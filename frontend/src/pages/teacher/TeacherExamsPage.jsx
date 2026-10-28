@@ -1,0 +1,174 @@
+import { useState, useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { teacherAPI } from '../../api/endpoints';
+import Spinner from '../../components/Spinner';
+
+function StatusBadge({ status }) {
+  return (
+    <span className={status === 'published' ? 'badge-published' : 'badge-draft'}>
+      {status === 'published' ? '✅ Đã xuất bản' : '✏️ Nháp'}
+    </span>
+  );
+}
+
+function CreateExamModal({ onClose, onCreated }) {
+  const [form, setForm] = useState({
+    title: '',
+    duration: 30,
+    start_time: '',
+    end_time: '',
+  });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleChange = (e) => setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+    try {
+      const payload = {
+        ...form,
+        duration: parseInt(form.duration),
+        start_time: new Date(form.start_time).toISOString(),
+        end_time: new Date(form.end_time).toISOString(),
+      };
+      const { data } = await teacherAPI.createExam(payload);
+      onCreated(data.exam);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Tạo đề thất bại');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
+        <div className="flex items-center justify-between p-6 border-b">
+          <h3 className="text-lg font-semibold">Tạo đề thi mới</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+        </div>
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <div>
+            <label className="label">Tên đề thi</label>
+            <input name="title" value={form.title} onChange={handleChange} className="input" placeholder="VD: Kiểm tra Toán học kỳ 1" required />
+          </div>
+          <div>
+            <label className="label">Thời lượng (phút)</label>
+            <input name="duration" type="number" min="1" max="300" value={form.duration} onChange={handleChange} className="input" required />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="label">Thời gian bắt đầu</label>
+              <input name="start_time" type="datetime-local" value={form.start_time} onChange={handleChange} className="input" required />
+            </div>
+            <div>
+              <label className="label">Thời gian kết thúc</label>
+              <input name="end_time" type="datetime-local" value={form.end_time} onChange={handleChange} className="input" required />
+            </div>
+          </div>
+          {error && <p className="text-red-600 text-sm">⚠️ {error}</p>}
+          <div className="flex gap-3 pt-2">
+            <button type="button" onClick={onClose} className="btn-secondary flex-1">Hủy</button>
+            <button type="submit" disabled={loading} className="btn-primary flex-1">
+              {loading ? <Spinner size="sm" /> : null} Tạo đề thi
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+export default function TeacherExamsPage() {
+  const [exams, setExams] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showModal, setShowModal] = useState(false);
+  const navigate = useNavigate();
+
+  const fetchExams = async () => {
+    try {
+      const { data } = await teacherAPI.listExams();
+      setExams(data.exams || []);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { fetchExams(); }, []);
+
+  const handleCreated = (exam) => {
+    setShowModal(false);
+    navigate(`/teacher/exams/${exam.id}`);
+  };
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-8">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Đề thi của tôi</h1>
+          <p className="text-gray-500 mt-1">Quản lý và soạn thảo đề thi trắc nghiệm</p>
+        </div>
+        <button onClick={() => setShowModal(true)} className="btn-primary btn-lg">
+          ＋ Tạo đề thi mới
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center py-20"><Spinner size="lg" /></div>
+      ) : exams.length === 0 ? (
+        <div className="card text-center py-16">
+          <div className="text-5xl mb-4">📄</div>
+          <h3 className="text-lg font-medium text-gray-700">Chưa có đề thi nào</h3>
+          <p className="text-gray-400 mt-1 mb-6">Tạo đề thi đầu tiên của bạn ngay!</p>
+          <button onClick={() => setShowModal(true)} className="btn-primary mx-auto">＋ Tạo đề thi</button>
+        </div>
+      ) : (
+        <div className="grid gap-4">
+          {exams.map((exam) => (
+            <div key={exam.id} className="card hover:shadow-md transition-shadow cursor-pointer group"
+              onClick={() => navigate(`/teacher/exams/${exam.id}`)}>
+              <div className="flex items-center justify-between">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <h3 className="font-semibold text-gray-900 text-lg group-hover:text-indigo-700 transition-colors truncate">
+                      {exam.title}
+                    </h3>
+                    <StatusBadge status={exam.status} />
+                  </div>
+                  <div className="flex items-center gap-4 mt-2 text-sm text-gray-500 flex-wrap">
+                    <span className="flex items-center gap-1">
+                      🔑 Mã: <code className="bg-gray-100 px-2 py-0.5 rounded font-mono font-bold text-indigo-700">{exam.exam_code}</code>
+                    </span>
+                    <span>⏱ {exam.duration} phút</span>
+                    <span>📅 {new Date(exam.start_time).toLocaleString('vi-VN')}</span>
+                  </div>
+                </div>
+                <div className="flex gap-2 ml-4 flex-shrink-0">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); navigate(`/teacher/exams/${exam.id}`); }}
+                    className="btn-secondary btn-sm"
+                  >
+                    ✏️ Soạn thảo
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); navigate(`/teacher/exams/${exam.id}/results`); }}
+                    className="btn-sm btn bg-violet-600 text-white hover:bg-violet-700"
+                  >
+                    📊 Kết quả
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {showModal && <CreateExamModal onClose={() => setShowModal(false)} onCreated={handleCreated} />}
+    </div>
+  );
+}
