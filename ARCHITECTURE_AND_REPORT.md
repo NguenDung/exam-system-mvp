@@ -23,7 +23,7 @@ Hệ thống **Online Exam MVP** được xây dựng theo mô hình **Client-Se
 |  +-------------------------------------------------------------------+  |
 |  | Auth Middleware: JWT Verification & RBAC Guard (Teacher / Student)|  |
 |  +-------------------------------------------------------------------+  |
-|  | Business Logic Handlers: Auth, Teacher (6 APIs), Student (7 APIs) |  |
+|  | Handlers: Auth, Teacher Management, Student Examination & Appeals |  |
 |  +-------------------------------------------------------------------+  |
 |  | Security Guards: QuestionSafe DTO, Dual-Timer, FOR UPDATE Lock   |  |
 |  +-------------------------------------------------------------------+  |
@@ -36,7 +36,7 @@ Hệ thống **Online Exam MVP** được xây dựng theo mô hình **Client-Se
 +-------------------------------------------------------------------------+
 |                        PERSISTENCE LAYER (RDBMS)                        |
 |       PostgreSQL 15 (Docker) / SQLite In-Memory (Test Suite)            |
-|       5 Normalized Tables + 2 Unique Composite Indexes                  |
+|       6 Normalized Tables + 2 Unique Composite Indexes                  |
 +-------------------------------------------------------------------------+
 ```
 
@@ -55,7 +55,7 @@ Hệ thống **Online Exam MVP** được xây dựng theo mô hình **Client-Se
 
 ## 2. THIẾT KẾ CƠ SỞ DỮ LIỆU & SƠ ĐỒ ERD (DATABASE SCHEMA & ERD)
 
-Cơ sở dữ liệu được chuẩn hóa ở dạng chuẩn 3NF (Third Normal Form) gồm đúng **5 bảng cốt lõi**, phản ánh chính xác nghiệp vụ khảo thí.
+Cơ sở dữ liệu được chuẩn hóa ở dạng chuẩn 3NF (Third Normal Form) gồm đúng **6 bảng cốt lõi**, phản ánh chính xác nghiệp vụ khảo thí và phúc khảo khiếu nại.
 
 ### 2.1. Sơ đồ thực thể liên kết (ERD Diagram)
 
@@ -63,9 +63,13 @@ Cơ sở dữ liệu được chuẩn hóa ở dạng chuẩn 3NF (Third Normal 
 erDiagram
     users ||--o{ exams : "teacher creates"
     users ||--o{ exam_attempts : "student takes"
+    users ||--o{ appeals : "student submits"
+    users ||--o{ appeals : "teacher responds"
     exams ||--o{ questions : "contains (CASCADE)"
     exams ||--o{ exam_attempts : "has"
+    exams ||--o{ appeals : "relates to"
     exam_attempts ||--o{ attempt_answers : "records (CASCADE)"
+    exam_attempts ||--o{ appeals : "appeals for"
     questions ||--o{ attempt_answers : "answered for"
 
     users {
@@ -82,11 +86,12 @@ erDiagram
     exams {
         bigint id PK
         bigint teacher_id FK "References users.id"
-        varchar exam_code UK "6-char code (e.g. IT2026)"
+        varchar exam_code UK "Unique code (e.g. IT2026)"
         varchar title "Exam title"
         int duration "Duration in minutes"
         timestamp start_time "Exam window start"
         timestamp end_time "Exam window end"
+        timestamp published_at "Publication timestamp"
         varchar status "'draft' or 'published'"
         timestamp created_at
         timestamp updated_at
@@ -130,6 +135,21 @@ erDiagram
         decimal points_awarded "Awarded points for question"
         timestamp updated_at "Save timestamp"
     }
+
+    appeals {
+        bigint id PK
+        bigint exam_id FK "References exams.id"
+        bigint submission_id FK "References exam_attempts.id"
+        bigint student_id FK "References users.id"
+        bigint teacher_id FK "References users.id"
+        varchar title "Appeal subject"
+        text content "Appeal explanation"
+        varchar status "'PENDING'|'REPLIED'|'REJECTED'|'RESOLVED'"
+        text teacher_response "Response from teacher"
+        timestamp responded_at "Response timestamp"
+        timestamp created_at
+        timestamp updated_at
+    }
 ```
 
 ### 2.2. Phân tích chi tiết các bảng dữ liệu
@@ -141,10 +161,11 @@ erDiagram
    - Hỗ trợ Soft-delete qua cột `deleted_at` (`gorm.DeletedAt`).
 
 2. **`exams`**:
-   - Chứa thông tin đề thi do Giáo viên tạo (`teacher_id`).
-   - `exam_code`: Mã kỳ thi gồm 6 ký tự chữ hoa/số ngẫu nhiên (hoặc mã định danh như `IT2026`), có ràng buộc `UNIQUE`.
+   - Chứa thông tin đề thi do Giảng viên tạo (`teacher_id`).
+   - `exam_code`: Mã kỳ thi gồm chữ hoa/số ngẫu nhiên (hoặc mã định danh như `IT2026`), có ràng buộc `UNIQUE`.
    - `status`: Quản lý trạng thái đề thi (`draft`: đang soạn thảo; `published`: đã phát hành). Đề thi chỉ được phép xuất bản khi có ít nhất 1 câu hỏi, và khi đã xuất bản thì nghiêm cấm thêm/xóa câu hỏi.
    - `start_time` và `end_time`: Xác định khung giờ mở cửa kỳ thi trên hệ thống.
+   - `published_at`: Lưu mốc thời gian xuất bản chính thức của đề thi.
 
 3. **`questions`**:
    - Lưu nội dung câu hỏi trắc nghiệm 4 đáp án (A, B, C, D) và đáp án đúng (`correct_option`).
@@ -152,8 +173,8 @@ erDiagram
    - Có cột `points` (mặc định 1.0) cho phép thiết lập trọng số điểm linh hoạt từng câu.
 
 4. **`exam_attempts`**:
-   - Đại diện cho một lượt làm bài của một học sinh cụ thể với một đề thi cụ thể.
-   - `started_at`: Thời điểm học sinh bấm nút bắt đầu làm bài.
+   - Đại diện cho một lượt làm bài của một thí sinh cụ thể với một đề thi cụ thể.
+   - `started_at`: Thời điểm thí sinh bấm nút bắt đầu làm bài.
    - `status`: Chuyển đổi trạng thái từ `in_progress` sang `completed` khi nộp bài hoặc khi bị hệ thống cưỡng chế auto-submit do hết giờ.
    - `score`, `correct_count`, `wrong_count`: Lưu kết quả chấm thi cuối cùng.
 
@@ -162,13 +183,20 @@ erDiagram
    - `chosen_option`: Lựa chọn của thí sinh (`A`, `B`, `C`, `D` hoặc `NULL` nếu thí sinh chưa chọn).
    - `is_correct` và `points_awarded`: Được tính toán và cập nhật khi bài thi được nộp và chấm điểm.
 
+6. **`appeals`**:
+   - Lưu trữ đơn khiếu nại/phúc khảo điểm thi của thí sinh gửi lên giảng viên phụ trách môn thi.
+   - Liên kết 4 khóa ngoại: `exam_id`, `submission_id`, `student_id`, `teacher_id`.
+   - `status`: Quản lý tiến trình xử lý đơn (`PENDING`: Chờ xử lý, `REPLIED`: Đã phản hồi, `REJECTED`: Đã từ chối, `RESOLVED`: Đã xử lý).
+   - `teacher_response`: Nội dung giải trình, nhận xét từ giảng viên.
+   - `responded_at`: Mốc thời gian phản hồi gần nhất của giảng viên.
+
 ---
 
 ### 2.3. Phân tích 2 Unique Composite Index đặc tả
 
 Cơ sở dữ liệu được trang bị 2 chỉ mục tổng hợp duy nhất (Unique Composite Indexes) đóng vai trò then chốt trong việc bảo vệ tính toàn vẹn dữ liệu:
 
-#### 🔹 Index 1: `idx_exam_attempts_exam_user`
+#### Index 1: `idx_exam_attempts_exam_user`
 ```sql
 CREATE UNIQUE INDEX IF NOT EXISTS idx_exam_attempts_exam_user
 ON exam_attempts (exam_id, user_id);
@@ -176,7 +204,7 @@ ON exam_attempts (exam_id, user_id);
 - **Mục đích nghiệp vụ**: Ràng buộc nguyên tắc tối cao của thi trắc nghiệm: **Mỗi học sinh chỉ được phép có duy nhất 1 lượt làm bài (`exam_attempt`) cho một đề thi cụ thể**. Ngăn chặn hoàn toàn việc thí sinh gian lận tạo nhiều bài thi để làm lại từ đầu.
 - **Điểm cải tiến kỹ thuật (Vá lỗi Migration)**: Ban đầu index có mệnh đề `WHERE deleted_at IS NULL`. Tuy nhiên, bảng `exam_attempts` không sử dụng soft-delete (không có cột `deleted_at`). Do đó, mệnh đề này đã được loại bỏ để tránh lỗi cú pháp `column "deleted_at" does not exist` trên PostgreSQL, đảm bảo câu lệnh migration thực thi thành công 100%.
 
-#### 🔹 Index 2: `idx_attempt_answers_attempt_question`
+#### Index 2: `idx_attempt_answers_attempt_question`
 ```sql
 CREATE UNIQUE INDEX IF NOT EXISTS idx_attempt_answers_attempt_question
 ON attempt_answers (attempt_id, question_id);
@@ -216,10 +244,10 @@ sequenceDiagram
     Handler->>DB: Quét & tự động chấm bài hết hạn (gradeExpiredAttempts)
     DB-->>Handler: Trả về thông tin Exam & Attempt hiện tại (nếu có)
     Handler-->>FE: HTTP 200 (exam_status: open/expired, attempt_status: not_attempted/in_progress/submitted)
-    FE-->>Student: Hiển thị thông tin đề thi & nút "Vào thi" / "Làm tiếp"
+    FE-->>Student: Hiển thị thông tin đề thi & nút Vào thi / Tiếp tục
 
     Note over Student, DB: GIAI ĐOẠN 2: BẮT ĐẦU LÀM BÀI HOẶC RESUME
-    Student->>FE: Bấm "Bắt đầu làm bài"
+    Student->>FE: Bấm Bắt đầu làm bài
     FE->>Auth: POST /api/student/exams/:id/start
     Auth->>Handler: Forward request kèm UserID
     Handler->>DB: Kiểm tra attempt hiện có
@@ -254,8 +282,8 @@ sequenceDiagram
     end
 
     Note over Student, DB: GIAI ĐOẠN 4: NỘP BÀI HOẶC HẾT GIỜ TỰ ĐỘNG CHẤM
-    alt Thí sinh chủ động bấm "Nộp bài" hoặc Hết giờ làm bài
-        Student->>FE: Bấm "Nộp bài" (hoặc countdown = 0)
+    alt Thí sinh chủ động bấm Nộp bài hoặc Hết giờ làm bài
+        Student->>FE: Bấm Nộp bài (hoặc countdown = 0)
         FE->>Auth: POST /api/student/attempts/:id/submit
         Auth->>Handler: Forward request
         Handler->>DB: BEGIN Transaction
@@ -328,16 +356,9 @@ flowchart TD
     Effective1 & Effective2 --> SyncClient["remaining_seconds = Effective Deadline - NOW()<br/>Đồng bộ xuống Client"]
 ```
 
-#### Phân tích các kịch bản thực tế:
-- **Kịch bản 1 (Vào thi đúng giờ)**: Đề thi mở từ `08:00` đến `10:00`, thời lượng `45 phút`. Thí sinh vào thi lúc `08:15`. Hạn nộp bài là `08:15 + 45p = 09:00` (nhỏ hơn `10:00`). Thí sinh được hưởng trọn vẹn 45 phút làm bài.
-- **Kịch bản 2 (Vào thi muộn - Bị ép nộp cùng phòng thi)**: Đề thi kết thúc lúc `10:00`. Thí sinh vào thi lúc `09:40`. Mốc `started_at + duration` sẽ là `10:25`, tuy nhiên do `end_time` là `10:00` nên hạn chót thực tế bị giới hạn lại đúng `10:00`. Thí sinh chỉ còn `20 phút` để làm bài. Điều này loại bỏ hoàn toàn hành vi cố tình vào muộn để xin đề hoặc kéo dài thời gian thi.
-- **Kịch bản 3 (Tải lại trang hoặc mất mạng - Resume)**: Khi thí sinh F5 tải lại trang, client không tự ý reset đồng hồ. Client gửi request `/start`, server tính lại `Effective Deadline - NOW()` theo đồng hồ nguyên tử của server và trả về số giây còn lại chính xác tuyệt đối.
-
 ---
 
 ## 4. ĐIỂM NHẤN KỸ THUẬT & CÁC BẢN VÁ BẢO MẬT (SECURITY & TECHNICAL HIGHLIGHTS)
-
-Hệ thống đã trải qua quá trình audit và vá toàn bộ các lỗ hổng bảo mật nghiêm trọng thường gặp trong các ứng dụng khảo thí trực tuyến:
 
 ### 4.1. Chống lộ đáp án trắc nghiệm (Zero-Leak Data Transfer Object - DTO)
 - **Nguy cơ tiềm ẩn**: Nếu serialize trực tiếp GORM Model `Question` trả về cho học sinh, trường `correct_option` sẽ nằm trong payload JSON. Thí sinh chỉ cần bấm F12 mở tab Network là có thể xem được toàn bộ đáp án đề thi trước khi làm bài.
@@ -357,107 +378,65 @@ Hệ thống đã trải qua quá trình audit và vá toàn bộ các lỗ hổ
     }
     ```
   - Tại API `StudentStartExam`, 100% câu hỏi được chuyển đổi qua hàm `models.ToQuestionSafe(q)` trước khi gửi về client.
-  - **Bảo mật kép tại trang Xem kết quả (`StudentGetResult`)**: Kể cả sau khi nộp bài, nếu đề thi vẫn đang mở (`now.Before(exam.EndTime)`), trường `correct_option` của toàn bộ các câu hỏi vẫn bị ẩn (`nil`). Chỉ khi toàn bộ khung giờ thi kết thúc (`now.After(exam.EndTime)`), thí sinh mới được phép xem đáp án đúng. Cơ chế này ngăn chặn việc thí sinh nộp bài sớm lấy đáp án rồi gửi cho các bạn khác đang làm bài trong phòng thi.
+  - **Bảo mật kép tại trang Xem kết quả (`StudentGetResult`)**: Kể cả sau khi nộp bài, nếu đề thi vẫn đang mở (`now.Before(exam.EndTime)`), trường `correct_option` của toàn bộ các câu hỏi vẫn bị ẩn (`nil`). Chỉ khi toàn bộ khung giờ thi kết thúc (`now.After(exam.EndTime)`), thí sinh mới được phép xem đáp án đúng.
 
 ---
 
 ### 4.2. Chống gian lận thời gian (Server-Authoritative Clock & Grace Period)
-- **Nguy cơ tiềm ẩn**: Nếu tin cậy đồng hồ phía Client (JavaScript `Date.now()`), thí sinh có thể chỉnh lùi giờ hệ điều hành trên máy tính hoặc can thiệp biến đếm ngược trên console để kéo dài thời gian làm bài vô tận.
+- **Nguy cơ tiềm ẩn**: Nếu tin cậy đồng hồ phía Client (JavaScript `Date.now()`), thí sinh có thể chỉnh lùi giờ hệ điều hành trên máy tính để kéo dài thời gian làm bài vô tận.
 - **Giải pháp kỹ thuật**:
   - **Server-Authoritative**: Mọi phép tính toán thời gian bắt đầu, thời hạn kết thúc và thời gian còn lại đều lấy mốc từ `time.Now()` trên máy chủ Backend.
   - **Vùng đệm mạng (Network Grace Period)**: Khi gửi request lưu đáp án (`/save`) hoặc nộp bài (`/submit`), hệ thống cho phép vùng đệm trễ mạng 5 giây (`const saveGracePeriod = 5 * time.Second`):
     - Nếu request gửi lên trong khoảng `deadline < now <= deadline + 5s`: Hệ thống vẫn chấp nhận lưu đáp án cuối cùng để bù trừ độ trễ mạng (latency/jitter) của thí sinh.
-    - Nếu `now > deadline + 5s`: Hệ thống kiên quyết từ chối lưu đáp án mới, tự động kích hoạt hàm chấm bài dựa trên các đáp án đã lưu hợp lệ trước đó và trả về mã lỗi `409 Conflict` kèm thông báo bài thi đã tự động kết thúc.
-  - **Cơ chế quét bài thi hết hạn bị động (Lazy Expiration Grading)**: Nếu thí sinh tắt máy tính không chịu bấm nộp bài, hàm `gradeExpiredAttempts(examID)` sẽ được kích hoạt tự động mỗi khi giáo viên mở trang xem kết quả thống kê (`TeacherGetResults`) hoặc khi học sinh tra cứu đề (`StudentLookupExam`), đảm bảo mọi bài thi quá hạn đều được chấm điểm và thống kê chính xác.
+    - Nếu `now > deadline + 5s`: Hệ thống từ chối lưu đáp án mới, tự động kích hoạt hàm chấm bài dựa trên các đáp án đã lưu hợp lệ trước đó và trả về mã lỗi `409 Conflict`.
+  - **Cơ chế quét bài thi hết hạn bị động (Lazy Expiration Grading)**: Khi giáo viên mở bảng điểm hoặc khi học sinh tra cứu đề thi, hàm `gradeExpiredAttempts` tự động chấm điểm toàn bộ các bài thi quá hạn chưa nộp.
 
 ---
 
 ### 4.3. Chống Race Condition & Double Submit (Pessimistic Locking `FOR UPDATE`)
-- **Nguy cơ tiềm ẩn**: Thí sinh mở 2 tab trình duyệt và bấm nộp bài cùng một thời điểm, hoặc viết script gửi 10 request `/submit` đồng thời. Nếu không có cơ chế khóa, nhiều goroutine backend sẽ cùng đọc dữ liệu, cùng tính điểm và cùng ghi đè lên database, dẫn đến sai lệch kết quả hoặc duplicate dữ liệu.
+- **Nguy cơ tiềm ẩn**: Thí sinh mở nhiều tab trình duyệt gửi song song request `/submit` hoặc `/save` gây xung đột dữ liệu.
 - **Giải pháp kỹ thuật**:
   - Bọc toàn bộ quy trình chấm thi và lưu bài trong một **Database Transaction** nguyên tử (`config.DB.Transaction`).
-  - Sử dụng cơ chế khóa dòng bi quan (Pessimistic Row-level Locking) với GORM clause:
+  - Khóa dòng bi quan bằng GORM clause:
     ```go
     err := config.DB.Transaction(func(tx *gorm.DB) error {
         var attempt models.ExamAttempt
-        // Tương đương lệnh SQL: SELECT * FROM exam_attempts WHERE id=? AND user_id=? FOR UPDATE
         if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
             Where("id = ? AND user_id = ?", attemptID, userID).
             First(&attempt).Error; err != nil {
             return err
         }
-        
-        // Kiểm tra tính lũy kế (Idempotency): Nếu đã nộp bài thì chặn ngay lập tức
         if attempt.Status != "in_progress" {
             return errAlreadySubmitted
         }
         ...
     ```
-  - Khi một request đang giữ khóa `FOR UPDATE`, tất cả các request song song khác gửi đến cùng một `attempt_id` bắt buộc phải xếp hàng chờ. Request đầu tiên hoàn thành sẽ đổi trạng thái `status = 'completed'`. Khi request thứ hai lấy được khóa, nó sẽ thấy `status != 'in_progress'` và bị từ chối ngay lập tức với lỗi `400 Exam already submitted`.
-  - **Chống tạo 2 bài thi song song**: Tại API `/start`, sử dụng `clause.OnConflict{DoNothing: true}` kết hợp với Unique Composite Index `(exam_id, user_id)` để đảm bảo ngay cả khi có 2 request `/start` gửi đồng thời, hệ thống chỉ tạo duy nhất 1 bản ghi trong database mà không bao giờ bị crash do Duplicate Key Violation.
+  - Khi một request đang giữ khóa `FOR UPDATE`, tất cả các request song song khác gửi đến cùng một `attempt_id` bắt buộc phải xếp hàng chờ. Request đầu tiên hoàn thành sẽ đổi trạng thái `status = 'completed'`, các request sau sẽ bị từ chối ngay lập tức.
 
 ---
 
 ### 4.4. Chống lỗ hổng IDOR chéo đề thi (Insecure Direct Object Reference)
-- **Nguy cơ tiềm ẩn**: Kẻ tấn công có thể can thiệp payload gửi lên API `/attempts/:id/save` hoặc `/submit`, cố tình chèn `question_id` thuộc về một đề thi khác. Nếu backend không kiểm tra, kẻ tấn công có thể trả lời câu hỏi của đề thi khác, hoặc làm sai lệch cơ sở dữ liệu câu trả lời.
+- **Nguy cơ tiềm ẩn**: Thí sinh can thiệp payload gửi lên API `/save` hoặc `/submit`, cố tình chèn `question_id` thuộc về đề thi khác.
 - **Giải pháp kỹ thuật**:
-  - Xây dựng hàm thẩm định quyền sở hữu câu hỏi dùng chung `upsertAnswers`:
-    ```go
-    // Truy vấn tập hợp tất cả question_id thuộc về đề thi của attempt này
-    var validIDs []uint
-    tx.Model(&models.Question{}).Where("exam_id = ?", attempt.ExamID).Pluck("id", &validIDs)
-    
-    validSet := make(map[uint]struct{}, len(validIDs))
-    for _, id := range validIDs {
-        validSet[id] = struct{}{}
-    }
-    
-    // Kiểm tra từng question_id gửi lên
-    for _, ans := range answers {
-        if _, ok := validSet[ans.QuestionID]; !ok {
-            return fmt.Errorf("question_id %d does not belong to this exam", ans.QuestionID)
-        }
-        ...
-    ```
-  - Nếu phát hiện bất kỳ `question_id` nào không nằm trong danh sách câu hỏi hợp lệ của đề thi đó, Transaction lập tức bị hủy bỏ (Rollback) và trả về lỗi `400 Bad Request`.
+  - Hàm `upsertAnswers` truy vấn danh sách `validIDs` thuộc đề thi, kiểm tra mọi câu hỏi trong payload. Nếu có câu hỏi không thuộc đề, transaction bị rollback và trả về `400 Bad Request`.
+  - Tại API khiếu nại (`/student/appeals`), hệ thống xác thực `submissionId` phải thuộc về chính sinh viên đó và ở trạng thái `completed`.
 
 ---
 
-### 4.5. Chống SQL Injection & Kiểm soát phân quyền chặt chẽ (Broken Object Level Authorization)
-- **Chống SQL Injection**:
-  - Loại bỏ hoàn toàn việc truyền chuỗi thô từ URL param vào các câu lệnh SQL.
-  - Sử dụng hàm helper `parseUintParam(c, paramName)` để parse và validate tham số ID trên URL thành kiểu số nguyên không âm `uint` trước khi đưa vào ORM:
-    ```go
-    func parseUintParam(c *gin.Context, param string) (uint, bool) {
-        v, err := strconv.ParseUint(c.Param(param), 10, 64)
-        if err != nil {
-            c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid " + param})
-            return 0, false
-        }
-        return uint(v), true
-    }
-    ```
-  - 100% truy vấn cơ sở dữ liệu đều sử dụng tính năng Parameterized Query an toàn của GORM.
-- **Phân quyền sở hữu chặt chẽ (Ownership Guard)**:
-  - Trong `TeacherDeleteQuestion`, hệ thống thực hiện kiểm tra 3 lớp:
-    1. Câu hỏi cần xóa có tồn tại không?
-    2. Đề thi chứa câu hỏi đó có đúng do chính Giáo viên đang đăng nhập (`teacherID`) tạo ra hay không (`Where("id = ? AND teacher_id = ?", examID, teacherID)`)? Nếu không, trả về `403 Forbidden`.
-    3. Trạng thái của đề thi có đang là `draft` hay không? Nếu đề thi đã `published`, nghiêm cấm xóa câu hỏi để bảo toàn dữ liệu bài thi của học sinh.
-- **Bảo mật tài khoản & Chuẩn hóa đầu vào**:
-  - Tự động chuẩn hóa email bằng hàm `normalizeEmail` (`strings.ToLower(strings.TrimSpace(email))`) chống bypass kiểm tra trùng lặp email do chữ hoa/thường hoặc khoảng trắng thừa.
-  - Giới hạn độ dài mật khẩu `binding:"max=72"` để phù hợp với giới hạn thuật toán Bcrypt, phòng chống tấn công DoS CPU bằng chuỗi mật khẩu siêu dài.
+### 4.5. Chống SQL Injection & Kiểm soát phân quyền chặt chẽ
+- **Chống SQL Injection**: 100% truy vấn dùng Parameterized Query qua GORM; các tham số trên URL đều được kiểm tra kiểu dữ liệu an toàn bằng hàm `parseUintParam`.
+- **Phân quyền sở hữu chặt chẽ**:
+  - Trong `TeacherDeleteQuestion`, xác thực câu hỏi thuộc về đề thi của giáo viên đó và đề phải đang ở trạng thái `draft`.
+  - Trong `TeacherGetAppeal` và `updateAppealStatus`, xác thực khiếu nại thuộc về kỳ thi do chính giáo viên đó quản lý.
+- **Chuẩn hóa dữ liệu đầu vào**:
+  - Hàm `normalizeEmail` (`strings.ToLower(strings.TrimSpace(email))`) chống bypass kiểm tra trùng lặp email.
+  - Giới hạn độ dài mật khẩu `max=72` để tương thích với thuật toán Bcrypt.
 
 ---
 
-### 4.6. Thuật toán chấm điểm chuẩn xác (Grading Precision & Integrity)
-- **Tính toán điểm số**:
-  - Duyệt qua toàn bộ danh sách câu hỏi chính thức của đề thi.
-  - So sánh `ans.ChosenOption` với `q.CorrectOption`. Nếu đúng, cộng điểm `q.Points` và tăng `correct_count`. Nếu sai hoặc không chọn, tăng `wrong_count`.
-- **Xử lý câu hỏi bỏ trống**:
-  - Đối với các câu hỏi thí sinh không trả lời, hệ thống tự động tạo bản ghi trong `attempt_answers` với `chosen_option = NULL, is_correct = false, points_awarded = 0`.
-  - Đảm bảo tính toán toàn vẹn: $\text{correct\_count} + \text{wrong\_count} \equiv \text{total\_questions}$.
-- **Kiểm soát sai số dấu phẩy động**:
-  - Điểm số được làm tròn 2 chữ số thập phân bằng hàm `math.Round(totalScore * 100) / 100`, loại bỏ hoàn toàn các lỗi sai số dấu phẩy động phổ biến (như `0.30000000000000004`).
+### 4.6. Thuật toán chấm điểm chuẩn xác
+- Duyệt qua toàn bộ danh sách câu hỏi chính thức của đề thi, tự động bổ sung câu sai cho các câu bỏ trống, đảm bảo $\text{correct\_count} + \text{wrong\_count} \equiv \text{total\_questions}$.
+- Điểm số được làm tròn 2 chữ số thập phân bằng `math.Round(totalScore * 100) / 100` để khử sai số số thực.
 
 ---
 
@@ -469,29 +448,37 @@ Tất cả các API yêu cầu xác thực đều phải đính kèm Header:
 ### 5.1. Authentication APIs (Public)
 | Method | Endpoint | Yêu cầu Body | Mã phản hồi | Mô tả |
 | :--- | :--- | :--- | :--- | :--- |
-| `POST` | `/api/auth/register` | `{full_name, email, password}` | `201 Created` / `400` / `409` | Đăng ký tài khoản học sinh mới |
+| `POST` | `/api/auth/register` | `{full_name, email, password}` | `201 Created` / `400` / `409` | Đăng ký tài khoản sinh viên mới |
 | `POST` | `/api/auth/login` | `{email, password}` | `200 OK` / `400` / `401` | Đăng nhập hệ thống, trả về Token & User Info |
 
 ### 5.2. Teacher APIs (Yêu cầu Role = `teacher`)
 | Method | Endpoint | Yêu cầu Body | Mã phản hồi | Mô tả |
 | :--- | :--- | :--- | :--- | :--- |
 | `GET` | `/api/teacher/exams` | Không | `200 OK` | Lấy danh sách đề thi do giáo viên hiện tại tạo |
-| `POST` | `/api/teacher/exams` | `{title, duration, start_time, end_time}` | `201 Created` / `400` | Tạo đề thi mới (trạng thái `draft`, sinh `exam_code` 6 ký tự) |
-| `GET` | `/api/teacher/exams/:id` | Không | `200 OK` / `404` | Xem chi tiết đề thi kèm toàn bộ câu hỏi (sắp xếp theo `sort_order`) |
-| `POST` | `/api/teacher/exams/:id/questions` | `{questions: [{prompt, option_a, ...}]}` | `201 Created` / `400` | Thêm danh sách câu hỏi vào đề thi (chỉ cho phép khi đề đang `draft`) |
-| `DELETE`| `/api/teacher/questions/:question_id` | Không | `200 OK` / `400` / `403` / `404` | Xóa câu hỏi khỏi đề thi (chỉ cho phép khi đề đang `draft`) |
+| `POST` | `/api/teacher/exams` | `{title, duration, start_time, end_time}` | `201 Created` / `400` | Tạo đề thi mới (trạng thái `draft`, sinh `exam_code`) |
+| `GET` | `/api/teacher/exams/:id` | Không | `200 OK` / `404` | Xem chi tiết đề thi kèm danh sách câu hỏi |
+| `POST` | `/api/teacher/exams/:id/questions` | `{questions: [{prompt, option_a, ...}]}` | `201 Created` / `400` | Thêm danh sách câu hỏi vào đề thi (khi đề đang `draft`) |
+| `DELETE`| `/api/teacher/questions/:question_id` | Không | `200 OK` / `400` / `403` / `404` | Xóa câu hỏi khỏi đề thi (khi đề đang `draft`) |
 | `PATCH`| `/api/teacher/exams/:id/publish` | Không | `200 OK` / `400` / `404` | Xuất bản đề thi (yêu cầu tối thiểu 1 câu hỏi) |
-| `GET` | `/api/teacher/exams/:id/results` | Không | `200 OK` / `404` | Thống kê kết quả thi: Tổng số HS, Điểm TB, Điểm cao/thấp nhất, Bảng điểm |
+| `GET` | `/api/teacher/exams/:id/results` | Không | `200 OK` / `404` | Thống kê kết quả thi: Tổng số HS, Điểm TB, Min/Max |
+| `GET` | `/api/teacher/exams/:id/appeals` | Query: `page`, `page_size`, `status`, `q` | `200 OK` / `404` | Lấy danh sách đơn khiếu nại của một đề thi |
+| `GET` | `/api/teacher/appeals/:appealId` | Không | `200 OK` / `404` | Xem chi tiết một đơn khiếu nại kèm bài làm thí sinh |
+| `PATCH`| `/api/teacher/appeals/:appealId/reply` | `{response}` | `200 OK` / `400` / `404` / `409` | Phản hồi ý kiến cho khiếu nại |
+| `PATCH`| `/api/teacher/appeals/:appealId/reject` | `{response}` (tùy chọn) | `200 OK` / `404` / `409` | Từ chối đơn khiếu nại |
+| `PATCH`| `/api/teacher/appeals/:appealId/resolve` | `{response}` (tùy chọn) | `200 OK` / `404` / `409` | Chấp thuận / giải quyết xong đơn khiếu nại |
 
 ### 5.3. Student APIs (Yêu cầu Role = `student`)
 | Method | Endpoint | Yêu cầu Body / Query Param | Mã phản hồi | Mô tả |
 | :--- | :--- | :--- | :--- | :--- |
 | `GET` | `/api/student/exams/lookup` | Query: `?code=XYZ` | `200 OK` / `400` / `404` | Tra cứu đề thi đã xuất bản theo mã kỳ thi |
-| `GET` | `/api/student/attempts` | Không | `200 OK` | Xem lịch sử toàn bộ các bài thi học sinh đã tham gia |
-| `POST` | `/api/student/exams/:id/start` | Không | `200 OK` / `400` / `403` / `404` | Bắt đầu hoặc Resume bài thi. Trả về `QuestionSafe` (ẩn `correct_option`) |
-| `POST` | `/api/student/attempts/:id/save`| `{answers: [{question_id, chosen_option}]}` | `200 OK` / `400` / `409` | Auto-save câu trả lời (Atomic UPSERT). Bị chặn nếu hết giờ |
-| `POST` | `/api/student/attempts/:id/submit`| `{answers: [...]}` (tùy chọn) | `200 OK` / `400` / `404` | Nộp bài thi và chấm điểm tự động trong 1 Transaction nguyên tử |
-| `GET` | `/api/student/attempts/:id/result`| Không | `200 OK` / `400` / `404` | Xem điểm số và bài làm sau khi nộp (chỉ hiện đáp án đúng khi đề đã đóng) |
+| `GET` | `/api/student/attempts` | Không | `200 OK` | Xem lịch sử các lượt thi gần đây của thí sinh |
+| `GET` | `/api/student/history` | Query: `page`, `page_size`, `q`, `appeal_status` | `200 OK` | Lấy lịch sử các bài thi đã hoàn thành (phân trang) |
+| `GET` | `/api/student/history/:submissionId` | Không | `200 OK` / `404` | Xem chi tiết bài làm đã hoàn thành và danh sách khiếu nại |
+| `POST` | `/api/student/appeals` | `{submissionId, title, content}` | `201 Created` / `400` / `404` / `409` | Gửi đơn khiếu nại điểm thi |
+| `POST` | `/api/student/exams/:id/start` | Không | `200 OK` / `400` / `403` / `404` | Bắt đầu hoặc Resume bài thi. Trả về `QuestionSafe` |
+| `POST` | `/api/student/attempts/:id/save`| `{answers: [{question_id, chosen_option}]}` | `200 OK` / `400` / `409` | Auto-save câu trả lời (Atomic UPSERT) |
+| `POST` | `/api/student/attempts/:id/submit`| `{answers: [...]}` (tùy chọn) | `200 OK` / `400` / `404` | Nộp bài thi và chấm điểm tự động trong DB Transaction |
+| `GET` | `/api/student/attempts/:id/result`| Không | `200 OK` / `400` / `404` | Xem điểm số và đối soát bài làm sau khi nộp |
 
 ### 5.4. System Health API (Public)
 | Method | Endpoint | Yêu cầu Body | Mã phản hồi | Mô tả |
@@ -503,15 +490,11 @@ Tất cả các API yêu cầu xác thực đều phải đính kèm Header:
 ## 6. ĐÁNH GIÁ KẾT QUẢ VÀ HƯỚNG PHÁT TRIỂN (EVALUATION & ROADMAP)
 
 ### 6.1. Đánh giá chất lượng phần mềm
-- **Độ tin cậy (Reliability)**: Bộ kiểm thử tự động `backend/main_test.go` thực thi qua 6 kịch bản nghiệp vụ (UC01 -> UC06) và toàn bộ các edge cases (nhập sai dữ liệu, xung đột thời gian, race condition, IDOR chéo đề) đạt tỉ lệ thành công **100% PASS**.
-- **Tính toàn vẹn (Data Integrity)**: Áp dụng triệt để ACID Transactions và Foreign Key Cascades, không có bản ghi rác mồ côi (orphaned records).
-- **Hiệu năng (Performance)**:
-  - Tối ưu hóa truy vấn bằng 2 Composite Unique Index.
-  - Tận dụng Atomic `UPSERT` thay cho mô hình Select-then-Update truyền thống.
-  - Phục vụ frontend tĩnh siêu tốc thông qua Vite bundle tối ưu.
+- **Độ tin cậy (Reliability)**: Bộ kiểm thử tự động `backend/main_test.go` thực thi qua toàn bộ kịch bản nghiệp vụ (xác thực, đề thi, làm bài, auto-save, nộp bài, tính điểm, lịch sử bài làm, khiếu nại) đạt tỉ lệ thành công **100% PASS**.
+- **Tính toàn vẹn (Data Integrity)**: Áp dụng triệt để ACID Transactions và Foreign Key Cascades, không có bản ghi mồ côi.
+- **Giao diện tối giản (Clean UI)**: Loại bỏ toàn bộ các thành phần trang trí không cần thiết, áp dụng bảng màu trung tính, bố cục rõ ràng, tối ưu trải nghiệm người dùng trong môi trường giáo dục đại học.
 
-### 6.2. Hướng mở rộng cho phiên bản tiếp theo (Production Roadmap)
-1. **Giám sát chống gian lận thời gian thực (Real-time Proctoring)**: Tích hợp WebSocket để phát hiện thí sinh chuyển tab (blur event), mở cửa sổ DevTools hoặc ngắt kết nối mạng.
-2. **Ngân hàng đề thi & Xáo trộn đề (Question Bank & Randomization)**: Hỗ trợ xáo trộn ngẫu nhiên thứ tự câu hỏi và thứ tự 4 đáp án A/B/C/D cho từng thí sinh khác nhau trong cùng một đề thi.
-3. **Bộ nhớ đệm Redis (Distributed Caching & Rate Limiting)**: Sử dụng Redis để cache nội dung câu hỏi và giới hạn tần suất request (Rate Limiting) cho API `/save`, giảm tải tối đa cho PostgreSQL.
-4. **Hỗ trợ câu hỏi đa phương tiện (Multimedia Questions)**: Tích hợp AWS S3 / Cloudflare R2 để tải lên hình ảnh minh họa, sơ đồ và công thức toán học (KaTeX/LaTeX).
+### 6.2. Hướng mở rộng cho phiên bản tiếp theo
+1. **Giám sát thời gian thực (Real-time Proctoring)**: Tích hợp WebSocket để phát hiện thí sinh rời màn hình làm bài thi.
+2. **Ngân hàng câu hỏi & Xáo trộn đề**: Tự động sinh đề và xáo trộn thứ tự câu hỏi cũng như thứ tự 4 đáp án cho từng thí sinh.
+3. **Phân phối tải (Rate Limiting & Caching)**: Áp dụng Redis cache và giới hạn tần suất gửi request cho các API auto-save.

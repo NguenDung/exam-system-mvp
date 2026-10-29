@@ -4,13 +4,13 @@ import { studentAPI } from '../../api/endpoints';
 import Spinner from '../../components/Spinner';
 
 const STATUS_LABELS = {
-  not_attempted: { label: 'Chưa thi', color: 'text-gray-500', icon: '📋' },
-  open: { label: 'Đang mở', color: 'text-emerald-600', icon: '🟢' },
-  in_progress: { label: 'Đang làm dở', color: 'text-orange-600', icon: '⏳' },
-  submitted: { label: 'Đã nộp', color: 'text-blue-600', icon: '✅' },
-  not_started_yet: { label: 'Chưa mở', color: 'text-gray-400', icon: '🕐' },
-  expired: { label: 'Đã hết hạn', color: 'text-red-500', icon: '🔒' },
-  time_up: { label: 'Hết giờ', color: 'text-red-500', icon: '⏰' },
+  not_attempted: { label: 'Chưa thi', badgeClass: 'bg-gray-100 text-gray-700' },
+  open: { label: 'Đang mở', badgeClass: 'bg-emerald-100 text-emerald-800' },
+  in_progress: { label: 'Đang làm bài', badgeClass: 'bg-amber-100 text-amber-800' },
+  submitted: { label: 'Đã nộp bài', badgeClass: 'bg-blue-100 text-blue-800' },
+  not_started_yet: { label: 'Chưa mở', badgeClass: 'bg-gray-100 text-gray-600' },
+  expired: { label: 'Đã hết hạn', badgeClass: 'bg-red-100 text-red-800' },
+  time_up: { label: 'Hết giờ làm bài', badgeClass: 'bg-red-100 text-red-800' },
 };
 
 export default function StudentHomePage() {
@@ -39,7 +39,9 @@ export default function StudentHomePage() {
     }
   }, []);
 
-  useEffect(() => { fetchAttempts(); }, [fetchAttempts]);
+  useEffect(() => {
+    fetchAttempts();
+  }, [fetchAttempts]);
 
   const handleLookup = async (e) => {
     e.preventDefault();
@@ -51,7 +53,7 @@ export default function StudentHomePage() {
       const { data } = await studentAPI.lookupExam(code.trim().toUpperCase());
       setLookupResult(data);
     } catch (err) {
-      setLookupError(err.response?.data?.error || 'Không tìm thấy đề thi');
+      setLookupError(err.response?.data?.error || 'Không tìm thấy đề thi với mã đã nhập');
     } finally {
       setLookupLoading(false);
     }
@@ -62,8 +64,6 @@ export default function StudentHomePage() {
     setStarting(true);
     try {
       const { data } = await studentAPI.startExam(lookupResult.exam.id, { confirmed });
-      const { data } = await studentAPI.startExam(lookupResult.exam.id);
-      // Auto-submitted on start (deadline passed) → go to results
       if (data.auto_submitted || data.attempt?.status === 'completed') {
         navigate(`/student/attempts/${data.attempt.id}/result`, { replace: true });
         return;
@@ -88,49 +88,49 @@ export default function StudentHomePage() {
   return (
     <div className="space-y-8">
       {/* Lookup section */}
-      <div className="card max-w-2xl mx-auto">
-        <h2 className="text-xl font-bold text-gray-900 mb-1">🔍 Tìm kiếm đề thi</h2>
-        <p className="text-gray-500 text-sm mb-4">Nhập mã đề thi để bắt đầu làm bài</p>
+      <div className="card max-w-2xl mx-auto border border-gray-200">
+        <h2 className="text-lg font-bold text-gray-900 mb-1">Tra cứu kỳ thi</h2>
+        <p className="text-gray-500 text-sm mb-4">Nhập mã đề thi được cung cấp để tham gia kiểm tra</p>
 
         <form onSubmit={handleLookup} className="flex gap-3">
           <div className="flex-1 relative">
             <input
               value={code}
               onChange={(e) => { setCode(e.target.value.toUpperCase()); setLookupResult(null); setLookupError(''); }}
-              className="input font-mono text-lg tracking-widest uppercase pr-24"
-              placeholder="IT2026"
+              className="input font-mono text-base tracking-widest uppercase pr-24"
+              placeholder="Nhập mã (vd: IT2026)"
               maxLength={20}
             />
-            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 font-normal">gợi ý: IT2026</span>
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">Mẫu: IT2026</span>
           </div>
-          <button type="submit" disabled={lookupLoading || !code.trim()} className="btn-primary px-6">
-            {lookupLoading ? <Spinner size="sm" /> : '🔍 Tìm'}
+          <button type="submit" disabled={lookupLoading || !code.trim()} className="btn-primary px-5">
+            {lookupLoading ? <Spinner size="sm" /> : 'Tra cứu'}
           </button>
         </form>
 
         {lookupError && (
-          <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm flex items-center gap-2">
-            <span>❌</span> {lookupError}
+          <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+            {lookupError}
           </div>
         )}
 
         {lookupResult && (
-          <div className="mt-5 p-5 bg-emerald-50 border border-emerald-200 rounded-2xl">
+          <div className="mt-5 p-5 bg-gray-50 border border-gray-200 rounded-xl">
             <div className="flex items-start justify-between gap-4 flex-wrap">
-              <div>
+              <div className="space-y-2">
                 <h3 className="font-bold text-gray-900 text-lg">{lookupResult.exam.title}</h3>
-                <div className="flex items-center gap-3 mt-2 text-sm text-gray-600 flex-wrap">
-                  <span>🔑 <code className="font-mono font-bold text-indigo-700">{lookupResult.exam.exam_code}</code></span>
-                  <span>⏱ {lookupResult.exam.duration} phút</span>
-                  <span>📅 Đến {new Date(lookupResult.exam.end_time).toLocaleDateString('vi-VN')}</span>
+                <div className="flex items-center gap-4 text-sm text-gray-600 flex-wrap">
+                  <span>Mã đề: <code className="font-mono font-bold text-gray-900">{lookupResult.exam.exam_code}</code></span>
+                  <span>Thời lượng: <strong>{lookupResult.exam.duration} phút</strong></span>
+                  <span>Hạn nộp: {new Date(lookupResult.exam.end_time).toLocaleString('vi-VN')}</span>
                 </div>
-                <div className="mt-2 flex items-center gap-2">
+                <div className="flex items-center gap-2 pt-1">
                   {(() => {
                     const s = STATUS_LABELS[lookupResult.attempt_status] || STATUS_LABELS.not_attempted;
-                    return <span className={`text-sm font-medium ${s.color}`}>{s.icon} {s.label}</span>;
+                    return <span className={`px-2.5 py-0.5 rounded text-xs font-semibold ${s.badgeClass}`}>{s.label}</span>;
                   })()}
                   {lookupResult.exam_status === 'not_started_yet' && (
-                    <span className="text-xs text-gray-400">
+                    <span className="text-xs text-gray-500">
                       (Mở lúc {new Date(lookupResult.exam.start_time).toLocaleString('vi-VN')})
                     </span>
                   )}
@@ -139,34 +139,34 @@ export default function StudentHomePage() {
               <div className="flex flex-col gap-2">
                 {canStart && (
                   <button
-                    onClick={() => isResume ? handleStart() : setStartConfirmOpen(true)}
+                    onClick={() => (isResume ? handleStart() : setStartConfirmOpen(true))}
                     disabled={starting}
-                    className="btn-success btn-lg"
+                    className="btn-primary"
                   >
-                    {starting ? <Spinner size="sm" /> : (isResume ? '▶️ Tiếp tục làm bài' : '🚀 Bắt đầu làm bài')}
+                    {starting ? <Spinner size="sm" /> : (isResume ? 'Tiếp tục làm bài' : 'Bắt đầu làm bài')}
                   </button>
                 )}
                 {lookupResult.attempt_status === 'submitted' && lookupResult.attempt && (
                   <button
                     onClick={() => navigate(`/student/attempts/${lookupResult.attempt.id}/result`)}
-                    className="btn-primary btn-lg"
+                    className="btn-secondary"
                   >
-                    📊 Xem kết quả
+                    Xem kết quả
                   </button>
                 )}
                 {lookupResult.attempt_status === 'time_up' && lookupResult.attempt && (
                   <button
                     onClick={() => navigate(`/student/attempts/${lookupResult.attempt.id}/result`)}
-                    className="btn-primary btn-lg"
+                    className="btn-secondary"
                   >
-                    📊 Xem kết quả (hết giờ)
+                    Xem kết quả (Hết giờ)
                   </button>
                 )}
                 {lookupResult.exam_status === 'expired' && (
-                  <span className="text-red-500 text-sm font-medium">🔒 Đề thi đã hết hạn</span>
+                  <span className="text-red-600 text-sm font-medium">Đề thi đã kết thúc thời gian làm bài</span>
                 )}
                 {lookupResult.exam_status === 'not_started_yet' && (
-                  <span className="text-gray-400 text-sm">Đề thi chưa mở</span>
+                  <span className="text-gray-500 text-sm">Chưa đến giờ mở đề thi</span>
                 )}
               </div>
             </div>
@@ -174,38 +174,37 @@ export default function StudentHomePage() {
         )}
       </div>
 
-      {/* History */}
+      {/* History section */}
       <div>
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-bold text-gray-900">📚 Lịch sử làm bài</h2>
-          <button onClick={fetchAttempts} className="btn-secondary btn-sm">🔄 Làm mới</button>
+          <h2 className="text-lg font-bold text-gray-900">Lịch sử làm bài gần đây</h2>
+          <button onClick={fetchAttempts} className="btn-secondary btn-sm">Làm mới</button>
         </div>
 
         {attemptsLoading ? (
           <div className="flex justify-center py-10"><Spinner size="lg" /></div>
         ) : attemptsError ? (
-          <div role="alert" className="card flex flex-col items-center gap-3 py-10 text-center">
+          <div role="alert" className="card flex flex-col items-center gap-3 py-8 text-center border border-red-200 bg-red-50">
             <p className="text-sm text-red-700">{attemptsError}</p>
             <button onClick={fetchAttempts} className="btn-secondary btn-sm">Thử lại</button>
           </div>
         ) : attempts.length === 0 ? (
-          <div className="card text-center py-12">
-            <div className="text-4xl mb-3">📭</div>
-            <p className="text-gray-500">Bạn chưa tham gia bài thi nào</p>
+          <div className="card text-center py-12 border border-gray-200">
+            <p className="text-gray-500">Chưa có bản ghi bài thi nào</p>
           </div>
         ) : (
-          <div className="card overflow-hidden p-0">
+          <div className="card overflow-hidden p-0 border border-gray-200">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-gray-50 border-b text-left">
-                    <th className="px-5 py-3 font-semibold text-gray-600">Đề thi</th>
-                    <th className="px-5 py-3 font-semibold text-gray-600 text-center">Mã đề</th>
-                    <th className="px-5 py-3 font-semibold text-gray-600 text-center">Điểm</th>
-                    <th className="px-5 py-3 font-semibold text-gray-600 text-center">Đúng/Sai</th>
-                    <th className="px-5 py-3 font-semibold text-gray-600 text-center">Trạng thái</th>
-                    <th className="px-5 py-3 font-semibold text-gray-600">Thời gian</th>
-                    <th className="px-5 py-3 font-semibold text-gray-600"></th>
+                    <th className="px-5 py-3 font-semibold text-gray-700">Tên bài thi</th>
+                    <th className="px-5 py-3 font-semibold text-gray-700 text-center">Mã đề</th>
+                    <th className="px-5 py-3 font-semibold text-gray-700 text-center">Điểm số</th>
+                    <th className="px-5 py-3 font-semibold text-gray-700 text-center">Đúng / Sai</th>
+                    <th className="px-5 py-3 font-semibold text-gray-700 text-center">Trạng thái</th>
+                    <th className="px-5 py-3 font-semibold text-gray-700">Bắt đầu</th>
+                    <th className="px-5 py-3 font-semibold text-gray-700 text-right">Thao tác</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -213,34 +212,37 @@ export default function StudentHomePage() {
                     <tr key={a.id} className="border-b last:border-0 hover:bg-gray-50 transition-colors">
                       <td className="px-5 py-4 font-medium text-gray-900">{a.exam_title}</td>
                       <td className="px-5 py-4 text-center">
-                        <code className="bg-gray-100 px-2 py-0.5 rounded font-mono text-indigo-700">{a.exam_code}</code>
+                        <code className="bg-gray-100 px-2 py-0.5 rounded font-mono text-gray-800">{a.exam_code}</code>
                       </td>
-                      <td className="px-5 py-4 text-center font-bold text-indigo-700">
-                        {a.status === 'completed' ? a.score.toFixed(2) : '—'}
+                      <td className="px-5 py-4 text-center font-bold text-gray-900">
+                        {a.status === 'completed' ? Number(a.score).toFixed(2) : '—'}
                       </td>
                       <td className="px-5 py-4 text-center text-xs">
                         {a.status === 'completed' ? (
-                          <span className="text-emerald-600 font-semibold">{a.correct_count}✓</span>
+                          <span>
+                            <span className="text-emerald-700 font-semibold">{a.correct_count}</span>
+                            <span className="text-gray-400"> / </span>
+                            <span className="text-red-600 font-semibold">{a.wrong_count}</span>
+                          </span>
                         ) : '—'}
-                        {a.status === 'completed' && a.wrong_count > 0 && (
-                          <span className="text-red-500 font-semibold ml-1">{a.wrong_count}✗</span>
-                        )}
                       </td>
                       <td className="px-5 py-4 text-center">
-                        <span className={a.status === 'completed' ? 'badge-completed' : 'badge-in_progress'}>
-                          {a.status === 'completed' ? '✅ Đã nộp' : '⏳ Đang làm'}
+                        <span className={`px-2.5 py-0.5 rounded text-xs font-semibold ${
+                          a.status === 'completed' ? 'bg-blue-100 text-blue-800' : 'bg-amber-100 text-amber-800'
+                        }`}>
+                          {a.status === 'completed' ? 'Đã nộp' : 'Đang làm'}
                         </span>
                       </td>
                       <td className="px-5 py-4 text-gray-500 text-xs">
                         {new Date(a.started_at).toLocaleString('vi-VN')}
                       </td>
-                      <td className="px-5 py-4">
+                      <td className="px-5 py-4 text-right">
                         {a.status === 'completed' ? (
                           <button onClick={() => navigate(`/student/attempts/${a.id}/result`)}
-                            className="btn-primary btn-sm">Kết quả</button>
+                            className="btn-secondary btn-sm">Xem kết quả</button>
                         ) : (
                           <button onClick={() => navigate(`/student/exam/${a.exam_id}/take`)}
-                            className="btn-success btn-sm">Tiếp tục</button>
+                            className="btn-primary btn-sm">Làm tiếp</button>
                         )}
                       </td>
                     </tr>
@@ -253,33 +255,34 @@ export default function StudentHomePage() {
       </div>
 
       {startConfirmOpen && lookupResult?.exam && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div
             role="dialog"
             aria-modal="true"
             aria-labelledby="start-exam-title"
-            className="w-full max-w-md rounded-2xl bg-white p-7 text-center shadow-2xl"
+            className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl border border-gray-200"
           >
-            <div className="mb-3 text-5xl">📝</div>
-            <h2 id="start-exam-title" className="text-xl font-bold text-gray-900">Xác nhận tham gia bài thi?</h2>
-            <p className="mt-3 text-sm text-gray-600">
-              Thời gian làm bài {lookupResult.exam.duration} phút sẽ bắt đầu đếm ngược ngay khi bạn đồng ý.
-              Khi hết giờ, bài thi được tự động nộp và khóa.
+            <h2 id="start-exam-title" className="text-lg font-bold text-gray-900">Xác nhận vào thi</h2>
+            <p className="mt-3 text-sm text-gray-600 leading-relaxed">
+              Bạn chuẩn bị bắt đầu bài thi <strong>{lookupResult.exam.title}</strong>. 
+              Thời lượng làm bài là <strong>{lookupResult.exam.duration} phút</strong> và sẽ đếm ngược ngay khi bấm xác nhận.
             </p>
-            <div className="mt-6 flex gap-3">
+            <div className="mt-6 flex justify-end gap-3">
               <button
+                type="button"
                 onClick={() => setStartConfirmOpen(false)}
                 disabled={starting}
-                className="btn-secondary flex-1"
+                className="btn-secondary"
               >
-                Để sau
+                Hủy bỏ
               </button>
               <button
+                type="button"
                 onClick={() => handleStart(true)}
                 disabled={starting}
-                className="btn-success flex-1"
+                className="btn-primary"
               >
-                {starting ? <Spinner size="sm" /> : 'Đồng ý, vào thi'}
+                {starting ? <Spinner size="sm" /> : 'Bắt đầu làm bài'}
               </button>
             </div>
           </div>

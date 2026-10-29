@@ -26,7 +26,7 @@ function AppealModal({ submission, onClose, onSuccess }) {
     event.preventDefault();
     const trimmed = content.trim();
     if (trimmed.length < 10 || trimmed.length > 1000) {
-      setError('Nội dung phải có từ 10 đến 1000 ký tự.');
+      setError('Nội dung khiếu nại phải từ 10 đến 1000 ký tự.');
       return;
     }
 
@@ -40,37 +40,58 @@ function AppealModal({ submission, onClose, onSuccess }) {
       });
       onSuccess();
     } catch (requestError) {
-      setError(requestError.response?.data?.error || 'Không thể gửi khiếu nại. Vui lòng thử lại.');
+      setError(requestError.response?.data?.error || 'Gửi đơn khiếu nại không thành công. Vui lòng thử lại.');
     } finally {
       setSubmitting(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <form onSubmit={handleSubmit} role="dialog" aria-modal="true" aria-labelledby="appeal-title"
-        className="w-full max-w-lg space-y-4 rounded-2xl bg-white p-6 shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <form
+        onSubmit={handleSubmit}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="appeal-title"
+        className="w-full max-w-lg space-y-4 rounded-lg bg-white p-6 shadow-xl border border-slate-200"
+      >
         <div>
-          <h2 id="appeal-title" className="text-xl font-bold text-gray-900">Khiếu nại điểm thi</h2>
-          <p className="mt-1 text-sm text-gray-500">{submission.exam_title}</p>
+          <h2 id="appeal-title" className="text-lg font-bold text-slate-900">Gửi đơn khiếu nại điểm thi</h2>
+          <p className="mt-0.5 text-xs text-slate-500">Môn thi: {submission.exam_title}</p>
         </div>
         <div>
-          <label htmlFor="appeal-subject" className="label">Tiêu đề khiếu nại (không bắt buộc)</label>
-          <input id="appeal-subject" value={title} onChange={(event) => setTitle(event.target.value)}
-            maxLength={255} className="input" placeholder="Ví dụ: Phúc khảo câu 4" />
+          <label htmlFor="appeal-subject" className="label">Tiêu đề (tùy chọn)</label>
+          <input
+            id="appeal-subject"
+            value={title}
+            onChange={(event) => setTitle(event.target.value)}
+            maxLength={255}
+            className="input"
+            placeholder="Ví dụ: Xin xem xét lại câu hỏi số 3"
+          />
         </div>
         <div>
-          <label htmlFor="appeal-content" className="label">Nội dung khiếu nại *</label>
-          <textarea id="appeal-content" value={content} onChange={(event) => setContent(event.target.value)}
-            required minLength={10} maxLength={1000} rows={5} className="input resize-y"
-            placeholder="Mô tả câu hỏi hoặc điểm số bạn muốn được xem xét..." />
-          <p className="mt-1 text-right text-xs text-gray-400">{content.trim().length}/1000 ký tự (tối thiểu 10)</p>
+          <label htmlFor="appeal-content" className="label">Nội dung giải trình *</label>
+          <textarea
+            id="appeal-content"
+            value={content}
+            onChange={(event) => setContent(event.target.value)}
+            required
+            minLength={10}
+            maxLength={1000}
+            rows={5}
+            className="input resize-y"
+            placeholder="Nêu rõ lý do hoặc nội dung câu hỏi cần phúc khảo..."
+          />
+          <p className="mt-1 text-right text-xs text-slate-400">{content.trim().length}/1000 ký tự (tối thiểu 10)</p>
         </div>
-        {error && <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p>}
-        <div className="flex justify-end gap-3">
-          <button type="button" onClick={onClose} disabled={submitting} className="btn-secondary">Hủy</button>
+        {error && <p role="alert" className="rounded bg-red-50 p-3 text-sm text-red-700 border border-red-200">{error}</p>}
+        <div className="flex justify-end gap-3 pt-1">
+          <button type="button" onClick={onClose} disabled={submitting} className="btn-secondary">
+            Hủy bỏ
+          </button>
           <button type="submit" disabled={submitting || content.trim().length < 10} className="btn-primary">
-            {submitting ? <Spinner size="sm" /> : 'Gửi khiếu nại'}
+            {submitting ? <Spinner size="sm" /> : 'Gửi đơn khiếu nại'}
           </button>
         </div>
       </form>
@@ -105,13 +126,15 @@ export default function StudentHistoryPage() {
       setItems(data.items || []);
       setPagination(data.pagination || { page, page_size: PAGE_SIZE, total: 0 });
     } catch (requestError) {
-      setError(requestError.response?.data?.error || 'Không thể tải lịch sử bài làm.');
+      setError(requestError.response?.data?.error || 'Không thể tải danh sách bài làm.');
     } finally {
       setLoading(false);
     }
   }, [page, search, status]);
 
-  useEffect(() => { fetchHistory(); }, [fetchHistory, refreshKey]);
+  useEffect(() => {
+    fetchHistory();
+  }, [fetchHistory, refreshKey]);
 
   const handleSearch = (event) => {
     event.preventDefault();
@@ -124,69 +147,103 @@ export default function StudentHistoryPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Lịch sử bài làm</h1>
-        <p className="mt-1 text-sm text-gray-500">Các bài thi bạn đã hoàn thành và điểm số tương ứng.</p>
+        <h1 className="text-xl font-bold text-slate-900">Lịch sử bài làm</h1>
+        <p className="mt-0.5 text-sm text-slate-500">Danh sách các bài thi đã hoàn thành và trạng thái phúc khảo</p>
       </div>
 
-      <form onSubmit={handleSearch} className="card flex flex-col gap-3 p-4 sm:flex-row">
-        <input value={searchInput} onChange={(event) => setSearchInput(event.target.value)}
-          className="input flex-1" placeholder="Tìm theo tên bài thi..." aria-label="Tìm theo tên bài thi" />
-        <select value={status} onChange={(event) => { setStatus(event.target.value); setPage(1); }}
-          className="input sm:max-w-xs" aria-label="Lọc theo trạng thái khiếu nại">
+      <form onSubmit={handleSearch} className="bg-white rounded-lg border border-slate-200 p-4 flex flex-col gap-3 sm:flex-row">
+        <input
+          value={searchInput}
+          onChange={(event) => setSearchInput(event.target.value)}
+          className="input flex-1"
+          placeholder="Tìm theo tên bài thi..."
+          aria-label="Tìm theo tên bài thi"
+        />
+        <select
+          value={status}
+          onChange={(event) => {
+            setStatus(event.target.value);
+            setPage(1);
+          }}
+          className="input sm:max-w-xs"
+          aria-label="Lọc theo trạng thái khiếu nại"
+        >
           <option value="">Tất cả trạng thái khiếu nại</option>
-          {Object.entries(APPEAL_STATUS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+          {Object.entries(APPEAL_STATUS).map(([value, label]) => (
+            <option key={value} value={value}>{label}</option>
+          ))}
         </select>
         <button type="submit" className="btn-primary">Tìm kiếm</button>
       </form>
 
-      {notice && <div role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">{notice}</div>}
-      {error && <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>}
+      {notice && (
+        <div role="status" className="rounded border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-800">
+          {notice}
+        </div>
+      )}
+      {error && (
+        <div role="alert" className="rounded border border-red-300 bg-red-50 p-4 text-sm text-red-700">
+          {error}
+        </div>
+      )}
 
-      <div className="card overflow-hidden p-0">
+      <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
         {loading ? (
           <div className="flex justify-center py-16"><Spinner size="lg" /></div>
         ) : items.length === 0 ? (
-          <div className="px-6 py-16 text-center">
-            <div className="mb-3 text-4xl">📭</div>
-            <p className="text-gray-500">{search || status ? 'Không tìm thấy bài làm phù hợp.' : 'Bạn chưa thực hiện bài thi nào.'}</p>
+          <div className="px-6 py-16 text-center text-slate-500">
+            <p>{search || status ? 'Không tìm thấy bài làm phù hợp với tiêu chí lọc.' : 'Bạn chưa có bài thi nào đã hoàn thành.'}</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1050px] text-sm">
+            <table className="w-full min-w-[950px] text-sm">
               <thead>
-                <tr className="border-b bg-gray-50 text-left">
-                  <th className="px-4 py-3 font-semibold text-gray-600">STT</th>
-                  <th className="px-4 py-3 font-semibold text-gray-600">Tên bài thi</th>
-                  <th className="px-4 py-3 font-semibold text-gray-600">Xuất bản</th>
-                  <th className="px-4 py-3 font-semibold text-gray-600">Bắt đầu làm</th>
-                  <th className="px-4 py-3 font-semibold text-gray-600">Kết thúc làm</th>
-                  <th className="px-4 py-3 text-center font-semibold text-gray-600">Điểm</th>
-                  <th className="px-4 py-3 font-semibold text-gray-600">Khiếu nại</th>
-                  <th className="px-4 py-3 font-semibold text-gray-600">Thao tác</th>
+                <tr className="border-b border-slate-200 bg-slate-50 text-left text-slate-600">
+                  <th className="px-4 py-3 font-semibold">STT</th>
+                  <th className="px-4 py-3 font-semibold">Tên bài thi</th>
+                  <th className="px-4 py-3 font-semibold">Bắt đầu làm</th>
+                  <th className="px-4 py-3 font-semibold">Nộp bài lúc</th>
+                  <th className="px-4 py-3 text-center font-semibold">Điểm số</th>
+                  <th className="px-4 py-3 font-semibold">Khiếu nại</th>
+                  <th className="px-4 py-3 font-semibold text-right">Thao tác</th>
                 </tr>
               </thead>
               <tbody>
                 {items.map((item, index) => (
-                  <tr key={item.submission_id} className="border-b last:border-0 hover:bg-gray-50">
-                    <td className="px-4 py-4 text-gray-500">{(page - 1) * PAGE_SIZE + index + 1}</td>
-                    <td className="px-4 py-4 font-medium text-gray-900">{item.exam_title}</td>
-                    <td className="px-4 py-4 text-gray-600">{formatDate(item.published_at)}</td>
-                    <td className="px-4 py-4 text-gray-600">{formatDate(item.started_at)}</td>
-                    <td className="px-4 py-4 text-gray-600">{formatDate(item.submitted_at)}</td>
-                    <td className="px-4 py-4 text-center font-bold text-indigo-700">
-                      {Number(item.score).toFixed(2)}/{Number(item.max_score).toFixed(2)}
+                  <tr key={item.submission_id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors">
+                    <td className="px-4 py-3.5 text-slate-400 font-mono">{(page - 1) * PAGE_SIZE + index + 1}</td>
+                    <td className="px-4 py-3.5 font-medium text-slate-900">{item.exam_title}</td>
+                    <td className="px-4 py-3.5 text-slate-500 text-xs">{formatDate(item.started_at)}</td>
+                    <td className="px-4 py-3.5 text-slate-500 text-xs">{formatDate(item.submitted_at)}</td>
+                    <td className="px-4 py-3.5 text-center font-bold text-slate-900">
+                      {Number(item.score).toFixed(2)} / {Number(item.max_score).toFixed(2)}
                     </td>
-                    <td className="px-4 py-4">
+                    <td className="px-4 py-3.5">
                       {item.appeal_status ? (
-                        <span className="text-xs font-medium text-amber-700">{APPEAL_STATUS[item.appeal_status] || item.appeal_status}</span>
-                      ) : <span className="text-gray-400">Chưa gửi</span>}
+                        <span className="inline-block px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800">
+                          {APPEAL_STATUS[item.appeal_status] || item.appeal_status}
+                        </span>
+                      ) : (
+                        <span className="text-slate-400 text-xs">Chưa gửi</span>
+                      )}
                     </td>
-                    <td className="px-4 py-4">
-                      <div className="flex gap-2">
-                        <button onClick={() => navigate(`/student/history/${item.submission_id}`)}
-                          className="btn-primary btn-sm">Chi tiết</button>
-                        <button onClick={() => { setNotice(''); setSelectedSubmission(item); }}
-                          className="btn-secondary btn-sm">Khiếu nại</button>
+                    <td className="px-4 py-3.5 text-right">
+                      <div className="flex justify-end gap-2">
+                        <button
+                          onClick={() => navigate(`/student/history/${item.submission_id}`)}
+                          className="btn-secondary btn-sm"
+                        >
+                          Chi tiết
+                        </button>
+                        <button
+                          onClick={() => {
+                            setNotice('');
+                            setSelectedSubmission(item);
+                          }}
+                          className="btn-secondary btn-sm"
+                        >
+                          Khiếu nại
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -198,11 +255,23 @@ export default function StudentHistoryPage() {
       </div>
 
       {!loading && pagination.total > 0 && (
-        <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-gray-600">
-          <span>{pagination.total} bài làm · Trang {page}/{pageCount}</span>
+        <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-slate-600">
+          <span>Tổng số: {pagination.total} bài làm · Trang {page}/{pageCount}</span>
           <div className="flex gap-2">
-            <button disabled={page <= 1} onClick={() => setPage((current) => current - 1)} className="btn-secondary btn-sm">Trước</button>
-            <button disabled={page >= pageCount} onClick={() => setPage((current) => current + 1)} className="btn-secondary btn-sm">Sau</button>
+            <button
+              disabled={page <= 1}
+              onClick={() => setPage((current) => current - 1)}
+              className="btn-secondary btn-sm"
+            >
+              Trước
+            </button>
+            <button
+              disabled={page >= pageCount}
+              onClick={() => setPage((current) => current + 1)}
+              className="btn-secondary btn-sm"
+            >
+              Sau
+            </button>
           </div>
         </div>
       )}
@@ -213,7 +282,7 @@ export default function StudentHistoryPage() {
           onClose={() => setSelectedSubmission(null)}
           onSuccess={() => {
             setSelectedSubmission(null);
-            setNotice('Gửi khiếu nại thành công.');
+            setNotice('Gửi đơn khiếu nại thành công. Giảng viên phụ trách sẽ xem xét và phản hồi.');
             setRefreshKey((key) => key + 1);
           }}
         />

@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { teacherAPI } from '../../api/endpoints';
 import Spinner from '../../components/Spinner';
 
 function StatusBadge({ status }) {
   return (
-    <span className={status === 'published' ? 'badge-published' : 'badge-draft'}>
-      {status === 'published' ? '✅ Đã xuất bản' : '✏️ Nháp'}
+    <span className={`px-2.5 py-0.5 rounded text-xs font-semibold ${
+      status === 'published' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+    }`}>
+      {status === 'published' ? 'Đã xuất bản' : 'Bản nháp'}
     </span>
   );
 }
@@ -37,7 +39,7 @@ function CreateExamModal({ onClose, onCreated }) {
       const { data } = await teacherAPI.createExam(payload);
       onCreated(data.exam);
     } catch (err) {
-      setError(err.response?.data?.error || 'Tạo đề thất bại');
+      setError(err.response?.data?.error || 'Tạo đề thi không thành công');
     } finally {
       setLoading(false);
     }
@@ -45,21 +47,21 @@ function CreateExamModal({ onClose, onCreated }) {
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
-        <div className="flex items-center justify-between p-6 border-b">
-          <h3 className="text-lg font-semibold">Tạo đề thi mới</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-lg border border-slate-200">
+        <div className="flex items-center justify-between p-5 border-b border-slate-200">
+          <h3 className="text-base font-bold text-slate-900">Tạo đề thi mới</h3>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-xl leading-none">&times;</button>
         </div>
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="p-5 space-y-4">
           <div>
-            <label className="label">Tên đề thi</label>
-            <input name="title" value={form.title} onChange={handleChange} className="input" placeholder="VD: Kiểm tra Toán học kỳ 1" required />
+            <label className="label">Tên đề thi / môn thi</label>
+            <input name="title" value={form.title} onChange={handleChange} className="input" placeholder="Ví dụ: Kiểm tra giữa kỳ Lập trình Web" required />
           </div>
           <div>
-            <label className="label">Thời lượng (phút)</label>
+            <label className="label">Thời lượng làm bài (phút)</label>
             <input name="duration" type="number" min="1" max="300" value={form.duration} onChange={handleChange} className="input" required />
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="label">Thời gian bắt đầu</label>
               <input name="start_time" type="datetime-local" value={form.start_time} onChange={handleChange} className="input" required />
@@ -69,10 +71,10 @@ function CreateExamModal({ onClose, onCreated }) {
               <input name="end_time" type="datetime-local" value={form.end_time} onChange={handleChange} className="input" required />
             </div>
           </div>
-          {error && <p className="text-red-600 text-sm">⚠️ {error}</p>}
-          <div className="flex gap-3 pt-2">
-            <button type="button" onClick={onClose} className="btn-secondary flex-1">Hủy</button>
-            <button type="submit" disabled={loading} className="btn-primary flex-1">
+          {error && <p className="text-red-600 text-sm">{error}</p>}
+          <div className="flex justify-end gap-3 pt-2">
+            <button type="button" onClick={onClose} className="btn-secondary">Hủy bỏ</button>
+            <button type="submit" disabled={loading} className="btn-primary">
               {loading ? <Spinner size="sm" /> : null} Tạo đề thi
             </button>
           </div>
@@ -99,7 +101,9 @@ export default function TeacherExamsPage() {
     }
   };
 
-  useEffect(() => { fetchExams(); }, []);
+  useEffect(() => {
+    fetchExams();
+  }, []);
 
   const handleCreated = (exam) => {
     setShowModal(false);
@@ -108,58 +112,67 @@ export default function TeacherExamsPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Đề thi của tôi</h1>
-          <p className="text-gray-500 mt-1">Quản lý và soạn thảo đề thi trắc nghiệm</p>
+          <h1 className="text-xl font-bold text-slate-900">Danh mục đề thi</h1>
+          <p className="text-slate-500 text-sm mt-0.5">Quản trị danh sách đề thi trắc nghiệm đã tạo</p>
         </div>
-        <button onClick={() => setShowModal(true)} className="btn-primary btn-lg">
-          ＋ Tạo đề thi mới
+        <button onClick={() => setShowModal(true)} className="btn-primary">
+          Tạo đề thi mới
         </button>
       </div>
 
       {loading ? (
         <div className="flex justify-center py-20"><Spinner size="lg" /></div>
       ) : exams.length === 0 ? (
-        <div className="card text-center py-16">
-          <div className="text-5xl mb-4">📄</div>
-          <h3 className="text-lg font-medium text-gray-700">Chưa có đề thi nào</h3>
-          <p className="text-gray-400 mt-1 mb-6">Tạo đề thi đầu tiên của bạn ngay!</p>
-          <button onClick={() => setShowModal(true)} className="btn-primary mx-auto">＋ Tạo đề thi</button>
+        <div className="card text-center py-16 border border-slate-200">
+          <p className="text-slate-600 font-medium">Chưa có đề thi nào trong danh sách</p>
+          <p className="text-slate-400 text-sm mt-1 mb-5">Bấm nút bên dưới để khởi tạo đề thi đầu tiên</p>
+          <button onClick={() => setShowModal(true)} className="btn-primary mx-auto">Tạo đề thi</button>
         </div>
       ) : (
         <div className="grid gap-4">
           {exams.map((exam) => (
-            <div key={exam.id} className="card hover:shadow-md transition-shadow cursor-pointer group"
-              onClick={() => navigate(`/teacher/exams/${exam.id}`)}>
-              <div className="flex items-center justify-between">
+            <div
+              key={exam.id}
+              className="bg-white rounded-lg border border-slate-200 p-5 hover:border-slate-300 transition-colors cursor-pointer"
+              onClick={() => navigate(`/teacher/exams/${exam.id}`)}
+            >
+              <div className="flex items-center justify-between gap-4 flex-wrap">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-3 flex-wrap">
-                    <h3 className="font-semibold text-gray-900 text-lg group-hover:text-indigo-700 transition-colors truncate">
+                    <h3 className="font-semibold text-slate-900 text-base hover:text-indigo-600 transition-colors truncate">
                       {exam.title}
                     </h3>
                     <StatusBadge status={exam.status} />
                   </div>
-                  <div className="flex items-center gap-4 mt-2 text-sm text-gray-500 flex-wrap">
-                    <span className="flex items-center gap-1">
-                      🔑 Mã: <code className="bg-gray-100 px-2 py-0.5 rounded font-mono font-bold text-indigo-700">{exam.exam_code}</code>
+                  <div className="flex items-center gap-5 mt-2 text-xs text-slate-500 flex-wrap">
+                    <span>
+                      Mã kỳ thi: <code className="bg-slate-100 px-2 py-0.5 rounded font-mono font-bold text-slate-800">{exam.exam_code}</code>
                     </span>
-                    <span>⏱ {exam.duration} phút</span>
-                    <span>📅 {new Date(exam.start_time).toLocaleString('vi-VN')}</span>
+                    <span>Thời lượng: <strong>{exam.duration} phút</strong></span>
+                    <span>Bắt đầu: {new Date(exam.start_time).toLocaleString('vi-VN')}</span>
+                    <span>Kết thúc: {new Date(exam.end_time).toLocaleString('vi-VN')}</span>
                   </div>
                 </div>
-                <div className="flex gap-2 ml-4 flex-shrink-0">
+                <div className="flex gap-2 flex-shrink-0">
                   <button
-                    onClick={(e) => { e.stopPropagation(); navigate(`/teacher/exams/${exam.id}`); }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      navigate(`/teacher/exams/${exam.id}`);
+                    }}
                     className="btn-secondary btn-sm"
                   >
-                    ✏️ Soạn thảo
+                    Soạn đề
                   </button>
                   <button
-                    onClick={(e) => { e.stopPropagation(); navigate(`/teacher/exams/${exam.id}/results`); }}
-                    className="btn-sm btn bg-violet-600 text-white hover:bg-violet-700"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      navigate(`/teacher/exams/${exam.id}/results`);
+                    }}
+                    className="btn-secondary btn-sm"
                   >
-                    📊 Kết quả
+                    Bảng điểm
                   </button>
                 </div>
               </div>

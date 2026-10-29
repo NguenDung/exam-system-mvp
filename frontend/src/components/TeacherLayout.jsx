@@ -6,8 +6,8 @@ function NavItem({ to, children }) {
     <NavLink
       to={to}
       className={({ isActive }) =>
-        `px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-          isActive ? 'bg-indigo-700 text-white' : 'text-indigo-100 hover:bg-indigo-700/60'
+        `px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+          isActive ? 'bg-slate-800 text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white'
         }`
       }
     >
@@ -20,25 +20,29 @@ export default function TeacherLayout() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
-  const handleLogout = () => { logout(); navigate('/login'); };
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-indigo-800 shadow-lg">
+    <div className="min-h-screen bg-slate-50 text-slate-900">
+      <header className="bg-slate-900 border-b border-slate-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-6">
-            <div className="flex items-center gap-2">
-              <span className="text-2xl">🎓</span>
-              <span className="text-white font-bold text-lg tracking-tight">ExamMVP</span>
-              <span className="text-indigo-300 text-xs ml-2 font-medium uppercase tracking-wider">Giáo viên</span>
+            <div className="flex items-center gap-3">
+              <span className="font-bold text-base tracking-tight text-white uppercase">Hệ Thống Khảo Thí</span>
+              <span className="bg-slate-700 text-slate-300 text-xs px-2 py-0.5 rounded font-medium">Giảng viên</span>
             </div>
-            <nav className="flex gap-1">
-              <NavItem to="/teacher">Đề thi của tôi</NavItem>
+            <nav className="flex gap-2">
+              <NavItem to="/teacher">Quản lý đề thi</NavItem>
             </nav>
           </div>
-          <div className="flex items-center gap-3">
-            <span className="text-indigo-200 text-sm hidden sm:block">👋 {user?.full_name}</span>
-            <button onClick={handleLogout} className="btn-secondary btn-sm">Đăng xuất</button>
+          <div className="flex items-center gap-4">
+            <span className="text-slate-300 text-sm hidden sm:block">{user?.full_name}</span>
+            <button onClick={handleLogout} className="btn-secondary btn-sm bg-slate-800 text-slate-200 border-slate-700 hover:bg-slate-700">
+              Đăng xuất
+            </button>
           </div>
         </div>
       </header>

@@ -5,10 +5,10 @@ import { useAuth } from '../contexts/AuthContext';
 import Spinner from '../components/Spinner';
 
 const DEMO_ACCOUNTS = [
-  { label: '👨‍🏫 Giáo viên Demo', email: 'teacher@test.com', password: '123456', color: 'indigo' },
-  { label: '👨‍🎓 Student 1', email: 'student@test.com', password: '123456', color: 'emerald' },
-  { label: '👨‍🎓 Student 2', email: 'student2@test.com', password: '123456', color: 'emerald' },
-  { label: '👩‍🎓 Student 3', email: 'student3@test.com', password: '123456', color: 'emerald' },
+  { label: 'Giảng viên', email: 'teacher@test.com', password: '123456' },
+  { label: 'Sinh viên 1', email: 'student@test.com', password: '123456' },
+  { label: 'Sinh viên 2', email: 'student2@test.com', password: '123456' },
+  { label: 'Sinh viên 3', email: 'student3@test.com', password: '123456' },
 ];
 
 export default function LoginPage() {
@@ -37,39 +37,33 @@ export default function LoginPage() {
       login(data.token, data.user);
       navigate(data.user.role === 'teacher' ? '/teacher' : '/student', { replace: true });
     } catch (err) {
-      setError(err.response?.data?.error || 'Đăng nhập thất bại. Vui lòng thử lại.');
+      setError(err.response?.data?.error || 'Đăng nhập không thành công. Vui lòng kiểm tra lại thông tin.');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-emerald-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
-        {/* Logo */}
-        <div className="text-center mb-8">
-          <div className="text-5xl mb-3">🎓</div>
-          <h1 className="text-3xl font-bold text-gray-900">ExamMVP</h1>
-          <p className="text-gray-500 mt-1">Hệ thống thi trắc nghiệm trực tuyến</p>
+        <div className="text-center mb-6">
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight uppercase">Hệ Thống Thi Trực Tuyến</h1>
+          <p className="text-slate-600 text-sm mt-1">Cổng khảo thí và đánh giá nội bộ</p>
         </div>
 
-        <div className="card shadow-xl">
-          <h2 className="text-xl font-semibold text-gray-800 mb-6">Đăng nhập</h2>
+        <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6 sm:p-8">
+          <h2 className="text-lg font-semibold text-slate-800 mb-5">Đăng nhập tài khoản</h2>
 
-          {/* Demo accounts */}
-          <div className="mb-5 p-4 bg-amber-50 rounded-xl border border-amber-200">
-            <p className="text-xs font-semibold text-amber-700 mb-2 uppercase tracking-wider">⚡ Tài khoản Demo (Click để điền)</p>
+          {/* Demo quick fill */}
+          <div className="mb-6 p-3 bg-slate-50 rounded-md border border-slate-200">
+            <p className="text-xs font-semibold text-slate-600 mb-2 uppercase tracking-wide">Tài khoản thử nghiệm:</p>
             <div className="grid grid-cols-2 gap-2">
               {DEMO_ACCOUNTS.map((acc) => (
                 <button
                   key={acc.email}
                   type="button"
                   onClick={() => fillDemo(acc)}
-                  className={`flex-1 text-xs py-2 px-3 rounded-lg border font-medium transition-all hover:scale-[1.02] active:scale-95 ${
-                    acc.color === 'indigo'
-                      ? 'border-indigo-300 bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
-                      : 'border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
-                  }`}
+                  className="text-xs py-1.5 px-2.5 rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 font-medium text-left truncate transition-colors"
                 >
                   {acc.label}
                 </button>
@@ -79,14 +73,14 @@ export default function LoginPage() {
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="label">Email</label>
+              <label className="label">Địa chỉ Email</label>
               <input
                 name="email"
                 type="email"
                 value={form.email}
                 onChange={handleChange}
                 className="input"
-                placeholder="your@email.com"
+                placeholder="name@institution.edu.vn"
                 required
                 autoComplete="email"
               />
@@ -106,21 +100,21 @@ export default function LoginPage() {
             </div>
 
             {error && (
-              <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm flex items-center gap-2">
-                <span>⚠️</span> {error}
+              <div className="p-3 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
+                {error}
               </div>
             )}
 
-            <button type="submit" disabled={loading} className="btn-primary w-full btn-lg mt-2">
+            <button type="submit" disabled={loading} className="btn-primary w-full py-2.5 mt-2">
               {loading ? <Spinner size="sm" /> : null}
-              {loading ? 'Đang đăng nhập...' : 'Đăng nhập'}
+              {loading ? 'Đang xác thực...' : 'Đăng nhập'}
             </button>
           </form>
 
-          <p className="mt-5 text-center text-sm text-gray-500">
-            Chưa có tài khoản?{' '}
+          <p className="mt-6 text-center text-sm text-slate-500">
+            Thí sinh chưa có tài khoản?{' '}
             <Link to="/register" className="text-indigo-600 font-medium hover:underline">
-              Đăng ký ngay
+              Đăng ký tại đây
             </Link>
           </p>
         </div>

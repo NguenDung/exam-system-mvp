@@ -18,161 +18,174 @@ export default function ExamResultPage() {
       const { data: d } = await studentAPI.getResult(attempt_id);
       setData(d);
     } catch (err) {
-      setError(err.response?.data?.error || 'Không thể tải kết quả');
+      setError(err.response?.data?.error || 'Không thể tải kết quả bài thi');
     } finally {
       setLoading(false);
     }
   }, [attempt_id]);
 
-  useEffect(() => { fetchResult(); }, [fetchResult]);
+  useEffect(() => {
+    fetchResult();
+  }, [fetchResult]);
 
   if (loading) return <div className="flex justify-center py-20"><Spinner size="lg" /></div>;
 
-  if (error) return (
-    <div className="card text-center py-16 max-w-md mx-auto">
-      <div className="text-4xl mb-3">❌</div>
-      <p className="text-red-600 font-medium">{error}</p>
-      <button onClick={() => navigate('/student')} className="btn-primary mt-4">← Về trang chủ</button>
-    </div>
-  );
+  if (error) {
+    return (
+      <div className="bg-white rounded-lg border border-red-200 text-center py-12 px-6 max-w-md mx-auto">
+        <p className="text-red-700 font-medium text-sm">{error}</p>
+        <button onClick={() => navigate('/student')} className="btn-primary mt-4">
+          Quay về trang chủ
+        </button>
+      </div>
+    );
+  }
 
   const { attempt, exam, answers, show_correct_answers } = data;
   const maxScore = (answers || []).reduce((total, answer) => total + Number(answer.points || 0), 0);
-  const scorePercent = answers && answers.length > 0
-    ? Math.round((attempt.correct_count / answers.length) * 100)
-    : 0;
-
-  const scoreColor = scorePercent >= 80 ? 'text-emerald-600' : scorePercent >= 50 ? 'text-amber-600' : 'text-red-600';
-  const scoreRingColor = scorePercent >= 80 ? 'border-emerald-400' : scorePercent >= 50 ? 'border-amber-400' : 'border-red-400';
+  const scorePercent =
+    answers && answers.length > 0 ? Math.round((attempt.correct_count / answers.length) * 100) : 0;
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center gap-4 flex-wrap">
-        <button onClick={() => navigate('/student')} className="btn-secondary btn-sm">← Về trang chủ</button>
-        <h1 className="text-2xl font-bold text-gray-900">📊 Kết quả bài thi</h1>
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-xl font-bold text-slate-900">Kết quả bài thi</h1>
+          <p className="text-xs text-slate-500 mt-0.5">Bảng điểm và thống kê bài làm</p>
+        </div>
+        <button onClick={() => navigate('/student')} className="btn-secondary btn-sm">
+          Quay lại trang chủ
+        </button>
       </div>
 
-      {/* Score card */}
-      <div className="card max-w-2xl mx-auto text-center py-8">
-        <h2 className="text-xl font-bold text-gray-900 mb-1">{exam?.title}</h2>
-        <p className="text-gray-500 text-sm mb-6">Mã đề: <code className="font-mono text-indigo-700 font-bold">{exam?.exam_code}</code></p>
+      {/* Score overview card */}
+      <div className="bg-white rounded-lg border border-slate-200 p-6 max-w-2xl mx-auto text-center">
+        <h2 className="text-lg font-bold text-slate-900">{exam?.title}</h2>
+        <p className="text-slate-500 text-xs mt-1 mb-6">
+          Mã đề: <code className="font-mono text-slate-800 font-bold">{exam?.exam_code}</code>
+        </p>
 
-        {/* Score circle */}
-        <div className={`w-36 h-36 rounded-full border-8 ${scoreRingColor} mx-auto flex flex-col items-center justify-center mb-6`}>
-          <span className={`text-3xl font-extrabold ${scoreColor}`}>{Number(attempt.score).toFixed(2)}</span>
-          <span className="text-xs font-medium text-gray-400">/ {maxScore.toFixed(2)} điểm</span>
+        <div className="inline-block p-6 rounded-lg bg-slate-50 border border-slate-200 mb-6 min-w-[200px]">
+          <span className="text-4xl font-extrabold text-slate-900 block">{Number(attempt.score).toFixed(2)}</span>
+          <span className="text-xs font-medium text-slate-500 uppercase tracking-wide">
+            trên tổng {maxScore.toFixed(2)} điểm
+          </span>
         </div>
 
-        <div className="grid grid-cols-3 gap-4 max-w-sm mx-auto mb-4">
-          <div className="text-center">
-            <div className="text-2xl font-bold text-emerald-600">{attempt.correct_count}</div>
-            <div className="text-xs text-gray-500">Câu đúng</div>
+        <div className="grid grid-cols-3 gap-4 max-w-sm mx-auto mb-4 border-t border-slate-100 pt-4 text-sm">
+          <div>
+            <div className="text-xl font-bold text-emerald-700">{attempt.correct_count}</div>
+            <div className="text-xs text-slate-500">Số câu đúng</div>
           </div>
-          <div className="text-center">
-            <div className="text-2xl font-bold text-red-500">{attempt.wrong_count}</div>
-            <div className="text-xs text-gray-500">Câu sai</div>
+          <div>
+            <div className="text-xl font-bold text-red-600">{attempt.wrong_count}</div>
+            <div className="text-xs text-slate-500">Số câu sai</div>
           </div>
-          <div className="text-center">
-            <div className="text-2xl font-bold text-gray-400">
+          <div>
+            <div className="text-xl font-bold text-slate-400">
               {(answers?.length || 0) - attempt.correct_count - attempt.wrong_count}
             </div>
-            <div className="text-xs text-gray-500">Bỏ qua</div>
+            <div className="text-xs text-slate-500">Bỏ qua</div>
           </div>
         </div>
 
-        <div className="bg-gray-100 rounded-full h-3 max-w-xs mx-auto overflow-hidden mb-2">
-          <div
-            className={`h-full rounded-full transition-all duration-700 ${
-              scorePercent >= 80 ? 'bg-emerald-500' : scorePercent >= 50 ? 'bg-amber-500' : 'bg-red-500'
-            }`}
-            style={{ width: `${scorePercent}%` }}
-          />
-        </div>
-        <p className={`text-sm font-semibold ${scoreColor}`}>{scorePercent}% chính xác</p>
+        <p className="text-xs text-slate-500">Tỷ lệ chính xác: <strong>{scorePercent}%</strong></p>
 
         {attempt.submitted_at && (
-          <p className="text-xs text-gray-400 mt-3">
-            Nộp lúc: {new Date(attempt.submitted_at).toLocaleString('vi-VN')}
+          <p className="text-xs text-slate-400 mt-2">
+            Thời điểm nộp bài: {new Date(attempt.submitted_at).toLocaleString('vi-VN')}
           </p>
         )}
 
         {!show_correct_answers && (
-          <p className="mt-4 text-sm text-amber-600 bg-amber-50 rounded-lg px-4 py-2 inline-block">
-            🔒 Đáp án chi tiết sẽ hiển thị sau khi kỳ thi kết thúc
-          </p>
+          <div className="mt-4 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded p-2.5 max-w-md mx-auto">
+            Đáp án chuẩn sẽ được hiển thị sau khi kỳ thi chính thức kết thúc thời gian làm bài.
+          </div>
         )}
       </div>
 
-      {/* Detail answers */}
+      {/* Answers list */}
       {answers && answers.length > 0 && (
-        <div>
-          <h3 className="font-bold text-gray-900 text-lg mb-4">
-            📝 Chi tiết từng câu
-            {!show_correct_answers && <span className="text-sm font-normal text-gray-400 ml-2">(chưa hiển thị đáp án)</span>}
+        <div className="max-w-2xl mx-auto space-y-4">
+          <h3 className="font-bold text-slate-900 text-sm uppercase tracking-wide">
+            Chi tiết các câu hỏi
+            {!show_correct_answers && (
+              <span className="text-xs font-normal text-slate-400 ml-2">(Chưa mở đáp án đúng)</span>
+            )}
           </h3>
-          <div className="space-y-4">
+
+          <div className="space-y-3">
             {answers.map((a, idx) => {
               const isCorrect = a.is_correct;
               const isUnanswered = !a.chosen_option;
 
               return (
-                <div key={a.question_id} className={`card border-2 transition-all ${
-                  isUnanswered ? 'border-gray-200' :
-                  isCorrect ? 'border-emerald-200 bg-emerald-50/30' :
-                  'border-red-200 bg-red-50/30'
-                }`}>
-                  <div className="flex items-start gap-3 mb-4">
-                    <span className={`flex-shrink-0 w-8 h-8 rounded-full font-bold text-sm flex items-center justify-center ${
-                      isUnanswered ? 'bg-gray-200 text-gray-500' :
-                      isCorrect ? 'bg-emerald-500 text-white' :
-                      'bg-red-500 text-white'
-                    }`}>
-                      {isUnanswered ? '—' : isCorrect ? '✓' : '✗'}
+                <div
+                  key={a.question_id}
+                  className={`bg-white rounded-lg border p-4 ${
+                    isUnanswered
+                      ? 'border-slate-200'
+                      : isCorrect
+                      ? 'border-emerald-200'
+                      : 'border-red-200'
+                  }`}
+                >
+                  <div className="flex items-start gap-3 mb-3">
+                    <span className="flex-shrink-0 w-6 h-6 rounded bg-slate-100 text-slate-700 font-bold text-xs flex items-center justify-center">
+                      {idx + 1}
                     </span>
                     <div className="flex-1">
-                      <p className="font-medium text-gray-900 leading-relaxed">
-                        <span className="text-gray-400 mr-2">Câu {idx + 1}.</span>
-                        {a.prompt}
-                      </p>
-                      <p className="text-xs text-gray-400 mt-0.5">{a.points} điểm</p>
+                      <p className="font-medium text-slate-900 text-sm">{a.prompt}</p>
+                      <p className="text-xs text-slate-400 mt-0.5">Trọng số: {a.points} điểm</p>
                     </div>
-                    <span className="text-sm font-bold">
-                      {isCorrect ? <span className="text-emerald-600">+{a.points_awarded.toFixed(1)}</span> :
-                       <span className="text-gray-400">0</span>}
+                    <span className="text-xs font-semibold">
+                      {isCorrect ? (
+                        <span className="text-emerald-700">+{Number(a.points_awarded).toFixed(1)}</span>
+                      ) : (
+                        <span className="text-slate-400">0</span>
+                      )}
                     </span>
                   </div>
 
-                  {/* Options */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 ml-11">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
                     {OPTIONS.map((opt) => {
                       const field = OPTION_FIELDS[opt];
                       const isChosen = a.chosen_option === opt;
                       const isAnswer = show_correct_answers && a.correct_option === opt;
 
-                      let cls = 'border-gray-200 bg-white text-gray-600';
-                      if (isAnswer && show_correct_answers) cls = 'border-emerald-400 bg-emerald-50 text-emerald-800 font-semibold';
-                      if (isChosen && !isCorrect && !isAnswer) cls = 'border-red-400 bg-red-50 text-red-800 font-semibold';
-                      if (isChosen && isCorrect) cls = 'border-emerald-400 bg-emerald-50 text-emerald-800 font-semibold';
+                      let cls = 'border-slate-200 bg-white text-slate-700';
+                      if (isAnswer && show_correct_answers) cls = 'border-emerald-300 bg-emerald-50 text-emerald-900 font-semibold';
+                      if (isChosen && !isCorrect && !isAnswer) cls = 'border-red-300 bg-red-50 text-red-900 font-semibold';
+                      if (isChosen && isCorrect) cls = 'border-emerald-300 bg-emerald-50 text-emerald-900 font-semibold';
 
                       return (
-                        <div key={opt} className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl border-2 text-sm ${cls}`}>
-                          <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${
-                            isAnswer && show_correct_answers ? 'bg-emerald-500 text-white' :
-                            isChosen && !isCorrect ? 'bg-red-500 text-white' :
-                            'bg-gray-100 text-gray-500'
-                          }`}>{opt}</span>
-                          <span>{a[field]}</span>
-                          {isChosen && <span className="ml-auto text-xs">{isCorrect ? '✓ Đúng' : '✗ Sai'}</span>}
+                        <div key={opt} className={`flex items-center gap-2 px-3 py-2 rounded border ${cls}`}>
+                          <span
+                            className={`w-5 h-5 rounded flex items-center justify-center text-xs font-bold flex-shrink-0 ${
+                              isAnswer && show_correct_answers
+                                ? 'bg-emerald-600 text-white'
+                                : isChosen && !isCorrect
+                                ? 'bg-red-600 text-white'
+                                : 'bg-slate-100 text-slate-600'
+                            }`}
+                          >
+                            {opt}
+                          </span>
+                          <span className="truncate">{a[field]}</span>
+                          {isChosen && (
+                            <span className="ml-auto text-xs font-medium">
+                              {isCorrect ? '(Đúng)' : '(Bạn chọn)'}
+                            </span>
+                          )}
                           {isAnswer && show_correct_answers && !isChosen && (
-                            <span className="ml-auto text-xs text-emerald-600">✓ Đáp án</span>
+                            <span className="ml-auto text-xs text-emerald-700 font-semibold">(Đáp án)</span>
                           )}
                         </div>
                       );
                     })}
                   </div>
                   {isUnanswered && (
-                    <p className="text-xs text-gray-400 mt-2 ml-11 italic">Bỏ qua câu này</p>
+                    <p className="text-xs text-slate-400 mt-2 italic">Câu hỏi này chưa được trả lời</p>
                   )}
                 </div>
               );
@@ -181,10 +194,9 @@ export default function ExamResultPage() {
         </div>
       )}
 
-      {/* Bottom nav */}
       <div className="text-center pt-4 pb-8">
-        <button onClick={() => navigate('/student')} className="btn-primary btn-lg">
-          🏠 Về trang chủ
+        <button onClick={() => navigate('/student')} className="btn-secondary">
+          Quay lại trang chủ
         </button>
       </div>
     </div>
