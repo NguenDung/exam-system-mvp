@@ -2,14 +2,9 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { teacherAPI } from '../../api/endpoints';
 import Spinner from '../../components/Spinner';
+import ExamAppealsTab from './ExamAppealsTab';
 
 const OPTION_LABELS = ['A', 'B', 'C', 'D'];
-const OPTION_COLORS = {
-  A: 'bg-blue-50 border-blue-300 text-blue-800',
-  B: 'bg-purple-50 border-purple-300 text-purple-800',
-  C: 'bg-orange-50 border-orange-300 text-orange-800',
-  D: 'bg-pink-50 border-pink-300 text-pink-800',
-};
 
 const EMPTY_QUESTION = {
   prompt: '', option_a: '', option_b: '', option_c: '', option_d: '',
@@ -129,6 +124,10 @@ export default function TeacherExamDetailPage() {
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [toast, setToast] = useState(null);
+  const [activeTab, setActiveTab] = useState('info');
+  const [scoreData, setScoreData] = useState(null);
+  const [scoreLoading, setScoreLoading] = useState(false);
+  const [scoreError, setScoreError] = useState('');
 
   const showToast = useCallback((msg, type = 'success') => {
     setToast({ msg, type });
@@ -148,6 +147,17 @@ export default function TeacherExamDetailPage() {
   }, [id, navigate]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  useEffect(() => {
+    if (activeTab !== 'scores' || scoreData) return;
+    let active = true;
+    setScoreLoading(true);
+    teacherAPI.getResults(id)
+      .then(({ data }) => { if (active) setScoreData(data); })
+      .catch((err) => { if (active) setScoreError(err.response?.data?.error || 'Không thể tải bảng điểm.'); })
+      .finally(() => { if (active) setScoreLoading(false); });
+    return () => { active = false; };
+  }, [activeTab, id, scoreData]);
 
   const handleAddQuestion = async (questionData) => {
     setSaving(true);
@@ -191,6 +201,12 @@ export default function TeacherExamDetailPage() {
   if (!exam) return null;
 
   const isDraft = exam.status === 'draft';
+  const tabs = [
+    { id: 'info', label: 'Thông tin chung' },
+    { id: 'questions', label: 'Câu hỏi - đáp án' },
+    { id: 'scores', label: 'Điểm' },
+    { id: 'appeals', label: 'Khiếu nại' },
+  ];
 
   return (
     <div>
@@ -231,51 +247,93 @@ export default function TeacherExamDetailPage() {
         </div>
       </div>
 
-      {/* Info bar */}
-      <div className="grid grid-cols-3 gap-4 mb-6">
-        {[
-          { label: 'Số câu hỏi', value: questions.length, icon: '❓' },
-          { label: 'Tổng điểm', value: questions.reduce((s, q) => s + (q.points || 1), 0).toFixed(1), icon: '💯' },
-          { label: 'Trạng thái', value: isDraft ? 'Bản nháp' : 'Đã xuất bản', icon: isDraft ? '✏️' : '✅' },
-        ].map((stat) => (
-          <div key={stat.label} className="card text-center py-4">
-            <div className="text-2xl mb-1">{stat.icon}</div>
-            <div className="text-xl font-bold text-gray-900">{stat.value}</div>
-            <div className="text-xs text-gray-500 mt-0.5">{stat.label}</div>
-          </div>
+      <nav className="mb-6 flex gap-2 overflow-x-auto border-b" aria-label="Các mục của đề thi">
+        {tabs.map((tab) => (
+          <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+            className={`whitespace-nowrap border-b-2 px-4 py-3 text-sm font-medium ${
+              activeTab === tab.id ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-gray-500 hover:text-gray-800'
+            }`}>
+            {tab.label}
+          </button>
         ))}
-      </div>
+      </nav>
 
-      {/* Questions list */}
-      <div className="space-y-3 mb-4">
-        {questions.length === 0 && !showForm && (
-          <div className="card text-center py-12 border-dashed border-2 border-gray-200">
-            <div className="text-4xl mb-3">📭</div>
-            <p className="text-gray-500">Chưa có câu hỏi nào. {isDraft && 'Thêm câu hỏi đầu tiên!'}</p>
+      {activeTab === 'info' && (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          {[
+            { label: 'Số câu hỏi', value: questions.length, icon: '❓' },
+            { label: 'Tổng điểm', value: questions.reduce((sum, question) => sum + (question.points || 1), 0).toFixed(1), icon: '💯' },
+            { label: 'Trạng thái', value: isDraft ? 'Bản nháp' : 'Đã xuất bản', icon: isDraft ? '✏️' : '✅' },
+          ].map((stat) => (
+            <div key={stat.label} className="card text-center py-6">
+              <div className="mb-2 text-3xl">{stat.icon}</div>
+              <div className="text-xl font-bold text-gray-900">{stat.value}</div>
+              <div className="mt-1 text-xs text-gray-500">{stat.label}</div>
+            </div>
+          ))}
+          <div className="card sm:col-span-3">
+            <h2 className="font-semibold text-gray-900">Thông tin đề thi</h2>
+            <dl className="mt-4 grid gap-4 text-sm sm:grid-cols-2">
+              <div><dt className="text-gray-500">Mã đề</dt><dd className="font-mono font-semibold">{exam.exam_code}</dd></div>
+              <div><dt className="text-gray-500">Thời lượng</dt><dd>{exam.duration} phút</dd></div>
+              <div><dt className="text-gray-500">Bắt đầu</dt><dd>{new Date(exam.start_time).toLocaleString('vi-VN')}</dd></div>
+              <div><dt className="text-gray-500">Kết thúc</dt><dd>{new Date(exam.end_time).toLocaleString('vi-VN')}</dd></div>
+              {exam.published_at && <div><dt className="text-gray-500">Xuất bản lúc</dt><dd>{new Date(exam.published_at).toLocaleString('vi-VN')}</dd></div>}
+            </dl>
           </div>
-        )}
-        {questions.map((q, i) => (
-          <QuestionCard key={q.id} q={q} index={i} isDraft={isDraft} onDelete={handleDelete} />
-        ))}
-      </div>
+        </div>
+      )}
 
-      {/* Add question area */}
-      {isDraft && (
-        showForm
-          ? <QuestionForm onSave={handleAddQuestion} onCancel={() => setShowForm(false)} saving={saving} />
-          : (
-            <button onClick={() => setShowForm(true)}
-              className="w-full py-4 border-2 border-dashed border-indigo-300 rounded-2xl text-indigo-600 font-medium hover:border-indigo-500 hover:bg-indigo-50 transition-all flex items-center justify-center gap-2">
+      {activeTab === 'questions' && (
+        <>
+          <div className="mb-4 space-y-3">
+            {questions.length === 0 && !showForm && (
+              <div className="card border-2 border-dashed border-gray-200 py-12 text-center">
+                <div className="mb-3 text-4xl">📭</div>
+                <p className="text-gray-500">Chưa có câu hỏi nào. {isDraft && 'Thêm câu hỏi đầu tiên!'}</p>
+              </div>
+            )}
+            {questions.map((question, index) => (
+              <QuestionCard key={question.id} q={question} index={index} isDraft={isDraft} onDelete={handleDelete} />
+            ))}
+          </div>
+          {isDraft && (showForm
+            ? <QuestionForm onSave={handleAddQuestion} onCancel={() => setShowForm(false)} saving={saving} />
+            : <button onClick={() => setShowForm(true)}
+              className="w-full rounded-2xl border-2 border-dashed border-indigo-300 py-4 font-medium text-indigo-600 transition-all hover:border-indigo-500 hover:bg-indigo-50">
               ➕ Thêm câu hỏi mới
-            </button>
-          )
+            </button>)}
+          {isDraft && questions.length === 0 && <p className="mt-4 rounded-lg bg-amber-50 p-3 text-center text-sm text-amber-600">⚠️ Cần có ít nhất 1 câu hỏi để xuất bản đề thi.</p>}
+        </>
       )}
 
-      {isDraft && questions.length === 0 && (
-        <p className="text-center text-amber-600 text-sm mt-4 bg-amber-50 rounded-lg p-3">
-          ⚠️ Cần có ít nhất 1 câu hỏi để xuất bản đề thi.
-        </p>
+      {activeTab === 'scores' && (
+        <section className="card">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-lg font-bold text-gray-900">Bảng điểm</h2>
+            <Link to={`/teacher/exams/${id}/results`} className="btn-primary btn-sm">Xem thống kê đầy đủ</Link>
+          </div>
+          {scoreLoading ? <div className="flex justify-center py-10"><Spinner size="lg" /></div> :
+            scoreError ? <p role="alert" className="text-sm text-red-600">{scoreError}</p> :
+              !scoreData?.results?.length ? <p className="py-8 text-center text-gray-500">Chưa có học sinh nào làm bài thi này.</p> : (
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[500px] text-sm">
+                    <thead><tr className="border-b text-left text-gray-500"><th className="py-3">Student</th><th className="py-3">Điểm</th><th className="py-3">Trạng thái</th><th className="py-3">Nộp lúc</th></tr></thead>
+                    <tbody>{scoreData.results.map((result) => (
+                      <tr key={result.attempt_id} className="border-b last:border-0">
+                        <td className="py-3"><p className="font-medium text-gray-900">{result.full_name}</p><p className="text-xs text-gray-500">{result.email}</p></td>
+                        <td className="py-3 font-semibold">{result.status === 'completed' ? Number(result.score).toFixed(2) : '—'}</td>
+                        <td className="py-3">{result.status === 'completed' ? 'Đã nộp' : 'Đang làm'}</td>
+                        <td className="py-3">{result.submitted_at ? new Date(result.submitted_at).toLocaleString('vi-VN') : '—'}</td>
+                      </tr>
+                    ))}</tbody>
+                  </table>
+                </div>
+              )}
+        </section>
       )}
+
+      {activeTab === 'appeals' && <ExamAppealsTab examId={id} />}
     </div>
   );
 }

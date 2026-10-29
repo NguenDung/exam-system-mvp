@@ -16,8 +16,17 @@ func Migrate(db *gorm.DB) {
 		&Question{},
 		&ExamAttempt{},
 		&AttemptAnswer{},
+		&Appeal{},
 	); err != nil {
 		log.Fatalf("AutoMigrate failed: %v", err)
+	}
+
+	if err := db.Exec(`
+		UPDATE exams
+		SET published_at = updated_at
+		WHERE status = 'published' AND published_at IS NULL
+	`).Error; err != nil {
+		log.Fatalf("Failed to backfill exam publication timestamps: %v", err)
 	}
 
 	// Unique composite index: (exam_id, user_id) on exam_attempts

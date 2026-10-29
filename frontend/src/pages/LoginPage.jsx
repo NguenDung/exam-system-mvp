@@ -6,7 +6,9 @@ import Spinner from '../components/Spinner';
 
 const DEMO_ACCOUNTS = [
   { label: '👨‍🏫 Giáo viên Demo', email: 'teacher@test.com', password: '123456', color: 'indigo' },
-  { label: '👨‍🎓 Học sinh Demo', email: 'student@test.com', password: '123456', color: 'emerald' },
+  { label: '👨‍🎓 Student 1', email: 'student@test.com', password: '123456', color: 'emerald' },
+  { label: '👨‍🎓 Student 2', email: 'student2@test.com', password: '123456', color: 'emerald' },
+  { label: '👩‍🎓 Student 3', email: 'student3@test.com', password: '123456', color: 'emerald' },
 ];
 
 export default function LoginPage() {
@@ -57,7 +59,7 @@ export default function LoginPage() {
           {/* Demo accounts */}
           <div className="mb-5 p-4 bg-amber-50 rounded-xl border border-amber-200">
             <p className="text-xs font-semibold text-amber-700 mb-2 uppercase tracking-wider">⚡ Tài khoản Demo (Click để điền)</p>
-            <div className="flex gap-2">
+            <div className="grid grid-cols-2 gap-2">
               {DEMO_ACCOUNTS.map((acc) => (
                 <button
                   key={acc.email}

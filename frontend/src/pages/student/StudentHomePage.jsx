@@ -20,15 +20,20 @@ export default function StudentHomePage() {
   const [lookupError, setLookupError] = useState('');
   const [attempts, setAttempts] = useState([]);
   const [attemptsLoading, setAttemptsLoading] = useState(true);
+  const [attemptsError, setAttemptsError] = useState('');
   const [starting, setStarting] = useState(false);
+  const [startConfirmOpen, setStartConfirmOpen] = useState(false);
   const navigate = useNavigate();
 
   const fetchAttempts = useCallback(async () => {
+    setAttemptsLoading(true);
+    setAttemptsError('');
     try {
       const { data } = await studentAPI.listAttempts();
       setAttempts(data.attempts || []);
-    } catch {
-      // silent
+    } catch (err) {
+      setAttempts([]);
+      setAttemptsError(err.response?.data?.error || 'Không thể tải lịch sử làm bài.');
     } finally {
       setAttemptsLoading(false);
     }
@@ -52,10 +57,11 @@ export default function StudentHomePage() {
     }
   };
 
-  const handleStart = async () => {
+  const handleStart = async (confirmed = false) => {
     if (!lookupResult?.exam) return;
     setStarting(true);
     try {
+      const { data } = await studentAPI.startExam(lookupResult.exam.id, { confirmed });
       const { data } = await studentAPI.startExam(lookupResult.exam.id);
       // Auto-submitted on start (deadline passed) → go to results
       if (data.auto_submitted || data.attempt?.status === 'completed') {
@@ -72,10 +78,11 @@ export default function StudentHomePage() {
       alert(payload?.error || 'Không thể bắt đầu bài thi');
     } finally {
       setStarting(false);
+      setStartConfirmOpen(false);
     }
   };
 
-  const canStart = lookupResult && ['open', 'in_progress'].includes(lookupResult.attempt_status) && lookupResult.exam_status === 'open';
+  const canStart = lookupResult && ['not_attempted', 'in_progress'].includes(lookupResult.attempt_status) && lookupResult.exam_status === 'open';
   const isResume = lookupResult?.attempt_status === 'in_progress';
 
   return (
@@ -131,7 +138,11 @@ export default function StudentHomePage() {
               </div>
               <div className="flex flex-col gap-2">
                 {canStart && (
-                  <button onClick={handleStart} disabled={starting} className="btn-success btn-lg">
+                  <button
+                    onClick={() => isResume ? handleStart() : setStartConfirmOpen(true)}
+                    disabled={starting}
+                    className="btn-success btn-lg"
+                  >
                     {starting ? <Spinner size="sm" /> : (isResume ? '▶️ Tiếp tục làm bài' : '🚀 Bắt đầu làm bài')}
                   </button>
                 )}
@@ -172,6 +183,11 @@ export default function StudentHomePage() {
 
         {attemptsLoading ? (
           <div className="flex justify-center py-10"><Spinner size="lg" /></div>
+        ) : attemptsError ? (
+          <div role="alert" className="card flex flex-col items-center gap-3 py-10 text-center">
+            <p className="text-sm text-red-700">{attemptsError}</p>
+            <button onClick={fetchAttempts} className="btn-secondary btn-sm">Thử lại</button>
+          </div>
         ) : attempts.length === 0 ? (
           <div className="card text-center py-12">
             <div className="text-4xl mb-3">📭</div>
@@ -235,6 +251,40 @@ export default function StudentHomePage() {
           </div>
         )}
       </div>
+
+      {startConfirmOpen && lookupResult?.exam && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="start-exam-title"
+            className="w-full max-w-md rounded-2xl bg-white p-7 text-center shadow-2xl"
+          >
+            <div className="mb-3 text-5xl">📝</div>
+            <h2 id="start-exam-title" className="text-xl font-bold text-gray-900">Xác nhận tham gia bài thi?</h2>
+            <p className="mt-3 text-sm text-gray-600">
+              Thời gian làm bài {lookupResult.exam.duration} phút sẽ bắt đầu đếm ngược ngay khi bạn đồng ý.
+              Khi hết giờ, bài thi được tự động nộp và khóa.
+            </p>
+            <div className="mt-6 flex gap-3">
+              <button
+                onClick={() => setStartConfirmOpen(false)}
+                disabled={starting}
+                className="btn-secondary flex-1"
+              >
+                Để sau
+              </button>
+              <button
+                onClick={() => handleStart(true)}
+                disabled={starting}
+                className="btn-success flex-1"
+              >
+                {starting ? <Spinner size="sm" /> : 'Đồng ý, vào thi'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

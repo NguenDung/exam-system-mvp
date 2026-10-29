@@ -227,7 +227,16 @@ func TeacherPublishExam(c *gin.Context) {
 		return
 	}
 
-	config.DB.Model(&exam).Update("status", "published")
+	now := time.Now()
+	if err := config.DB.Model(&exam).Updates(map[string]interface{}{
+		"status":       "published",
+		"published_at": now,
+	}).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to publish exam"})
+		return
+	}
+	exam.Status = "published"
+	exam.PublishedAt = &now
 	c.JSON(http.StatusOK, gin.H{"message": "Exam published successfully", "exam": exam})
 }
 

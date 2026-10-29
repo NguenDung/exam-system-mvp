@@ -16,26 +16,33 @@ const OPTION_BADGE = {
   D: 'bg-pink-100 text-pink-700',
 };
 
-function CountdownTimer({ seconds, onExpire }) {
+function CountdownTimer({ seconds, onExpire, onWarning }) {
   const [remaining, setRemaining] = useState(seconds);
   const expiredRef = useRef(false);
+  const warnedRef = useRef(false);
 
   useEffect(() => {
     setRemaining(seconds);
     expiredRef.current = false;
+    warnedRef.current = false;
   }, [seconds]);
 
   useEffect(() => {
+    if (remaining > 0 && remaining <= 60 && !warnedRef.current) {
+      warnedRef.current = true;
+      onWarning();
+    }
     if (remaining <= 0) {
       if (!expiredRef.current) {
         expiredRef.current = true;
+        onWarning(false);
         onExpire();
       }
       return;
     }
     const id = setTimeout(() => setRemaining((r) => r - 1), 1000);
     return () => clearTimeout(id);
-  }, [remaining, onExpire]);
+  }, [remaining, onExpire, onWarning]);
 
   const h = Math.floor(remaining / 3600);
   const m = Math.floor((remaining % 3600) / 60);
@@ -52,6 +59,26 @@ function CountdownTimer({ seconds, onExpire }) {
       <span>⏱</span>
       <span>{h > 0 ? `${String(h).padStart(2,'0')}:` : ''}{String(m).padStart(2,'0')}:{String(s).padStart(2,'0')}</span>
       {isWarning && <span className="text-xs ml-1">⚠️</span>}
+    </div>
+  );
+}
+
+function OneMinuteWarningModal({ onDismiss }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+      <div
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="time-warning-title"
+        className="w-full max-w-sm rounded-2xl bg-white p-8 text-center shadow-2xl"
+      >
+        <div className="mb-3 text-5xl">⏰</div>
+        <h2 id="time-warning-title" className="text-xl font-bold text-red-700">Sắp hết giờ làm bài</h2>
+        <p className="mt-3 text-sm text-gray-600">
+          Thời gian làm bài còn không quá 1 phút. Hãy hoàn tất và nộp bài trước khi hết giờ.
+        </p>
+        <button onClick={onDismiss} className="btn-primary mt-6 w-full">Tiếp tục làm bài</button>
+      </div>
     </div>
   );
 }
@@ -93,11 +120,12 @@ export default function ExamTakingPage() {
   const [saveStatus, setSaveStatus] = useState(''); // 'saving' | 'saved' | 'error' | ''
   const [showConfirm, setShowConfirm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [autoSubmitted, setAutoSubmitted] = useState(false);
+  const [showTimeWarning, setShowTimeWarning] = useState(false);
 
   const saveStatusTimerRef = useRef(null);
   const autoSaveTimerRef = useRef(null);
   const answersRef = useRef(answers);
+  const autoSubmittedRef = useRef(false);
   answersRef.current = answers;
 
   // ── Load exam on mount (also handles F5 resume) ───────────────────────────
@@ -190,9 +218,11 @@ export default function ExamTakingPage() {
 
   // ── Submit ────────────────────────────────────────────────────────────────
   const doSubmit = useCallback(async (finalAnswers) => {
-    if (!attempt || submitting) return;
+    if (!attempt || submitting || autoSubmittedRef.current) return;
+    autoSubmittedRef.current = true;
     setSubmitting(true);
     setShowConfirm(false);
+    setShowTimeWarning(false);
     const answersArray = Object.entries(finalAnswers || answersRef.current).map(([qId, opt]) => ({
       question_id: parseInt(qId),
       chosen_option: opt,
@@ -209,15 +239,19 @@ export default function ExamTakingPage() {
         return;
       }
       alert(payload?.error || 'Nộp bài thất bại');
+      autoSubmittedRef.current = false;
       setSubmitting(false);
     }
   }, [attempt, submitting, navigate]);
 
+  const handleOneMinuteWarning = useCallback((show = true) => {
+    setShowTimeWarning(show);
+  }, []);
+
   const handleTimerExpire = useCallback(() => {
-    if (autoSubmitted) return;
-    setAutoSubmitted(true);
+    if (autoSubmittedRef.current) return;
     doSubmit(answersRef.current);
-  }, [autoSubmitted, doSubmit]);
+  }, [doSubmit]);
 
   const answeredCount = Object.keys(answers).length;
   const totalCount = questions.length;
@@ -262,7 +296,11 @@ export default function ExamTakingPage() {
 
             {/* Timer */}
             {remainingSeconds > 0 && (
-              <CountdownTimer seconds={remainingSeconds} onExpire={handleTimerExpire} />
+              <CountdownTimer
+                seconds={remainingSeconds}
+                onExpire={handleTimerExpire}
+                onWarning={handleOneMinuteWarning}
+              />
             )}
 
             <button
@@ -307,6 +345,7 @@ export default function ExamTakingPage() {
                     <button
                       key={opt}
                       onClick={() => handleSelectAnswer(q.id, opt)}
+                      disabled={submitting}
                       className={`flex items-center gap-3 px-4 py-3 rounded-xl border-2 text-left transition-all duration-150 active:scale-95 ${
                         isSelected ? OPTION_COLORS.selected : OPTION_COLORS.base
                       }`}
@@ -342,6 +381,9 @@ export default function ExamTakingPage() {
           onCancel={() => setShowConfirm(false)}
           submitting={submitting}
         />
+      )}
+      {showTimeWarning && !submitting && (
+        <OneMinuteWarningModal onDismiss={() => setShowTimeWarning(false)} />
       )}
     </div>
   );

@@ -5,6 +5,7 @@ import (
 
 	"exam-system-mvp/handlers"
 	"exam-system-mvp/middleware"
+	"exam-system-mvp/models"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -40,7 +41,7 @@ func SetupRouter() *gin.Engine {
 
 	// ── Teacher routes ────────────────────────────────────────────────────────
 	teacher := api.Group("/teacher")
-	teacher.Use(middleware.AuthRequired(), middleware.RequireRole("teacher"))
+	teacher.Use(middleware.AuthRequired(), middleware.RequireRole(models.RoleTeacher))
 	{
 		teacher.GET("/exams", handlers.TeacherListExams)
 		teacher.POST("/exams", handlers.TeacherCreateExam)
@@ -48,14 +49,22 @@ func SetupRouter() *gin.Engine {
 		teacher.POST("/exams/:id/questions", handlers.TeacherAddQuestions)
 		teacher.PATCH("/exams/:id/publish", handlers.TeacherPublishExam)
 		teacher.GET("/exams/:id/results", handlers.TeacherGetResults)
+		teacher.GET("/exams/:id/appeals", handlers.TeacherListExamAppeals)
+		teacher.GET("/appeals/:appealId", handlers.TeacherGetAppeal)
+		teacher.PATCH("/appeals/:appealId/reply", handlers.TeacherReplyAppeal)
+		teacher.PATCH("/appeals/:appealId/reject", handlers.TeacherRejectAppeal)
+		teacher.PATCH("/appeals/:appealId/resolve", handlers.TeacherResolveAppeal)
 		teacher.DELETE("/questions/:question_id", handlers.TeacherDeleteQuestion)
 	}
 
 	// ── Student routes ────────────────────────────────────────────────────────
 	student := api.Group("/student")
-	student.Use(middleware.AuthRequired(), middleware.RequireRole("student"))
+	student.Use(middleware.AuthRequired(), middleware.RequireRole(models.RoleStudent))
 	{
 		student.GET("/exams/lookup", handlers.StudentLookupExam)
+		student.GET("/history", handlers.StudentGetHistory)
+		student.GET("/history/:submissionId", handlers.StudentGetHistoryDetail)
+		student.POST("/appeals", handlers.StudentCreateAppeal)
 		student.GET("/attempts", handlers.StudentListAttempts)
 		student.POST("/exams/:id/start", handlers.StudentStartExam)
 		student.POST("/attempts/:attempt_id/save", handlers.StudentSaveAnswers)

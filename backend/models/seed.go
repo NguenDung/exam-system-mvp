@@ -1,6 +1,7 @@
 package models
 
 import (
+	"errors"
 	"log"
 	"time"
 
@@ -8,62 +9,66 @@ import (
 	"gorm.io/gorm"
 )
 
-// SeedData seeds initial data if the users table is empty.
+// SeedData creates demo users and sample exam data when they are missing.
 func SeedData(db *gorm.DB) {
-	var count int64
-	db.Model(&User{}).Count(&count)
-	if count > 0 {
-		log.Println("Seed data already exists, skipping.")
+	demoUsers := []struct {
+		email    string
+		fullName string
+		role     string
+	}{
+		{email: "teacher@test.com", fullName: "Nguyễn Văn Giáo", role: RoleTeacher},
+		{email: "student@test.com", fullName: "Trần Thị Học", role: RoleStudent},
+		{email: "student2@test.com", fullName: "Lê Văn Minh", role: RoleStudent},
+		{email: "student3@test.com", fullName: "Phạm Thị Lan", role: RoleStudent},
+	}
+
+	var teacher User
+	for _, demoUser := range demoUsers {
+		user, err := ensureDemoUser(db, demoUser.email, demoUser.fullName, demoUser.role)
+		if err != nil {
+			log.Printf("Seed: failed to ensure demo user %s: %v", demoUser.email, err)
+			return
+		}
+		if demoUser.role == RoleTeacher {
+			teacher = user
+		}
+	}
+
+	var exam Exam
+	err := db.Where("exam_code = ?", "IT2026").First(&exam).Error
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		log.Printf("Seed: failed to find sample exam: %v", err)
 		return
 	}
 
-	log.Println("Seeding initial data...")
-
-	// ── Hash passwords ────────────────────────────────────────────────────────
-	teacherHash, _ := bcrypt.GenerateFromPassword([]byte("123456"), bcrypt.DefaultCost)
-	studentHash, _ := bcrypt.GenerateFromPassword([]byte("123456"), bcrypt.DefaultCost)
-
-	// ── Create teacher ────────────────────────────────────────────────────────
-	teacher := User{
-		Email:        "teacher@test.com",
-		PasswordHash: string(teacherHash),
-		FullName:     "Nguyễn Văn Giáo",
-		Role:         "teacher",
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		now := time.Now()
+		exam = Exam{
+			TeacherID:   teacher.ID,
+			ExamCode:    "IT2026",
+			Title:       "Kiểm tra Lập trình Web & Mạng máy tính",
+			Duration:    15,
+			StartTime:   now.Add(-1 * time.Hour),
+			EndTime:     now.Add(7 * 24 * time.Hour),
+			PublishedAt: &now,
+			Status:      "published",
+		}
+		if err := db.Create(&exam).Error; err != nil {
+			log.Printf("Seed: failed to create sample exam: %v", err)
+			return
+		}
 	}
-	if err := db.Create(&teacher).Error; err != nil {
-		log.Printf("Seed: failed to create teacher: %v", err)
+
+	var questionCount int64
+	if err := db.Model(&Question{}).Where("exam_id = ?", exam.ID).Count(&questionCount).Error; err != nil {
+		log.Printf("Seed: failed to count sample questions: %v", err)
+		return
+	}
+	if questionCount > 0 {
+		log.Printf("Seed data ready: demo users ensured, exam=%s (id=%d)", exam.ExamCode, exam.ID)
 		return
 	}
 
-	// ── Create student ────────────────────────────────────────────────────────
-	student := User{
-		Email:        "student@test.com",
-		PasswordHash: string(studentHash),
-		FullName:     "Trần Thị Học",
-		Role:         "student",
-	}
-	if err := db.Create(&student).Error; err != nil {
-		log.Printf("Seed: failed to create student: %v", err)
-		return
-	}
-
-	// ── Create sample published exam ──────────────────────────────────────────
-	now := time.Now()
-	exam := Exam{
-		TeacherID: teacher.ID,
-		ExamCode:  "IT2026",
-		Title:     "Kiểm tra Lập trình Web & Mạng máy tính",
-		Duration:  15,
-		StartTime: now.Add(-1 * time.Hour),
-		EndTime:   now.Add(7 * 24 * time.Hour),
-		Status:    "published",
-	}
-	if err := db.Create(&exam).Error; err != nil {
-		log.Printf("Seed: failed to create exam: %v", err)
-		return
-	}
-
-	// ── Create 5 sample questions ─────────────────────────────────────────────
 	questions := []Question{
 		{
 			ExamID:        exam.ID,
@@ -121,13 +126,36 @@ func SeedData(db *gorm.DB) {
 			Points:        1.0,
 		},
 	}
-
-	for _, q := range questions {
-		if err := db.Create(&q).Error; err != nil {
-			log.Printf("Seed: failed to create question: %v", err)
-		}
+	if err := db.Create(&questions).Error; err != nil {
+		log.Printf("Seed: failed to create sample questions: %v", err)
+		return
 	}
 
-	log.Printf("Seed completed: teacher=%s, student=%s, exam=%s (id=%d)",
-		teacher.Email, student.Email, exam.ExamCode, exam.ID)
+	log.Printf("Seed data ready: demo users ensured, exam=%s (id=%d)", exam.ExamCode, exam.ID)
+}
+
+func ensureDemoUser(db *gorm.DB, email, fullName, role string) (User, error) {
+	var user User
+	err := db.Where("email = ?", email).First(&user).Error
+	if err == nil {
+		return user, nil
+	}
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return User{}, err
+	}
+
+	passwordHash, err := bcrypt.GenerateFromPassword([]byte("123456"), bcrypt.DefaultCost)
+	if err != nil {
+		return User{}, err
+	}
+	user = User{
+		Email:        email,
+		PasswordHash: string(passwordHash),
+		FullName:     fullName,
+		Role:         role,
+	}
+	if err := db.Create(&user).Error; err != nil {
+		return User{}, err
+	}
+	return user, nil
 }
