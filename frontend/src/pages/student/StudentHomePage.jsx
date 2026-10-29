@@ -56,10 +56,20 @@ export default function StudentHomePage() {
     if (!lookupResult?.exam) return;
     setStarting(true);
     try {
-      await studentAPI.startExam(lookupResult.exam.id);
+      const { data } = await studentAPI.startExam(lookupResult.exam.id);
+      // Auto-submitted on start (deadline passed) → go to results
+      if (data.auto_submitted || data.attempt?.status === 'completed') {
+        navigate(`/student/attempts/${data.attempt.id}/result`, { replace: true });
+        return;
+      }
       navigate(`/student/exam/${lookupResult.exam.id}/take`);
     } catch (err) {
-      alert(err.response?.data?.error || 'Không thể bắt đầu bài thi');
+      const payload = err.response?.data;
+      if (payload?.attempt?.id && payload?.attempt?.status === 'completed') {
+        navigate(`/student/attempts/${payload.attempt.id}/result`, { replace: true });
+        return;
+      }
+      alert(payload?.error || 'Không thể bắt đầu bài thi');
     } finally {
       setStarting(false);
     }

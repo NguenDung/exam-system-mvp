@@ -21,10 +21,10 @@ func Migrate(db *gorm.DB) {
 	}
 
 	// Unique composite index: (exam_id, user_id) on exam_attempts
+	// Note: exam_attempts has no deleted_at column — do not use a partial WHERE.
 	if err := db.Exec(`
 		CREATE UNIQUE INDEX IF NOT EXISTS idx_exam_attempts_exam_user
 		ON exam_attempts (exam_id, user_id)
-		WHERE deleted_at IS NULL
 	`).Error; err != nil {
 		log.Printf("Warning: could not create idx_exam_attempts_exam_user: %v", err)
 	}

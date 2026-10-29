@@ -4,18 +4,14 @@ import (
 	"net/http"
 	"strings"
 
-	"exam-system-mvp/config"
+	"exam-system-mvp/utils"
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 )
 
-type Claims struct {
-	UserID uint   `json:"user_id"`
-	Email  string `json:"email"`
-	Role   string `json:"role"`
-	jwt.RegisteredClaims
-}
+// Claims is an alias kept for backward compatibility with existing imports.
+type Claims = utils.Claims
 
 // AuthRequired validates JWT and injects user info into context.
 func AuthRequired() gin.HandlerFunc {
@@ -33,7 +29,7 @@ func AuthRequired() gin.HandlerFunc {
 		}
 
 		tokenStr := parts[1]
-		secret := config.GetEnv("JWT_SECRET", "exam_mvp_super_secret_key_2026")
+		secret := utils.GetJWTSecret()
 
 		claims := &Claims{}
 		token, err := jwt.ParseWithClaims(tokenStr, claims, func(t *jwt.Token) (interface{}, error) {
