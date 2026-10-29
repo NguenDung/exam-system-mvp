@@ -819,6 +819,7 @@ func TestSecurity_IDOR_SaveForeignQuestion(t *testing.T) {
 
 	// Start Exam A
 	w = do(t, srv, "POST", fmt.Sprintf("/api/student/exams/%.0f/start", examAID), studentToken, map[string]bool{"confirmed": true})
+	w = do(t, srv, "POST", fmt.Sprintf("/api/student/exams/%.0f/start", examAID), studentToken, nil)
 	attemptID := parseJSON(t, w)["attempt"].(map[string]interface{})["id"].(float64)
 
 	// Try to save a question belonging to Exam B → must 400
@@ -874,6 +875,7 @@ func TestSecurity_InvalidChosenOption(t *testing.T) {
 	studentToken := getString(parseJSON(t, w), "token")
 
 	w = do(t, srv, "POST", fmt.Sprintf("/api/student/exams/%.0f/start", examID), studentToken, map[string]bool{"confirmed": true})
+	w = do(t, srv, "POST", fmt.Sprintf("/api/student/exams/%.0f/start", examID), studentToken, nil)
 	attemptID := parseJSON(t, w)["attempt"].(map[string]interface{})["id"].(float64)
 
 	w = do(t, srv, "POST", fmt.Sprintf("/api/student/attempts/%.0f/save", attemptID), studentToken, map[string]interface{}{
@@ -920,6 +922,7 @@ func TestTeacher_Stats_OnlyCompleted(t *testing.T) {
 	})
 	s1Token := getString(parseJSON(t, w), "token")
 	w = do(t, srv, "POST", fmt.Sprintf("/api/student/exams/%.0f/start", examID), s1Token, map[string]bool{"confirmed": true})
+	w = do(t, srv, "POST", fmt.Sprintf("/api/student/exams/%.0f/start", examID), s1Token, nil)
 	a1 := parseJSON(t, w)["attempt"].(map[string]interface{})["id"].(float64)
 	do(t, srv, "POST", fmt.Sprintf("/api/student/attempts/%.0f/submit", a1), s1Token, map[string]interface{}{
 		"answers": []map[string]interface{}{{"question_id": int(qID), "chosen_option": "A"}},
@@ -934,6 +937,7 @@ func TestTeacher_Stats_OnlyCompleted(t *testing.T) {
 	})
 	s2Token := getString(parseJSON(t, w), "token")
 	do(t, srv, "POST", fmt.Sprintf("/api/student/exams/%.0f/start", examID), s2Token, map[string]bool{"confirmed": true})
+	do(t, srv, "POST", fmt.Sprintf("/api/student/exams/%.0f/start", examID), s2Token, nil)
 
 	w = do(t, srv, "GET", fmt.Sprintf("/api/teacher/exams/%.0f/results", examID), teacherToken, nil)
 	if w.Code != http.StatusOK {

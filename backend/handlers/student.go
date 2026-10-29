@@ -18,6 +18,8 @@ import (
 	"gorm.io/gorm/clause"
 )
 
+const saveGracePeriod = 5 * time.Second
+
 // attemptDeadline returns the earlier of (startedAt + duration) and exam.EndTime.
 func attemptDeadline(startedAt time.Time, exam models.Exam) time.Time {
 	durationDeadline := startedAt.Add(time.Duration(exam.Duration) * time.Minute)
@@ -106,6 +108,14 @@ func autoSubmitExpiredAttempts() error {
 		}
 	}
 	return errors.Join(submitErrors...)
+	config.DB.Where("exam_id = ? AND status = ?", examID, "in_progress").Find(&attempts)
+
+	now := time.Now()
+	for _, a := range attempts {
+		if now.After(attemptDeadline(a.StartedAt, exam)) {
+			_ = gradeAttemptInTransaction(a.ID)
+		}
+	}
 }
 
 // upsertAnswers validates question ownership and upserts answers inside a transaction.
@@ -292,6 +302,8 @@ func StudentStartExam(c *gin.Context) {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load submitted exam"})
 				return
 			}
+			_ = gradeAttemptInTransaction(attempt.ID)
+			config.DB.First(&attempt, attempt.ID)
 			c.JSON(http.StatusOK, gin.H{
 				"message":           "Time is up. Your exam has been automatically submitted.",
 				"remaining_seconds": 0,
@@ -487,6 +499,54 @@ func StudentSaveAnswers(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Answers saved successfully", "saved_at": time.Now()})
+
+		now := time.Now()
+		deadline := attemptDeadline(attempt.StartedAt, exam)
+		if now.After(deadline.Add(saveGracePeriod)) {
+			// Past grace period — grade with previously saved answers only; reject new saves
+			if err := gradeAttemptInTx(tx, attempt.ID); err != nil {
+				return err
+			}
+			expiredAutoGraded = true
+			tx.First(&gradedAttempt, attempt.ID)
+			return errTimeExpired
+		}
+
+		if err := upsertAnswers(tx, attempt, answers); err != nil {
+			return err
+		}
+
+		return tx.Model(&attempt).Update("last_saved_at", now).Error
+	})
+
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Attempt not found"})
+		return
+	}
+	if errors.Is(err, errAlreadySubmitted) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Exam already submitted"})
+		return
+	}
+	if errors.Is(err, errTimeExpired) {
+		c.JSON(http.StatusConflict, gin.H{
+			"error":          "Time is up. Your exam has been automatically submitted.",
+			"auto_submitted": true,
+			"attempt":        gradedAttempt,
+		})
+		return
+	}
+	if err != nil {
+		// Invalid question_id (IDOR / cross-exam) → 400
+		if strings.Contains(err.Error(), "does not belong") {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save answers"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Answers saved successfully", "saved_at": time.Now()})
+	_ = expiredAutoGraded
 }
 
 // ─── POST /api/student/attempts/:attempt_id/submit ───────────────────────────
@@ -532,6 +592,57 @@ func StudentSubmitExam(c *gin.Context) {
 		// Answers arriving at or after the deadline are ignored; only saved
 		// answers are graded once time has expired.
 		if now.Before(deadline) && len(input.Answers) > 0 {
+			if err := upsertAnswers(tx, attempt, input.Answers); err != nil {
+				return err
+			}
+		}
+
+		if err := gradeAttemptInTx(tx, attempt.ID); err != nil {
+			return err
+		}
+		return tx.First(&finalAttempt, attempt.ID).Error
+	})
+
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Attempt not found"})
+		return
+	}
+	if errors.Is(err, errAlreadySubmitted) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Exam already submitted"})
+		return
+	}
+	if err != nil {
+		if strings.Contains(err.Error(), "does not belong") {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+	_ = c.ShouldBindJSON(&input) // optional body
+
+	var finalAttempt models.ExamAttempt
+
+	err := config.DB.Transaction(func(tx *gorm.DB) error {
+		var attempt models.ExamAttempt
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("id = ? AND user_id = ?", attemptID, userID).
+			First(&attempt).Error; err != nil {
+			return err
+		}
+		if attempt.Status != "in_progress" {
+			return errAlreadySubmitted
+		}
+
+		var exam models.Exam
+		if err := tx.First(&exam, attempt.ExamID).Error; err != nil {
+			return err
+		}
+
+		now := time.Now()
+		deadline := attemptDeadline(attempt.StartedAt, exam)
+		pastGrace := now.After(deadline.Add(saveGracePeriod))
+
+		// If still within grace (or before deadline), accept body answers.
+		// If past grace, ignore body answers and grade only previously saved ones.
+		if !pastGrace && len(input.Answers) > 0 {
 			if err := upsertAnswers(tx, attempt, input.Answers); err != nil {
 				return err
 			}
@@ -631,6 +742,12 @@ func StudentGetResult(c *gin.Context) {
 
 var (
 	errAlreadySubmitted = errors.New("already submitted")
+)
+
+
+var (
+	errAlreadySubmitted = errors.New("already submitted")
+	errTimeExpired      = errors.New("time expired")
 )
 
 // gradeAttemptInTransaction wraps gradeAttemptInTx in its own DB transaction.

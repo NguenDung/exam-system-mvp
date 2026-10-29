@@ -62,6 +62,7 @@ export default function StudentHomePage() {
     setStarting(true);
     try {
       const { data } = await studentAPI.startExam(lookupResult.exam.id, { confirmed });
+      const { data } = await studentAPI.startExam(lookupResult.exam.id);
       // Auto-submitted on start (deadline passed) → go to results
       if (data.auto_submitted || data.attempt?.status === 'completed') {
         navigate(`/student/attempts/${data.attempt.id}/result`, { replace: true });
