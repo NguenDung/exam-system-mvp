@@ -4,6 +4,7 @@ import (
 	"log"
 
 	"exam-system-mvp/config"
+	"exam-system-mvp/handlers"
 	"exam-system-mvp/models"
 	"exam-system-mvp/router"
 )
@@ -18,7 +19,10 @@ func main() {
 	// 3. Seed initial data
 	models.SeedData(config.DB)
 
-	// 4. Setup and run the HTTP server
+	// 4. Auto-submit in-progress exams when their server-side deadline expires.
+	go handlers.StartAttemptAutoSubmitWorker()
+
+	// 5. Setup and run the HTTP server
 	r := router.SetupRouter()
 
 	port := config.GetEnv("SERVER_PORT", "8081")

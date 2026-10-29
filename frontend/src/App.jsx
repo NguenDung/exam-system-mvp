@@ -13,6 +13,8 @@ import TeacherResultsPage from './pages/teacher/TeacherResultsPage';
 import StudentHomePage from './pages/student/StudentHomePage';
 import ExamTakingPage from './pages/student/ExamTakingPage';
 import ExamResultPage from './pages/student/ExamResultPage';
+import StudentHistoryPage from './pages/student/StudentHistoryPage';
+import StudentHistoryDetailPage from './pages/student/StudentHistoryDetailPage';
 
 export default function App() {
   return (
@@ -38,6 +40,8 @@ export default function App() {
             <Route path="/student/exam/:exam_id/take" element={<ExamTakingPage />} />
             <Route element={<StudentLayout />}>
               <Route path="/student" element={<StudentHomePage />} />
+              <Route path="/student/history" element={<StudentHistoryPage />} />
+              <Route path="/student/history/:submissionId" element={<StudentHistoryDetailPage />} />
               <Route path="/student/attempts/:attempt_id/result" element={<ExamResultPage />} />
             </Route>
           </Route>

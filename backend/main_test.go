@@ -7,14 +7,17 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
 	"exam-system-mvp/config"
 	"exam-system-mvp/models"
 	"exam-system-mvp/router"
+	"exam-system-mvp/utils"
 
 	"github.com/gin-gonic/gin"
+	"golang.org/x/crypto/bcrypt"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -44,6 +47,7 @@ func setupTestServer(t *testing.T) *gin.Engine {
 		&models.Question{},
 		&models.ExamAttempt{},
 		&models.AttemptAnswer{},
+		&models.Appeal{},
 	); err != nil {
 		t.Fatalf("AutoMigrate failed: %v", err)
 	}
@@ -154,9 +158,21 @@ func TestMVP_FullFlow(t *testing.T) {
 	})
 
 	t.Run("UC01_Verify_Seeded_Accounts", func(t *testing.T) {
-		var u models.User
-		if err := config.DB.Where("email = ?", "teacher@test.com").First(&u).Error; err != nil {
-			t.Fatalf("seeded teacher not found: %v", err)
+		users := []struct {
+			email string
+			role  string
+		}{
+			{email: "teacher@test.com", role: models.RoleTeacher},
+			{email: "student@test.com", role: models.RoleStudent},
+		}
+		for _, expected := range users {
+			var user models.User
+			if err := config.DB.Where("email = ?", expected.email).First(&user).Error; err != nil {
+				t.Fatalf("seeded user %q not found: %v", expected.email, err)
+			}
+			if user.Role != expected.role {
+				t.Errorf("user %q: expected role=%s, got %s", expected.email, expected.role, user.Role)
+			}
 		}
 	})
 
@@ -283,8 +299,8 @@ func TestMVP_FullFlow(t *testing.T) {
 		w := do(t, srv, "POST", url, teacherToken, map[string]interface{}{
 			"questions": []map[string]interface{}{
 				{
-					"prompt":         "Extra question",
-					"option_a":       "A", "option_b": "B", "option_c": "C", "option_d": "D",
+					"prompt":   "Extra question",
+					"option_a": "A", "option_b": "B", "option_c": "C", "option_d": "D",
 					"correct_option": "A",
 				},
 			},
@@ -298,6 +314,13 @@ func TestMVP_FullFlow(t *testing.T) {
 		w := do(t, srv, "GET", "/api/teacher/exams", studentToken, nil)
 		if w.Code != http.StatusForbidden {
 			t.Fatalf("want 403 for student accessing teacher API, got %d", w.Code)
+		}
+	})
+
+	t.Run("UC02_Teacher_Cannot_Access_Student_API", func(t *testing.T) {
+		w := do(t, srv, "GET", "/api/student/attempts", teacherToken, nil)
+		if w.Code != http.StatusForbidden {
+			t.Fatalf("want 403 for teacher accessing student API, got %d", w.Code)
 		}
 	})
 
@@ -338,7 +361,7 @@ func TestMVP_FullFlow(t *testing.T) {
 	// ══════════════════════════════════════════════════════════════════════════
 	t.Run("UC04_Start_Exam", func(t *testing.T) {
 		url := fmt.Sprintf("/api/student/exams/%.0f/start", examID)
-		w := do(t, srv, "POST", url, studentToken, nil)
+		w := do(t, srv, "POST", url, studentToken, map[string]bool{"confirmed": true})
 		if w.Code != http.StatusOK {
 			t.Fatalf("start exam: want 200, got %d — %s", w.Code, w.Body)
 		}
@@ -682,7 +705,7 @@ func TestStudent_GradingAccuracy(t *testing.T) {
 	studentToken := getString(parseJSON(t, w), "token")
 
 	// Start exam
-	w = do(t, srv, "POST", fmt.Sprintf("/api/student/exams/%.0f/start", examID), studentToken, nil)
+	w = do(t, srv, "POST", fmt.Sprintf("/api/student/exams/%.0f/start", examID), studentToken, map[string]bool{"confirmed": true})
 	startBody := parseJSON(t, w)
 	attemptID := startBody["attempt"].(map[string]interface{})["id"].(float64)
 
@@ -795,7 +818,7 @@ func TestSecurity_IDOR_SaveForeignQuestion(t *testing.T) {
 	studentToken := getString(parseJSON(t, w), "token")
 
 	// Start Exam A
-	w = do(t, srv, "POST", fmt.Sprintf("/api/student/exams/%.0f/start", examAID), studentToken, nil)
+	w = do(t, srv, "POST", fmt.Sprintf("/api/student/exams/%.0f/start", examAID), studentToken, map[string]bool{"confirmed": true})
 	attemptID := parseJSON(t, w)["attempt"].(map[string]interface{})["id"].(float64)
 
 	// Try to save a question belonging to Exam B → must 400
@@ -850,7 +873,7 @@ func TestSecurity_InvalidChosenOption(t *testing.T) {
 	})
 	studentToken := getString(parseJSON(t, w), "token")
 
-	w = do(t, srv, "POST", fmt.Sprintf("/api/student/exams/%.0f/start", examID), studentToken, nil)
+	w = do(t, srv, "POST", fmt.Sprintf("/api/student/exams/%.0f/start", examID), studentToken, map[string]bool{"confirmed": true})
 	attemptID := parseJSON(t, w)["attempt"].(map[string]interface{})["id"].(float64)
 
 	w = do(t, srv, "POST", fmt.Sprintf("/api/student/attempts/%.0f/save", attemptID), studentToken, map[string]interface{}{
@@ -896,7 +919,7 @@ func TestTeacher_Stats_OnlyCompleted(t *testing.T) {
 		"email": "s1stats@exam.local", "password": "password123",
 	})
 	s1Token := getString(parseJSON(t, w), "token")
-	w = do(t, srv, "POST", fmt.Sprintf("/api/student/exams/%.0f/start", examID), s1Token, nil)
+	w = do(t, srv, "POST", fmt.Sprintf("/api/student/exams/%.0f/start", examID), s1Token, map[string]bool{"confirmed": true})
 	a1 := parseJSON(t, w)["attempt"].(map[string]interface{})["id"].(float64)
 	do(t, srv, "POST", fmt.Sprintf("/api/student/attempts/%.0f/submit", a1), s1Token, map[string]interface{}{
 		"answers": []map[string]interface{}{{"question_id": int(qID), "chosen_option": "A"}},
@@ -910,7 +933,7 @@ func TestTeacher_Stats_OnlyCompleted(t *testing.T) {
 		"email": "s2stats@exam.local", "password": "password123",
 	})
 	s2Token := getString(parseJSON(t, w), "token")
-	do(t, srv, "POST", fmt.Sprintf("/api/student/exams/%.0f/start", examID), s2Token, nil)
+	do(t, srv, "POST", fmt.Sprintf("/api/student/exams/%.0f/start", examID), s2Token, map[string]bool{"confirmed": true})
 
 	w = do(t, srv, "GET", fmt.Sprintf("/api/teacher/exams/%.0f/results", examID), teacherToken, nil)
 	if w.Code != http.StatusOK {
@@ -951,5 +974,338 @@ func TestAuth_EmailNormalization(t *testing.T) {
 	})
 	if w.Code != http.StatusOK {
 		t.Fatalf("login with different case: want 200, got %d — %s", w.Code, w.Body)
+	}
+}
+
+func TestStudent_ConsentAndDeadlineAutograding(t *testing.T) {
+	srv := setupTestServer(t)
+
+	w := do(t, srv, "POST", "/api/auth/login", "", map[string]interface{}{
+		"email": "student@test.com", "password": "123456",
+	})
+	studentToken := getString(parseJSON(t, w), "token")
+
+	var exam models.Exam
+	if err := config.DB.Where("exam_code = ?", "IT2026").First(&exam).Error; err != nil {
+		t.Fatalf("seeded exam not found: %v", err)
+	}
+	startURL := fmt.Sprintf("/api/student/exams/%d/start", exam.ID)
+
+	w = do(t, srv, "POST", startURL, studentToken, nil)
+	if w.Code != http.StatusPreconditionRequired {
+		t.Fatalf("start without consent: want 428, got %d — %s", w.Code, w.Body)
+	}
+	var attemptCount int64
+	config.DB.Model(&models.ExamAttempt{}).Count(&attemptCount)
+	if attemptCount != 0 {
+		t.Fatalf("start without consent created %d attempts", attemptCount)
+	}
+
+	w = do(t, srv, "POST", startURL, studentToken, map[string]bool{"confirmed": true})
+	if w.Code != http.StatusOK {
+		t.Fatalf("confirmed start: want 200, got %d — %s", w.Code, w.Body)
+	}
+	body := parseJSON(t, w)
+	attemptData := body["attempt"].(map[string]interface{})
+	attemptID := uint(attemptData["id"].(float64))
+
+	var question models.Question
+	if err := config.DB.Where("exam_id = ?", exam.ID).Order("sort_order ASC").First(&question).Error; err != nil {
+		t.Fatalf("seeded question not found: %v", err)
+	}
+	w = do(t, srv, "POST", fmt.Sprintf("/api/student/attempts/%d/save", attemptID), studentToken, map[string]interface{}{
+		"question_id": question.ID, "chosen_option": "A",
+	})
+	if w.Code != http.StatusOK {
+		t.Fatalf("save answer: want 200, got %d — %s", w.Code, w.Body)
+	}
+
+	pastDeadline := time.Now().Add(-time.Duration(exam.Duration+1) * time.Minute)
+	if err := config.DB.Model(&models.ExamAttempt{}).Where("id = ?", attemptID).
+		Update("started_at", pastDeadline).Error; err != nil {
+		t.Fatalf("expire attempt: %v", err)
+	}
+	w = do(t, srv, "POST", fmt.Sprintf("/api/student/attempts/%d/save", attemptID), studentToken, map[string]interface{}{
+		"question_id": question.ID, "chosen_option": question.CorrectOption,
+	})
+	if w.Code != http.StatusConflict {
+		t.Fatalf("save after deadline: want 409 auto-submit, got %d — %s", w.Code, w.Body)
+	}
+	if !parseJSON(t, w)["auto_submitted"].(bool) {
+		t.Fatal("expired save response should report automatic submission")
+	}
+
+	var attempt models.ExamAttempt
+	if err := config.DB.First(&attempt, attemptID).Error; err != nil {
+		t.Fatalf("load auto-submitted attempt: %v", err)
+	}
+	if attempt.Status != "completed" {
+		t.Fatalf("expired attempt status: want completed, got %s", attempt.Status)
+	}
+	if attempt.Score != 0 {
+		t.Fatalf("auto-submit should grade saved wrong answer only; want 0, got %v", attempt.Score)
+	}
+
+	w = do(t, srv, "POST", fmt.Sprintf("/api/student/attempts/%d/save", attemptID), studentToken, map[string]interface{}{
+		"question_id": question.ID, "chosen_option": question.CorrectOption,
+	})
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("save after auto-submit: want 400, got %d — %s", w.Code, w.Body)
+	}
+
+	w = do(t, srv, "GET", fmt.Sprintf("/api/student/attempts/%d/result", attemptID), studentToken, nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("view auto-submitted result: want 200, got %d — %s", w.Code, w.Body)
+	}
+	if score := getFloat(parseJSON(t, w), "attempt", "score"); score != 0 {
+		t.Fatalf("auto-submitted result score: want 0, got %v", score)
+	}
+}
+
+func TestStudentHistoryAndAppealsOwnershipAndWorkflow(t *testing.T) {
+	srv := setupTestServer(t)
+
+	login := func(email string) string {
+		t.Helper()
+		w := do(t, srv, "POST", "/api/auth/login", "", map[string]interface{}{
+			"email": email, "password": "123456",
+		})
+		if w.Code != http.StatusOK {
+			t.Fatalf("login %s: want 200, got %d — %s", email, w.Code, w.Body)
+		}
+		return getString(parseJSON(t, w), "token")
+	}
+	studentToken := login("student@test.com")
+	teacherToken := login("teacher@test.com")
+
+	var exam models.Exam
+	if err := config.DB.Where("exam_code = ?", "IT2026").First(&exam).Error; err != nil {
+		t.Fatalf("seeded exam not found: %v", err)
+	}
+	w := do(t, srv, "POST", fmt.Sprintf("/api/student/exams/%d/start", exam.ID), studentToken, map[string]bool{"confirmed": true})
+	if w.Code != http.StatusOK {
+		t.Fatalf("start exam: want 200, got %d — %s", w.Code, w.Body)
+	}
+	startBody := parseJSON(t, w)
+	attemptID := uint(startBody["attempt"].(map[string]interface{})["id"].(float64))
+	questions := startBody["questions"].([]interface{})
+	firstQuestion := questions[0].(map[string]interface{})
+	w = do(t, srv, "POST", fmt.Sprintf("/api/student/attempts/%d/submit", attemptID), studentToken, map[string]interface{}{
+		"answers": []map[string]interface{}{{
+			"question_id": firstQuestion["id"], "chosen_option": "A",
+		}},
+	})
+	if w.Code != http.StatusOK {
+		t.Fatalf("submit exam: want 200, got %d — %s", w.Code, w.Body)
+	}
+
+	w = do(t, srv, "GET", "/api/student/history?page=1&page_size=5", studentToken, nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("history: want 200, got %d — %s", w.Code, w.Body)
+	}
+	history := parseJSON(t, w)
+	items := history["items"].([]interface{})
+	if len(items) != 1 || history["pagination"].(map[string]interface{})["total"].(float64) != 1 {
+		t.Fatalf("expected one owned history entry, got %s", w.Body)
+	}
+	historyItem := items[0].(map[string]interface{})
+	if historyItem["max_score"].(float64) != 5 {
+		t.Errorf("history max_score: want 5, got %v", historyItem["max_score"])
+	}
+
+	w = do(t, srv, "GET", fmt.Sprintf("/api/student/history/%d", attemptID), studentToken, nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("history detail: want 200, got %d — %s", w.Code, w.Body)
+	}
+	detailAnswers := parseJSON(t, w)["answers"].([]interface{})
+	if len(detailAnswers) != 5 {
+		t.Fatalf("history detail should include all exam questions, got %d", len(detailAnswers))
+	}
+	if detailAnswers[0].(map[string]interface{})["correct_option"] == nil {
+		t.Fatal("student history detail should show the correct option")
+	}
+
+	otherStudent := models.User{
+		Email: "other-history-student@test.com", PasswordHash: "unused",
+		FullName: "Other Student", Role: models.RoleStudent,
+	}
+	if err := config.DB.Create(&otherStudent).Error; err != nil {
+		t.Fatalf("create other student: %v", err)
+	}
+	otherToken, err := utils.GenerateJWT(otherStudent.ID, otherStudent.Email, otherStudent.Role)
+	if err != nil {
+		t.Fatalf("generate other student token: %v", err)
+	}
+	w = do(t, srv, "GET", fmt.Sprintf("/api/student/history/%d", attemptID), otherToken, nil)
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("other student history access: want 404, got %d", w.Code)
+	}
+
+	createAppeal := func(content string) *httptest.ResponseRecorder {
+		t.Helper()
+		return do(t, srv, "POST", "/api/student/appeals", studentToken, map[string]interface{}{
+			"submissionId": attemptID,
+			"title":        "Phúc khảo câu 1",
+			"content":      content,
+		})
+	}
+	w = createAppeal("Quá ngắn")
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("short appeal: want 400, got %d — %s", w.Code, w.Body)
+	}
+	w = createAppeal(strings.Repeat("x", 1001))
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("long appeal: want 400, got %d — %s", w.Code, w.Body)
+	}
+	w = do(t, srv, "POST", "/api/student/appeals", otherToken, map[string]interface{}{
+		"submissionId": attemptID, "content": "Tôi muốn khiếu nại điểm bài thi này.",
+	})
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("other student appeal: want 404, got %d — %s", w.Code, w.Body)
+	}
+	w = createAppeal("Em cho rằng đáp án của em đúng.")
+	if w.Code != http.StatusCreated {
+		t.Fatalf("create appeal: want 201, got %d — %s", w.Code, w.Body)
+	}
+	appeal := parseJSON(t, w)["appeal"].(map[string]interface{})
+	appealID := uint(appeal["id"].(float64))
+	if appeal["status"] != models.AppealStatusPending {
+		t.Fatalf("new appeal status: want PENDING, got %v", appeal["status"])
+	}
+
+	w = do(t, srv, "GET", fmt.Sprintf("/api/teacher/exams/%d/appeals?status=PENDING", exam.ID), teacherToken, nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("teacher list appeals: want 200, got %d — %s", w.Code, w.Body)
+	}
+	appealItems := parseJSON(t, w)["items"].([]interface{})
+	if len(appealItems) != 1 || appealItems[0].(map[string]interface{})["student_name"] != "Trần Thị Học" {
+		t.Fatalf("teacher appeal list should include student information, got %s", w.Body)
+	}
+	w = do(t, srv, "GET", fmt.Sprintf("/api/teacher/appeals/%d", appealID), teacherToken, nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("teacher appeal detail: want 200, got %d — %s", w.Code, w.Body)
+	}
+	detail := parseJSON(t, w)
+	if detail["submission"].(map[string]interface{})["max_score"].(float64) != 5 {
+		t.Errorf("teacher appeal detail should include maximum score: %s", w.Body)
+	}
+
+	otherTeacher := models.User{
+		Email: "other-appeal-teacher@test.com", PasswordHash: "unused",
+		FullName: "Other Teacher", Role: models.RoleTeacher,
+	}
+	if err := config.DB.Create(&otherTeacher).Error; err != nil {
+		t.Fatalf("create other teacher: %v", err)
+	}
+	otherTeacherToken, err := utils.GenerateJWT(otherTeacher.ID, otherTeacher.Email, otherTeacher.Role)
+	if err != nil {
+		t.Fatalf("generate other teacher token: %v", err)
+	}
+	w = do(t, srv, "GET", fmt.Sprintf("/api/teacher/appeals/%d", appealID), otherTeacherToken, nil)
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("other teacher appeal access: want 404, got %d", w.Code)
+	}
+	w = do(t, srv, "GET", fmt.Sprintf("/api/teacher/exams/%d/appeals", exam.ID), otherTeacherToken, nil)
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("other teacher exam appeals access: want 404, got %d", w.Code)
+	}
+	w = do(t, srv, "PATCH", fmt.Sprintf("/api/teacher/appeals/%d/reply", appealID), otherTeacherToken, map[string]string{
+		"response": "Đã kiểm tra lại nội dung câu hỏi.",
+	})
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("other teacher appeal reply: want 404, got %d", w.Code)
+	}
+
+	w = do(t, srv, "PATCH", fmt.Sprintf("/api/teacher/appeals/%d/reply", appealID), teacherToken, map[string]string{
+		"response": "Đã kiểm tra lại nội dung câu hỏi.",
+	})
+	if w.Code != http.StatusOK || parseJSON(t, w)["appeal"].(map[string]interface{})["status"] != models.AppealStatusReplied {
+		t.Fatalf("teacher reply failed: status=%d body=%s", w.Code, w.Body)
+	}
+	w = do(t, srv, "PATCH", fmt.Sprintf("/api/teacher/appeals/%d/resolve", appealID), teacherToken, nil)
+	if w.Code != http.StatusOK || parseJSON(t, w)["appeal"].(map[string]interface{})["status"] != models.AppealStatusResolved {
+		t.Fatalf("teacher resolve failed: status=%d body=%s", w.Code, w.Body)
+	}
+	w = do(t, srv, "PATCH", fmt.Sprintf("/api/teacher/appeals/%d/reject", appealID), teacherToken, nil)
+	if w.Code != http.StatusConflict {
+		t.Fatalf("closed appeal update: want 409, got %d — %s", w.Code, w.Body)
+	}
+
+	w = do(t, srv, "GET", fmt.Sprintf("/api/student/history/%d", attemptID), studentToken, nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("reload history detail: want 200, got %d — %s", w.Code, w.Body)
+	}
+	storedAppeals := parseJSON(t, w)["appeals"].([]interface{})
+	storedAppeal := storedAppeals[0].(map[string]interface{})
+	if storedAppeal["status"] != models.AppealStatusResolved || storedAppeal["teacher_response"] == nil {
+		t.Fatalf("student history should preserve appeal response and final status: %s", w.Body)
+	}
+
+	w = createAppeal("Em xin kiểm tra lại điểm tổng của bài thi.")
+	if w.Code != http.StatusCreated {
+		t.Fatalf("create second appeal: want 201, got %d — %s", w.Code, w.Body)
+	}
+	secondAppealID := uint(parseJSON(t, w)["appeal"].(map[string]interface{})["id"].(float64))
+	w = do(t, srv, "PATCH", fmt.Sprintf("/api/teacher/appeals/%d/reject", secondAppealID), teacherToken, nil)
+	if w.Code != http.StatusOK || parseJSON(t, w)["appeal"].(map[string]interface{})["status"] != models.AppealStatusRejected {
+		t.Fatalf("teacher reject failed: status=%d body=%s", w.Code, w.Body)
+	}
+	w = do(t, srv, "GET", "/api/student/history?appeal_status=REJECTED", studentToken, nil)
+	if w.Code != http.StatusOK || parseJSON(t, w)["pagination"].(map[string]interface{})["total"].(float64) != 1 {
+		t.Fatalf("student appeal status filter failed: status=%d body=%s", w.Code, w.Body)
+	}
+}
+
+func TestSeedDataEnsuresDemoUsersOnExistingDatabase(t *testing.T) {
+	dbPath := fmt.Sprintf("file:seed_existing_%d?mode=memory&cache=shared&_foreign_keys=on", time.Now().UnixNano())
+	db, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Silent),
+	})
+	if err != nil {
+		t.Fatalf("open test DB: %v", err)
+	}
+	sqlDB, err := db.DB()
+	if err != nil {
+		t.Fatalf("get test DB connection: %v", err)
+	}
+	defer sqlDB.Close()
+
+	if err := db.AutoMigrate(&models.User{}, &models.Exam{}, &models.Question{}); err != nil {
+		t.Fatalf("migrate test DB: %v", err)
+	}
+	if err := db.Create(&models.User{
+		Email: "already-existing@test.com", PasswordHash: "existing", FullName: "Existing User", Role: models.RoleStudent,
+	}).Error; err != nil {
+		t.Fatalf("create existing user: %v", err)
+	}
+
+	models.SeedData(db)
+	for _, email := range []string{"student@test.com", "student2@test.com", "student3@test.com"} {
+		var user models.User
+		if err := db.Where("email = ?", email).First(&user).Error; err != nil {
+			t.Fatalf("seeded student %s missing from populated database: %v", email, err)
+		}
+		if user.Role != models.RoleStudent {
+			t.Errorf("seeded account %s role: want student, got %s", email, user.Role)
+		}
+		if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte("123456")); err != nil {
+			t.Errorf("seeded account %s should accept demo password: %v", email, err)
+		}
+	}
+
+	models.SeedData(db)
+
+	var userCount, examCount, questionCount int64
+	if err := db.Model(&models.User{}).Count(&userCount).Error; err != nil {
+		t.Fatalf("count users: %v", err)
+	}
+	if err := db.Model(&models.Exam{}).Count(&examCount).Error; err != nil {
+		t.Fatalf("count exams: %v", err)
+	}
+	if err := db.Model(&models.Question{}).Count(&questionCount).Error; err != nil {
+		t.Fatalf("count questions: %v", err)
+	}
+	if userCount != 5 || examCount != 1 || questionCount != 5 {
+		t.Fatalf("repeated seed duplicated data: users=%d exams=%d questions=%d", userCount, examCount, questionCount)
 	}
 }

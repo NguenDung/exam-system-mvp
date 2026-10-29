@@ -25,15 +25,16 @@ export default function StudentLayout() {
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-emerald-800 shadow-lg">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-6">
+        <div className="mx-auto flex min-h-16 max-w-5xl flex-wrap items-center justify-between gap-3 px-4 py-2 sm:px-6">
+          <div className="flex flex-wrap items-center gap-3 sm:gap-6">
             <div className="flex items-center gap-2">
               <span className="text-2xl">📝</span>
               <span className="text-white font-bold text-lg tracking-tight">ExamMVP</span>
               <span className="text-emerald-300 text-xs ml-2 font-medium uppercase tracking-wider">Học sinh</span>
             </div>
-            <nav className="flex gap-1">
+            <nav className="flex flex-wrap gap-1">
               <NavItem to="/student" end>Làm bài thi</NavItem>
+              <NavItem to="/student/history">Lịch sử bài làm</NavItem>
             </nav>
           </div>
           <div className="flex items-center gap-3">

@@ -37,6 +37,7 @@ export default function ExamResultPage() {
   );
 
   const { attempt, exam, answers, show_correct_answers } = data;
+  const maxScore = (answers || []).reduce((total, answer) => total + Number(answer.points || 0), 0);
   const scorePercent = answers && answers.length > 0
     ? Math.round((attempt.correct_count / answers.length) * 100)
     : 0;
@@ -59,8 +60,8 @@ export default function ExamResultPage() {
 
         {/* Score circle */}
         <div className={`w-36 h-36 rounded-full border-8 ${scoreRingColor} mx-auto flex flex-col items-center justify-center mb-6`}>
-          <span className={`text-4xl font-extrabold ${scoreColor}`}>{attempt.score.toFixed(1)}</span>
-          <span className="text-xs text-gray-400 font-medium">điểm</span>
+          <span className={`text-3xl font-extrabold ${scoreColor}`}>{Number(attempt.score).toFixed(2)}</span>
+          <span className="text-xs font-medium text-gray-400">/ {maxScore.toFixed(2)} điểm</span>
         </div>
 
         <div className="grid grid-cols-3 gap-4 max-w-sm mx-auto mb-4">

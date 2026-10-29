@@ -80,7 +80,7 @@ func Register(c *gin.Context) {
 		FullName:     strings.TrimSpace(input.FullName),
 		Email:        email,
 		PasswordHash: string(hash),
-		Role:         "student",
+		Role:         models.RoleStudent,
 	}
 
 	if err := config.DB.Create(&user).Error; err != nil {
@@ -125,6 +125,10 @@ func Login(c *gin.Context) {
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(input.Password)); err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid email or password"})
+		return
+	}
+	if user.Role != models.RoleTeacher && user.Role != models.RoleStudent {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid email or password"})
 		return
 	}
