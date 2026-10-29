@@ -40,6 +40,7 @@ type Exam struct {
 	TeacherID   uint           `gorm:"not null;index" json:"teacher_id"`
 	ExamCode    string         `gorm:"uniqueIndex;size:20" json:"exam_code"`
 	Title       string         `gorm:"not null;size:500" json:"title"`
+	Description string         `gorm:"type:text" json:"description"`
 	Duration    int            `gorm:"not null" json:"duration"` // minutes
 	StartTime   time.Time      `json:"start_time"`
 	EndTime     time.Time      `json:"end_time"`
@@ -107,6 +108,7 @@ type ExamAttempt struct {
 	UserID       uint       `gorm:"not null;index" json:"user_id"`
 	Status       string     `gorm:"not null;default:'in_progress';size:20" json:"status"` // 'in_progress' | 'completed'
 	Score        float64    `gorm:"not null;default:0;type:decimal(8,2)" json:"score"`
+	TeacherNote  string     `gorm:"type:text" json:"teacher_note"`
 	CorrectCount int        `gorm:"not null;default:0" json:"correct_count"`
 	WrongCount   int        `gorm:"not null;default:0" json:"wrong_count"`
 	StartedAt    time.Time  `gorm:"not null" json:"started_at"`

@@ -42,15 +42,15 @@ function CountdownTimer({ seconds, onExpire, onWarning }) {
 
   return (
     <div
-      className={`flex items-center gap-2 px-3.5 py-1.5 rounded font-mono font-bold text-base transition-colors ${
+      className={`flex items-center gap-2 px-3 py-1.5 rounded font-mono font-bold text-sm sm:text-base transition-colors ${
         isWarning
-          ? 'bg-red-100 text-red-800'
+          ? 'bg-red-100 text-red-800 border border-red-300'
           : isUrgent
-          ? 'bg-amber-100 text-amber-800'
-          : 'bg-slate-100 text-slate-800'
+          ? 'bg-amber-100 text-amber-800 border border-amber-300'
+          : 'bg-slate-100 text-slate-800 border border-slate-200'
       }`}
     >
-      <span className="text-xs uppercase font-sans font-medium text-slate-500">Thời gian còn lại:</span>
+      <span className="text-xs uppercase font-sans font-medium text-slate-500 hidden sm:inline">Thời gian:</span>
       <span>
         {h > 0 ? `${String(h).padStart(2, '0')}:` : ''}
         {String(m).padStart(2, '0')}:{String(s).padStart(2, '0')}
@@ -80,7 +80,7 @@ function OneMinuteWarningModal({ onDismiss }) {
   );
 }
 
-function SubmitConfirmModal({ answeredCount, totalCount, onConfirm, onCancel, submitting }) {
+function SubmitConfirmModal({ answeredCount, totalCount, flaggedCount, onConfirm, onCancel, submitting }) {
   const unanswered = totalCount - answeredCount;
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -88,17 +88,20 @@ function SubmitConfirmModal({ answeredCount, totalCount, onConfirm, onCancel, su
         <h3 className="text-lg font-bold text-slate-900 mb-2">Xác nhận nộp bài thi</h3>
         <div className="space-y-1.5 text-sm mb-6 bg-slate-50 p-3.5 rounded border border-slate-100 text-left">
           <p className="text-slate-600">Tổng số câu hỏi: <span className="font-bold text-slate-900">{totalCount}</span></p>
-          <p className="text-slate-600">Số câu đã trả lời: <span className="font-bold text-emerald-700">{answeredCount}</span></p>
+          <p className="text-slate-600">Số câu đã làm: <span className="font-bold text-emerald-700">{answeredCount}</span></p>
+          {flaggedCount > 0 && (
+            <p className="text-amber-700">Số câu đang đặt cờ: <span className="font-bold">{flaggedCount}</span></p>
+          )}
           {unanswered > 0 && (
-            <p className="text-amber-800 font-medium">Lưu ý: Còn {unanswered} câu chưa chọn đáp án.</p>
+            <p className="text-red-700 font-medium">Lưu ý: Còn {unanswered} câu chưa chọn đáp án.</p>
           )}
         </div>
         <div className="flex gap-3">
           <button onClick={onCancel} disabled={submitting} className="btn-secondary flex-1">
-            Quay lại
+            Quay lại làm tiếp
           </button>
           <button onClick={onConfirm} disabled={submitting} className="btn-primary flex-1">
-            {submitting ? <Spinner size="sm" /> : 'Xác nhận nộp'}
+            {submitting ? <Spinner size="sm" /> : 'Xác nhận nộp bài'}
           </button>
         </div>
       </div>
@@ -114,6 +117,9 @@ export default function ExamTakingPage() {
   const [attempt, setAttempt] = useState(null);
   const [questions, setQuestions] = useState([]);
   const [answers, setAnswers] = useState({});
+  const [flagged, setFlagged] = useState({});
+  const [currentIndex, setCurrentIndex] = useState(0);
+
   const [remainingSeconds, setRemainingSeconds] = useState(0);
   const [saveStatus, setSaveStatus] = useState('');
   const [showConfirm, setShowConfirm] = useState(false);
@@ -168,7 +174,7 @@ export default function ExamTakingPage() {
   const saveAnswersToServer = useCallback(async (answerMap) => {
     if (!attempt) return;
     const answersArray = Object.entries(answerMap).map(([qId, opt]) => ({
-      question_id: parseInt(qId),
+      question_id: parseInt(qId, 10),
       chosen_option: opt,
     }));
     if (answersArray.length === 0) return;
@@ -207,6 +213,13 @@ export default function ExamTakingPage() {
     saveAnswersToServer(newAnswers);
   };
 
+  const toggleFlag = (questionId) => {
+    setFlagged((prev) => ({
+      ...prev,
+      [questionId]: !prev[questionId],
+    }));
+  };
+
   const doSubmit = useCallback(async (finalAnswers) => {
     if (!attempt || submitting || autoSubmittedRef.current) return;
     autoSubmittedRef.current = true;
@@ -214,7 +227,7 @@ export default function ExamTakingPage() {
     setShowConfirm(false);
     setShowTimeWarning(false);
     const answersArray = Object.entries(finalAnswers || answersRef.current).map(([qId, opt]) => ({
-      question_id: parseInt(qId),
+      question_id: parseInt(qId, 10),
       chosen_option: opt,
     }));
     try {
@@ -244,41 +257,44 @@ export default function ExamTakingPage() {
 
   const answeredCount = Object.keys(answers).length;
   const totalCount = questions.length;
+  const flaggedCount = Object.values(flagged).filter(Boolean).length;
+  const currentQuestion = questions[currentIndex];
 
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-100 flex flex-col items-center justify-center gap-3">
         <Spinner size="lg" />
-        <p className="text-slate-500 text-sm">Đang chuẩn bị đề thi...</p>
+        <p className="text-slate-500 text-sm">Đang kết nối vào phòng thi...</p>
       </div>
     );
   }
 
+  if (!currentQuestion) {
+    return (
+      <div className="min-h-screen bg-slate-100 flex flex-col items-center justify-center gap-3 p-4">
+        <p className="text-slate-600">Đề thi chưa có câu hỏi nào để hiển thị.</p>
+        <button onClick={() => navigate('/student')} className="btn-secondary btn-sm">Quay lại trang chủ</button>
+      </div>
+    );
+  }
+
+  const chosenOption = answers[currentQuestion.id];
+  const isCurrentFlagged = !!flagged[currentQuestion.id];
+
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900 pb-12">
-      {/* Sticky header */}
-      <div className="sticky top-0 z-30 bg-white border-b border-slate-200 shadow-sm">
-        <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between gap-4 flex-wrap">
-          <div>
-            <h1 className="font-bold text-slate-900 text-sm sm:text-base leading-tight">Đang làm bài thi</h1>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Đã trả lời: <span className="font-semibold text-slate-900">{answeredCount}</span> / {totalCount} câu
-            </p>
-          </div>
-
-          <div className="flex-1 max-w-xs hidden md:block">
-            <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-indigo-600 rounded-full transition-all duration-300"
-                style={{ width: `${totalCount > 0 ? (answeredCount / totalCount) * 100 : 0}%` }}
-              />
-            </div>
-          </div>
-
+      {/* Top Navigation Bar */}
+      <header className="sticky top-0 z-30 bg-slate-900 text-white border-b border-slate-800 shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-3">
-            {saveStatus === 'saving' && <span className="text-xs text-slate-400">Đang lưu...</span>}
-            {saveStatus === 'saved' && <span className="text-xs text-emerald-700 font-medium">Đã tự động lưu</span>}
-            {saveStatus === 'error' && <span className="text-xs text-red-600">Lưu thất bại</span>}
+            <span className="font-bold text-sm tracking-tight uppercase">Phòng thi trực tuyến</span>
+            <span className="text-xs text-slate-400 font-mono hidden sm:inline">#{attempt?.id}</span>
+          </div>
+
+          <div className="flex items-center gap-4">
+            {saveStatus === 'saving' && <span className="text-xs text-slate-300">Đang lưu...</span>}
+            {saveStatus === 'saved' && <span className="text-xs text-emerald-400 font-medium">Đã lưu tự động</span>}
+            {saveStatus === 'error' && <span className="text-xs text-red-400">Lưu lỗi mạng</span>}
 
             {remainingSeconds > 0 && (
               <CountdownTimer
@@ -288,81 +304,213 @@ export default function ExamTakingPage() {
               />
             )}
 
-            <button onClick={() => setShowConfirm(true)} disabled={submitting} className="btn-primary btn-sm">
+            <button
+              onClick={() => setShowConfirm(true)}
+              disabled={submitting}
+              className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-medium text-xs sm:text-sm transition-colors"
+            >
               {submitting ? <Spinner size="sm" /> : 'Nộp bài'}
             </button>
           </div>
         </div>
-      </div>
+      </header>
 
-      {/* Questions list */}
-      <div className="max-w-4xl mx-auto px-4 py-6 space-y-4">
-        {questions.map((q, idx) => {
-          const chosen = answers[q.id];
-          return (
-            <div key={q.id} className="bg-white rounded-lg border border-slate-200 p-5">
-              <div className="flex items-start gap-3 mb-4">
-                <span className="flex-shrink-0 w-7 h-7 rounded bg-slate-100 text-slate-700 font-bold text-xs flex items-center justify-center">
-                  {idx + 1}
-                </span>
-                <div className="flex-1">
-                  <p className="text-slate-900 font-medium leading-relaxed">{q.prompt}</p>
-                  <p className="text-xs text-slate-400 mt-1">Trọng số: {q.points} điểm</p>
-                </div>
-                {chosen && (
-                  <span className="text-xs px-2 py-0.5 rounded font-medium bg-slate-100 text-slate-700 border border-slate-200">
-                    Đã chọn {chosen}
+      {/* Main Content: 2 Columns */}
+      <main className="max-w-7xl mx-auto px-4 py-6">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+          {/* Left Column: Current Question View (3 cols on lg) */}
+          <section className="lg:col-span-3 space-y-4">
+            <div className="bg-white rounded-lg border border-slate-200 p-6 shadow-sm">
+              {/* Question Header */}
+              <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-4 gap-2 flex-wrap">
+                <div className="flex items-center gap-3">
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-500 bg-slate-100 px-2.5 py-1 rounded">
+                    Câu {currentIndex + 1} / {totalCount}
                   </span>
-                )}
+                  <span className="text-xs text-slate-500">
+                    Điểm số: <strong className="text-slate-800">{currentQuestion.points} điểm</strong>
+                  </span>
+                </div>
+
+                {/* Flag Question Toggle */}
+                <button
+                  onClick={() => toggleFlag(currentQuestion.id)}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1 rounded text-xs font-medium border transition-colors ${
+                    isCurrentFlagged
+                      ? 'bg-amber-100 text-amber-900 border-amber-300'
+                      : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                  }`}
+                >
+                  <span className={`inline-block w-2 h-2 rounded-full ${isCurrentFlagged ? 'bg-amber-500' : 'bg-slate-300'}`} />
+                  {isCurrentFlagged ? 'Đã đặt cờ xem lại' : 'Đặt cờ câu này'}
+                </button>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              {/* Question Prompt */}
+              <div className="py-2 mb-6">
+                <p className="text-slate-900 text-base sm:text-lg font-medium leading-relaxed whitespace-pre-wrap">
+                  {currentQuestion.prompt}
+                </p>
+              </div>
+
+              {/* Options List */}
+              <div className="space-y-3">
                 {OPTIONS.map((opt) => {
                   const field = OPTION_FIELDS[opt];
-                  const isSelected = chosen === opt;
+                  const isSelected = chosenOption === opt;
                   return (
                     <button
                       key={opt}
-                      onClick={() => handleSelectAnswer(q.id, opt)}
+                      onClick={() => handleSelectAnswer(currentQuestion.id, opt)}
                       disabled={submitting}
-                      className={`flex items-center gap-3 px-3.5 py-2.5 rounded border text-left text-sm transition-colors ${
+                      className={`w-full flex items-start gap-3 p-4 rounded-lg border text-left text-sm sm:text-base transition-colors ${
                         isSelected
-                          ? 'border-indigo-600 bg-indigo-50 text-indigo-900 font-medium'
-                          : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'
+                          ? 'border-indigo-600 bg-indigo-50/70 text-indigo-950 font-medium'
+                          : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'
                       }`}
                     >
                       <span
-                        className={`w-6 h-6 rounded flex items-center justify-center text-xs font-bold flex-shrink-0 ${
-                          isSelected ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600'
+                        className={`w-7 h-7 rounded flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5 ${
+                          isSelected ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600 border border-slate-200'
                         }`}
                       >
                         {opt}
                       </span>
-                      <span className="truncate">{q[field]}</span>
+                      <span className="flex-1 leading-snug">{currentQuestion[field]}</span>
                     </button>
                   );
                 })}
               </div>
+
+              {/* Question Navigation Controls */}
+              <div className="flex items-center justify-between pt-6 mt-6 border-t border-slate-100">
+                <button
+                  onClick={() => setCurrentIndex((idx) => Math.max(0, idx - 1))}
+                  disabled={currentIndex === 0}
+                  className="btn-secondary text-sm disabled:opacity-40"
+                >
+                  &larr; Câu trước
+                </button>
+
+                <div className="text-xs text-slate-500 hidden sm:block">
+                  {chosenOption ? (
+                    <span className="text-emerald-700 font-medium">Đã lưu phương án: {chosenOption}</span>
+                  ) : (
+                    <span className="text-slate-400">Chưa chọn đáp án</span>
+                  )}
+                </div>
+
+                {currentIndex < totalCount - 1 ? (
+                  <button
+                    onClick={() => setCurrentIndex((idx) => Math.min(totalCount - 1, idx + 1))}
+                    className="btn-primary text-sm"
+                  >
+                    Câu tiếp theo &rarr;
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => setShowConfirm(true)}
+                    className="btn-primary text-sm bg-emerald-600 hover:bg-emerald-700"
+                  >
+                    Nộp bài thi
+                  </button>
+                )}
+              </div>
             </div>
-          );
-        })}
+          </section>
 
-        <div className="text-center pt-4">
-          <button onClick={() => setShowConfirm(true)} disabled={submitting} className="btn-primary px-8 py-2.5">
-            {submitting ? <Spinner size="sm" /> : null} Nộp bài thi
-          </button>
+          {/* Right Column: Question Palette (1 col on lg) */}
+          <aside className="lg:col-span-1 space-y-4">
+            <div className="bg-white rounded-lg border border-slate-200 p-5 shadow-sm sticky top-20">
+              <h3 className="font-bold text-slate-900 text-sm mb-3">Bảng câu hỏi ({totalCount})</h3>
+
+              {/* Legend */}
+              <div className="grid grid-cols-2 gap-2 text-xs text-slate-600 mb-4 pb-4 border-b border-slate-100">
+                <div className="flex items-center gap-1.5">
+                  <span className="w-3.5 h-3.5 rounded bg-emerald-600 inline-block" />
+                  <span>Đã trả lời</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="w-3.5 h-3.5 rounded bg-amber-500 inline-block" />
+                  <span>Đặt cờ</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="w-3.5 h-3.5 rounded bg-slate-100 border border-slate-300 inline-block" />
+                  <span>Chưa làm</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="w-3.5 h-3.5 rounded border-2 border-indigo-600 bg-white inline-block" />
+                  <span>Đang xem</span>
+                </div>
+              </div>
+
+              {/* Question Buttons Grid */}
+              <div className="grid grid-cols-5 gap-2 mb-5">
+                {questions.map((q, idx) => {
+                  const isAnswered = !!answers[q.id];
+                  const isQFlagged = !!flagged[q.id];
+                  const isCurrent = idx === currentIndex;
+
+                  let colorClass = 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-300';
+                  if (isQFlagged) {
+                    colorClass = 'bg-amber-500 text-white font-bold border-amber-600';
+                  } else if (isAnswered) {
+                    colorClass = 'bg-emerald-600 text-white font-bold border-emerald-700';
+                  }
+
+                  const activeRing = isCurrent ? 'ring-2 ring-indigo-500 ring-offset-1 font-extrabold' : '';
+
+                  return (
+                    <button
+                      key={q.id}
+                      onClick={() => setCurrentIndex(idx)}
+                      className={`h-9 rounded text-xs flex items-center justify-center transition-all ${colorClass} ${activeRing}`}
+                      title={`Câu ${idx + 1}: ${isAnswered ? 'Đã trả lời' : 'Chưa trả lời'}${isQFlagged ? ' (Đã đặt cờ)' : ''}`}
+                    >
+                      {idx + 1}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Summary Stats */}
+              <div className="space-y-1.5 text-xs text-slate-500 bg-slate-50 p-3 rounded mb-4">
+                <div className="flex justify-between">
+                  <span>Tiến độ:</span>
+                  <span className="font-semibold text-slate-800">{answeredCount} / {totalCount} ({Math.round((answeredCount / (totalCount || 1)) * 100)}%)</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Số câu đặt cờ:</span>
+                  <span className="font-semibold text-amber-700">{flaggedCount}</span>
+                </div>
+              </div>
+
+              {/* Big Submit Button */}
+              <button
+                onClick={() => setShowConfirm(true)}
+                disabled={submitting}
+                className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-medium text-sm transition-colors shadow-sm"
+              >
+                Hoàn thành & Nộp bài
+              </button>
+            </div>
+          </aside>
         </div>
-      </div>
+      </main>
 
+      {/* Confirmation Modal */}
       {showConfirm && (
         <SubmitConfirmModal
           answeredCount={answeredCount}
           totalCount={totalCount}
+          flaggedCount={flaggedCount}
           onConfirm={() => doSubmit(answers)}
           onCancel={() => setShowConfirm(false)}
           submitting={submitting}
         />
       )}
+
+      {/* 1-Minute Warning Modal */}
       {showTimeWarning && !submitting && (
         <OneMinuteWarningModal onDismiss={() => setShowTimeWarning(false)} />
       )}

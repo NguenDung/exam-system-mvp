@@ -10,6 +10,7 @@ import RegisterPage from './pages/RegisterPage';
 import TeacherExamsPage from './pages/teacher/TeacherExamsPage';
 import TeacherExamDetailPage from './pages/teacher/TeacherExamDetailPage';
 import TeacherResultsPage from './pages/teacher/TeacherResultsPage';
+import TeacherStudentsPage from './pages/teacher/TeacherStudentsPage';
 import StudentHomePage from './pages/student/StudentHomePage';
 import ExamTakingPage from './pages/student/ExamTakingPage';
 import ExamResultPage from './pages/student/ExamResultPage';
@@ -31,6 +32,7 @@ export default function App() {
               <Route path="/teacher" element={<TeacherExamsPage />} />
               <Route path="/teacher/exams/:id" element={<TeacherExamDetailPage />} />
               <Route path="/teacher/exams/:id/results" element={<TeacherResultsPage />} />
+              <Route path="/teacher/students" element={<TeacherStudentsPage />} />
             </Route>
           </Route>
 

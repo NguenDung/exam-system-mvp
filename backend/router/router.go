@@ -46,7 +46,10 @@ func SetupRouter() *gin.Engine {
 		teacher.GET("/exams", handlers.TeacherListExams)
 		teacher.POST("/exams", handlers.TeacherCreateExam)
 		teacher.GET("/exams/:id", handlers.TeacherGetExam)
+		teacher.PUT("/exams/:id", handlers.TeacherUpdateExam)
+		teacher.DELETE("/exams/:id", handlers.TeacherDeleteExam)
 		teacher.POST("/exams/:id/questions", handlers.TeacherAddQuestions)
+		teacher.POST("/exams/:id/questions/bulk", handlers.TeacherBulkAddQuestions)
 		teacher.PATCH("/exams/:id/publish", handlers.TeacherPublishExam)
 		teacher.GET("/exams/:id/results", handlers.TeacherGetResults)
 		teacher.GET("/exams/:id/appeals", handlers.TeacherListExamAppeals)
@@ -54,13 +57,21 @@ func SetupRouter() *gin.Engine {
 		teacher.PATCH("/appeals/:appealId/reply", handlers.TeacherReplyAppeal)
 		teacher.PATCH("/appeals/:appealId/reject", handlers.TeacherRejectAppeal)
 		teacher.PATCH("/appeals/:appealId/resolve", handlers.TeacherResolveAppeal)
+		teacher.PUT("/questions/:id", handlers.TeacherUpdateQuestion)
 		teacher.DELETE("/questions/:question_id", handlers.TeacherDeleteQuestion)
+		teacher.PATCH("/attempts/:id/score", handlers.TeacherUpdateAttemptScore)
+		teacher.DELETE("/attempts/:id", handlers.TeacherResetAttempt)
+		teacher.GET("/students", handlers.TeacherListStudents)
+		teacher.POST("/students", handlers.TeacherCreateStudent)
+		teacher.PUT("/students/:id", handlers.TeacherUpdateStudent)
+		teacher.DELETE("/students/:id", handlers.TeacherDeleteStudent)
 	}
 
 	// ── Student routes ────────────────────────────────────────────────────────
 	student := api.Group("/student")
 	student.Use(middleware.AuthRequired(), middleware.RequireRole(models.RoleStudent))
 	{
+		student.GET("/exams/available", handlers.StudentGetAvailableExams)
 		student.GET("/exams/lookup", handlers.StudentLookupExam)
 		student.GET("/history", handlers.StudentGetHistory)
 		student.GET("/history/:submissionId", handlers.StudentGetHistoryDetail)

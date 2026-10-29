@@ -2,6 +2,9 @@ package main
 
 import (
 	"bytes"
+	"context"
+	"database/sql"
+	"database/sql/driver"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -17,11 +20,182 @@ import (
 	"exam-system-mvp/utils"
 
 	"github.com/gin-gonic/gin"
+	"github.com/mattn/go-sqlite3"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
+
+// ─── Custom SQLite Driver for Tests ──────────────────────────────────────────
+// SQLite returns expression results (such as COALESCE(e.published_at, ...))
+// with an empty decltype, causing go-sqlite3 to yield raw strings instead of
+// time.Time. This driver wrapper detects timestamp/datetime columns by name
+// and parses them so that sql.Scan into *time.Time succeeds seamlessly in tests.
+
+func init() {
+	sql.Register("sqlite3_test", &testDriver{parent: &sqlite3.SQLiteDriver{}})
+}
+
+type testDriver struct {
+	parent driver.Driver
+}
+
+func (d *testDriver) Open(name string) (driver.Conn, error) {
+	conn, err := d.parent.Open(name)
+	if err != nil {
+		return nil, err
+	}
+	return &testConn{Conn: conn}, nil
+}
+
+type testConn struct {
+	driver.Conn
+}
+
+func (c *testConn) PrepareContext(ctx context.Context, query string) (driver.Stmt, error) {
+	if pc, ok := c.Conn.(driver.ConnPrepareContext); ok {
+		stmt, err := pc.PrepareContext(ctx, query)
+		if err != nil {
+			return nil, err
+		}
+		return &testStmt{Stmt: stmt}, nil
+	}
+	stmt, err := c.Conn.Prepare(query)
+	if err != nil {
+		return nil, err
+	}
+	return &testStmt{Stmt: stmt}, nil
+}
+
+func (c *testConn) Prepare(query string) (driver.Stmt, error) {
+	return c.PrepareContext(context.Background(), query)
+}
+
+func (c *testConn) Exec(query string, args []driver.Value) (driver.Result, error) {
+	if e, ok := c.Conn.(driver.Execer); ok {
+		return e.Exec(query, args)
+	}
+	return nil, driver.ErrSkip
+}
+
+func (c *testConn) ExecContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Result, error) {
+	if ec, ok := c.Conn.(driver.ExecerContext); ok {
+		return ec.ExecContext(ctx, query, args)
+	}
+	dargs := make([]driver.Value, len(args))
+	for i, a := range args {
+		dargs[i] = a.Value
+	}
+	return c.Exec(query, dargs)
+}
+
+func (c *testConn) Query(query string, args []driver.Value) (driver.Rows, error) {
+	if q, ok := c.Conn.(driver.Queryer); ok {
+		rows, err := q.Query(query, args)
+		if err != nil {
+			return nil, err
+		}
+		return &testRows{Rows: rows, cols: rows.Columns()}, nil
+	}
+	return nil, driver.ErrSkip
+}
+
+func (c *testConn) QueryContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
+	if qc, ok := c.Conn.(driver.QueryerContext); ok {
+		rows, err := qc.QueryContext(ctx, query, args)
+		if err != nil {
+			return nil, err
+		}
+		return &testRows{Rows: rows, cols: rows.Columns()}, nil
+	}
+	dargs := make([]driver.Value, len(args))
+	for i, a := range args {
+		dargs[i] = a.Value
+	}
+	return c.Query(query, dargs)
+}
+
+func (c *testConn) BeginTx(ctx context.Context, opts driver.TxOptions) (driver.Tx, error) {
+	if bt, ok := c.Conn.(driver.ConnBeginTx); ok {
+		return bt.BeginTx(ctx, opts)
+	}
+	return c.Conn.Begin()
+}
+
+func (c *testConn) Ping(ctx context.Context) error {
+	if p, ok := c.Conn.(driver.Pinger); ok {
+		return p.Ping(ctx)
+	}
+	return nil
+}
+
+type testStmt struct {
+	driver.Stmt
+}
+
+func (s *testStmt) ExecContext(ctx context.Context, args []driver.NamedValue) (driver.Result, error) {
+	if ec, ok := s.Stmt.(driver.StmtExecContext); ok {
+		return ec.ExecContext(ctx, args)
+	}
+	dargs := make([]driver.Value, len(args))
+	for i, a := range args {
+		dargs[i] = a.Value
+	}
+	return s.Stmt.Exec(dargs)
+}
+
+func (s *testStmt) QueryContext(ctx context.Context, args []driver.NamedValue) (driver.Rows, error) {
+	if qc, ok := s.Stmt.(driver.StmtQueryContext); ok {
+		rows, err := qc.QueryContext(ctx, args)
+		if err != nil {
+			return nil, err
+		}
+		return &testRows{Rows: rows, cols: rows.Columns()}, nil
+	}
+	dargs := make([]driver.Value, len(args))
+	for i, a := range args {
+		dargs[i] = a.Value
+	}
+	rows, err := s.Stmt.Query(dargs)
+	if err != nil {
+		return nil, err
+	}
+	return &testRows{Rows: rows, cols: rows.Columns()}, nil
+}
+
+type testRows struct {
+	driver.Rows
+	cols []string
+}
+
+func (r *testRows) Next(dest []driver.Value) error {
+	err := r.Rows.Next(dest)
+	if err != nil {
+		return err
+	}
+	for i, col := range r.cols {
+		if strings.HasSuffix(col, "_at") || strings.HasSuffix(col, "_time") {
+			if s, ok := dest[i].(string); ok {
+				for _, format := range []string{
+					time.RFC3339Nano,
+					time.RFC3339,
+					"2006-01-02 15:04:05.999999999-07:00",
+					"2006-01-02 15:04:05.999999999",
+					"2006-01-02 15:04:05-07:00",
+					"2006-01-02 15:04:05",
+					"2006-01-02T15:04:05",
+				} {
+					if t, parseErr := time.Parse(format, s); parseErr == nil {
+						dest[i] = t
+						break
+					}
+				}
+			}
+		}
+	}
+	return nil
+}
 
 // ─── Test helpers ─────────────────────────────────────────────────────────────
 
@@ -30,7 +204,7 @@ func setupTestServer(t *testing.T) *gin.Engine {
 
 	// Use a unique SQLite file per test run (in-process, auto-cleaned)
 	dbPath := fmt.Sprintf("file:test_%d?mode=memory&cache=shared&_foreign_keys=on", time.Now().UnixNano())
-	db, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{
+	db, err := gorm.Open(sqlite.Dialector{DriverName: "sqlite3_test", DSN: dbPath}, &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Silent),
 	})
 	if err != nil {
@@ -1039,6 +1213,14 @@ func TestStudent_ConsentAndDeadlineAutograding(t *testing.T) {
 		t.Fatal("expired save response should report automatic submission")
 	}
 
+	w = do(t, srv, "POST", startURL, studentToken, nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("resume expired exam: want 200, got %d — %s", w.Code, w.Body)
+	}
+	if !parseJSON(t, w)["auto_submitted"].(bool) {
+		t.Fatal("expired resume response should report automatic submission")
+	}
+
 	var attempt models.ExamAttempt
 	if err := config.DB.First(&attempt, attemptID).Error; err != nil {
 		t.Fatalf("load auto-submitted attempt: %v", err)
@@ -1311,5 +1493,251 @@ func TestSeedDataEnsuresDemoUsersOnExistingDatabase(t *testing.T) {
 	}
 	if userCount != 5 || examCount != 1 || questionCount != 5 {
 		t.Fatalf("repeated seed duplicated data: users=%d exams=%d questions=%d", userCount, examCount, questionCount)
+	}
+}
+
+func TestTeacher_ExamCRUD_And_BulkQuestions(t *testing.T) {
+	srv := setupTestServer(t)
+
+	// Login teacher
+	w := do(t, srv, "POST", "/api/auth/login", "", map[string]interface{}{
+		"email": "teacher@test.com", "password": "123456",
+	})
+	teacherToken := getString(parseJSON(t, w), "token")
+	now := time.Now()
+
+	// 1. Create exam
+	w = do(t, srv, "POST", "/api/teacher/exams", teacherToken, map[string]interface{}{
+		"title": "CRUD Exam", "duration": 20,
+		"start_time": now.Add(-time.Hour).Format(time.RFC3339),
+		"end_time":   now.Add(2 * time.Hour).Format(time.RFC3339),
+	})
+	if w.Code != http.StatusCreated {
+		t.Fatalf("create exam: %d %s", w.Code, w.Body)
+	}
+	examID := uint(parseJSON(t, w)["exam"].(map[string]interface{})["id"].(float64))
+
+	// 2. Update exam (PUT)
+	newTitle := "Updated CRUD Exam"
+	newDesc := "Description for updated exam"
+	durMin := 35
+	w = do(t, srv, "PUT", fmt.Sprintf("/api/teacher/exams/%d", examID), teacherToken, map[string]interface{}{
+		"title":            newTitle,
+		"description":      newDesc,
+		"duration_minutes": durMin,
+	})
+	if w.Code != http.StatusOK {
+		t.Fatalf("update exam: %d %s", w.Code, w.Body)
+	}
+	upExam := parseJSON(t, w)["exam"].(map[string]interface{})
+	if upExam["title"].(string) != newTitle || upExam["description"].(string) != newDesc || int(upExam["duration"].(float64)) != 35 {
+		t.Fatalf("updated exam fields mismatch: %v", upExam)
+	}
+
+	// 3. Bulk import questions (POST /api/teacher/exams/:id/questions/bulk)
+	bulkQs := []map[string]interface{}{
+		{
+			"prompt": "Bulk Q1", "option_a": "A1", "option_b": "B1", "option_c": "C1", "option_d": "D1",
+			"correct_option": "A", "points": 2.0,
+		},
+		{
+			"prompt": "Bulk Q2", "option_a": "A2", "option_b": "B2", "option_c": "C2", "option_d": "D2",
+			"correct_option": "B", "points": 3.0,
+		},
+	}
+	w = do(t, srv, "POST", fmt.Sprintf("/api/teacher/exams/%d/questions/bulk", examID), teacherToken, map[string]interface{}{
+		"questions": bulkQs,
+	})
+	if w.Code != http.StatusCreated {
+		t.Fatalf("bulk add questions: %d %s", w.Code, w.Body)
+	}
+	createdQs := parseJSON(t, w)["questions"].([]interface{})
+	if len(createdQs) != 2 {
+		t.Fatalf("bulk add should create 2 questions, got %d", len(createdQs))
+	}
+	q1ID := uint(createdQs[0].(map[string]interface{})["id"].(float64))
+
+	// 4. Update single question (PUT /api/teacher/questions/:id)
+	w = do(t, srv, "PUT", fmt.Sprintf("/api/teacher/questions/%d", q1ID), teacherToken, map[string]interface{}{
+		"prompt": "Updated Bulk Q1 Prompt", "option_a": "New A", "option_b": "New B",
+		"option_c": "New C", "option_d": "New D", "correct_option": "C", "points": 2.5,
+	})
+	if w.Code != http.StatusOK {
+		t.Fatalf("update question: %d %s", w.Code, w.Body)
+	}
+	upQ := parseJSON(t, w)["question"].(map[string]interface{})
+	if upQ["prompt"].(string) != "Updated Bulk Q1 Prompt" || upQ["correct_option"].(string) != "C" || upQ["points"].(float64) != 2.5 {
+		t.Fatalf("updated question mismatch: %v", upQ)
+	}
+
+	// 5. Delete exam (DELETE /api/teacher/exams/:id)
+	w = do(t, srv, "DELETE", fmt.Sprintf("/api/teacher/exams/%d", examID), teacherToken, nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("delete exam: %d %s", w.Code, w.Body)
+	}
+	w = do(t, srv, "GET", fmt.Sprintf("/api/teacher/exams/%d", examID), teacherToken, nil)
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("deleted exam should return 404, got %d", w.Code)
+	}
+}
+
+func TestTeacher_ScoreUpdate_And_ResetAttempt(t *testing.T) {
+	srv := setupTestServer(t)
+
+	w := do(t, srv, "POST", "/api/auth/login", "", map[string]interface{}{
+		"email": "teacher@test.com", "password": "123456",
+	})
+	teacherToken := getString(parseJSON(t, w), "token")
+
+	w = do(t, srv, "POST", "/api/auth/login", "", map[string]interface{}{
+		"email": "student@test.com", "password": "123456",
+	})
+	studentToken := getString(parseJSON(t, w), "token")
+
+	var exam models.Exam
+	config.DB.Where("exam_code = ?", "IT2026").First(&exam)
+
+	// Student starts and submits exam
+	w = do(t, srv, "POST", fmt.Sprintf("/api/student/exams/%d/start", exam.ID), studentToken, map[string]bool{"confirmed": true})
+	attemptID := uint(parseJSON(t, w)["attempt"].(map[string]interface{})["id"].(float64))
+
+	w = do(t, srv, "POST", fmt.Sprintf("/api/student/attempts/%d/submit", attemptID), studentToken, map[string]interface{}{})
+	if w.Code != http.StatusOK {
+		t.Fatalf("submit: %d %s", w.Code, w.Body)
+	}
+
+	// Teacher updates score manually with note (PATCH /api/teacher/attempts/:id/score)
+	w = do(t, srv, "PATCH", fmt.Sprintf("/api/teacher/attempts/%d/score", attemptID), teacherToken, map[string]interface{}{
+		"score": 4.5,
+		"note":  "Cộng điểm thưởng câu khó",
+	})
+	if w.Code != http.StatusOK {
+		t.Fatalf("teacher update score: %d %s", w.Code, w.Body)
+	}
+	updatedAttempt := parseJSON(t, w)["attempt"].(map[string]interface{})
+	if updatedAttempt["score"].(float64) != 4.5 || updatedAttempt["teacher_note"].(string) != "Cộng điểm thưởng câu khó" {
+		t.Fatalf("score update mismatch: %v", updatedAttempt)
+	}
+
+	// Teacher resets attempt (DELETE /api/teacher/attempts/:id)
+	w = do(t, srv, "DELETE", fmt.Sprintf("/api/teacher/attempts/%d", attemptID), teacherToken, nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("reset attempt: %d %s", w.Code, w.Body)
+	}
+
+	// Student can now take exam again from scratch
+	w = do(t, srv, "POST", fmt.Sprintf("/api/student/exams/%d/start", exam.ID), studentToken, map[string]bool{"confirmed": true})
+	if w.Code != http.StatusOK {
+		t.Fatalf("retake exam after reset: want 200, got %d — %s", w.Code, w.Body)
+	}
+	newAttemptID := uint(parseJSON(t, w)["attempt"].(map[string]interface{})["id"].(float64))
+	if newAttemptID == 0 || newAttemptID == attemptID {
+		t.Fatalf("new attempt expected, got %d", newAttemptID)
+	}
+}
+
+func TestTeacher_StudentManagementCRUD(t *testing.T) {
+	srv := setupTestServer(t)
+
+	w := do(t, srv, "POST", "/api/auth/login", "", map[string]interface{}{
+		"email": "teacher@test.com", "password": "123456",
+	})
+	teacherToken := getString(parseJSON(t, w), "token")
+
+	// 1. List students (GET /api/teacher/students)
+	w = do(t, srv, "GET", "/api/teacher/students", teacherToken, nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("list students: %d %s", w.Code, w.Body)
+	}
+	students := parseJSON(t, w)["students"].([]interface{})
+	if len(students) < 3 {
+		t.Fatalf("expected at least 3 seeded students, got %d", len(students))
+	}
+
+	// 2. Create student (POST /api/teacher/students)
+	newEmail := "newstudent@univ.edu.vn"
+	w = do(t, srv, "POST", "/api/teacher/students", teacherToken, map[string]interface{}{
+		"full_name": "Sinh Viên Mới",
+		"email":     newEmail,
+		"password":  "studentpass123",
+	})
+	if w.Code != http.StatusCreated {
+		t.Fatalf("create student: %d %s", w.Code, w.Body)
+	}
+	studentID := uint(parseJSON(t, w)["student"].(map[string]interface{})["id"].(float64))
+
+	// Verify new student can login
+	w = do(t, srv, "POST", "/api/auth/login", "", map[string]interface{}{
+		"email": newEmail, "password": "studentpass123",
+	})
+	if w.Code != http.StatusOK {
+		t.Fatalf("login new student: %d %s", w.Code, w.Body)
+	}
+
+	// 3. Search students with ?q=
+	w = do(t, srv, "GET", "/api/teacher/students?q=newstudent", teacherToken, nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("search students: %d %s", w.Code, w.Body)
+	}
+	searchRes := parseJSON(t, w)["students"].([]interface{})
+	if len(searchRes) != 1 {
+		t.Fatalf("search should find 1 student, got %d", len(searchRes))
+	}
+
+	// 4. Update student (PUT /api/teacher/students/:id)
+	w = do(t, srv, "PUT", fmt.Sprintf("/api/teacher/students/%d", studentID), teacherToken, map[string]interface{}{
+		"full_name": "Sinh Viên Đã Sửa",
+		"password":  "newpass456789",
+	})
+	if w.Code != http.StatusOK {
+		t.Fatalf("update student: %d %s", w.Code, w.Body)
+	}
+
+	// Verify login with updated password
+	w = do(t, srv, "POST", "/api/auth/login", "", map[string]interface{}{
+		"email": newEmail, "password": "newpass456789",
+	})
+	if w.Code != http.StatusOK {
+		t.Fatalf("login with updated password: %d %s", w.Code, w.Body)
+	}
+
+	// 5. Delete student (DELETE /api/teacher/students/:id)
+	w = do(t, srv, "DELETE", fmt.Sprintf("/api/teacher/students/%d", studentID), teacherToken, nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("delete student: %d %s", w.Code, w.Body)
+	}
+
+	// Verify student cannot login anymore
+	w = do(t, srv, "POST", "/api/auth/login", "", map[string]interface{}{
+		"email": newEmail, "password": "newpass456789",
+	})
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("deleted student login should fail 401, got %d", w.Code)
+	}
+}
+
+func TestStudent_AvailableExams(t *testing.T) {
+	srv := setupTestServer(t)
+
+	w := do(t, srv, "POST", "/api/auth/login", "", map[string]interface{}{
+		"email": "student@test.com", "password": "123456",
+	})
+	studentToken := getString(parseJSON(t, w), "token")
+
+	// Get available exams (GET /api/student/exams/available)
+	w = do(t, srv, "GET", "/api/student/exams/available", studentToken, nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("available exams: %d %s", w.Code, w.Body)
+	}
+	exams := parseJSON(t, w)["exams"].([]interface{})
+	if len(exams) == 0 {
+		t.Fatal("expected at least 1 published exam in available list")
+	}
+	first := exams[0].(map[string]interface{})
+	if first["exam_code"].(string) != "IT2026" {
+		t.Errorf("expected IT2026, got %v", first["exam_code"])
+	}
+	if first["attempt_status"].(string) != "not_attempted" {
+		t.Errorf("expected not_attempted, got %v", first["attempt_status"])
 	}
 }

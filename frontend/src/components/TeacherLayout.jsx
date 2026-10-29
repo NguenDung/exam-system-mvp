@@ -5,6 +5,7 @@ function NavItem({ to, children }) {
   return (
     <NavLink
       to={to}
+      end={to === '/teacher'}
       className={({ isActive }) =>
         `px-3 py-2 rounded-md text-sm font-medium transition-colors ${
           isActive ? 'bg-slate-800 text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white'
@@ -36,6 +37,7 @@ export default function TeacherLayout() {
             </div>
             <nav className="flex gap-2">
               <NavItem to="/teacher">Quản lý đề thi</NavItem>
+              <NavItem to="/teacher/students">Quản lý sinh viên</NavItem>
             </nav>
           </div>
           <div className="flex items-center gap-4">
