@@ -691,13 +691,14 @@ func TestStudent_GradingAccuracy(t *testing.T) {
 		return qs[i].(map[string]interface{})["id"].(float64)
 	}
 
-	// Answer: Q1=A(✓), Q2=A(✗), Q3=C(✓), Q4=skip → score=2, correct=2, wrong=1
+	// Answer: Q1=A(✓), Q2=A(✗), Q3=C(✓), Q4=skip → score=2, correct=2, wrong=2
+	// (blank answers count as wrong so correct+wrong == total questions)
 	w = do(t, srv, "POST", fmt.Sprintf("/api/student/attempts/%.0f/submit", attemptID), studentToken, map[string]interface{}{
 		"answers": []map[string]interface{}{
 			{"question_id": int(getQID(0)), "chosen_option": "A"}, // correct
 			{"question_id": int(getQID(1)), "chosen_option": "A"}, // wrong (B)
 			{"question_id": int(getQID(2)), "chosen_option": "C"}, // correct
-			// Q4 not answered = skip
+			// Q4 not answered = skip → counted as wrong
 		},
 	})
 	if w.Code != http.StatusOK {
@@ -711,7 +712,244 @@ func TestStudent_GradingAccuracy(t *testing.T) {
 	if cc := result["correct_count"].(float64); cc != 2 {
 		t.Errorf("correct_count: want 2, got %.0f", cc)
 	}
-	if wc := result["wrong_count"].(float64); wc != 1 {
-		t.Errorf("wrong_count: want 1, got %.0f", wc)
+	if wc := result["wrong_count"].(float64); wc != 2 {
+		t.Errorf("wrong_count: want 2 (1 wrong + 1 blank), got %.0f", wc)
+	}
+	totalCounted := result["correct_count"].(float64) + result["wrong_count"].(float64)
+	if totalCounted != 4 {
+		t.Errorf("correct+wrong should equal total questions (4), got %.0f", totalCounted)
+	}
+}
+
+// ─── Security & business-rule focused tests ───────────────────────────────────
+
+func TestSecurity_SQLi_DeleteQuestion_InvalidID(t *testing.T) {
+	srv := setupTestServer(t)
+	models.SeedData(config.DB)
+
+	w := do(t, srv, "POST", "/api/auth/login", "", map[string]interface{}{
+		"email": "teacher@test.com", "password": "123456",
+	})
+	token := getString(parseJSON(t, w), "token")
+
+	// SQLi-like path param must be rejected by parseUintParam (400), not executed
+	w = do(t, srv, "DELETE", "/api/teacher/questions/1%20OR%201=1", token, nil)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("SQLi question_id: want 400, got %d — %s", w.Code, w.Body)
+	}
+
+	w = do(t, srv, "DELETE", "/api/teacher/questions/abc", token, nil)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("non-numeric question_id: want 400, got %d — %s", w.Code, w.Body)
+	}
+}
+
+func TestSecurity_IDOR_SaveForeignQuestion(t *testing.T) {
+	srv := setupTestServer(t)
+	models.SeedData(config.DB)
+	now := time.Now()
+
+	w := do(t, srv, "POST", "/api/auth/login", "", map[string]interface{}{
+		"email": "teacher@test.com", "password": "123456",
+	})
+	teacherToken := getString(parseJSON(t, w), "token")
+
+	// Exam A
+	w = do(t, srv, "POST", "/api/teacher/exams", teacherToken, map[string]interface{}{
+		"title": "Exam A", "duration": 30,
+		"start_time": now.Add(-time.Hour).Format(time.RFC3339),
+		"end_time":   now.Add(time.Hour).Format(time.RFC3339),
+	})
+	examAID := parseJSON(t, w)["exam"].(map[string]interface{})["id"].(float64)
+	w = do(t, srv, "POST", fmt.Sprintf("/api/teacher/exams/%.0f/questions", examAID), teacherToken, map[string]interface{}{
+		"questions": []map[string]interface{}{{
+			"prompt": "QA?", "option_a": "A", "option_b": "B", "option_c": "C", "option_d": "D",
+			"correct_option": "A",
+		}},
+	})
+	qAID := parseJSON(t, w)["questions"].([]interface{})[0].(map[string]interface{})["id"].(float64)
+	do(t, srv, "PATCH", fmt.Sprintf("/api/teacher/exams/%.0f/publish", examAID), teacherToken, nil)
+
+	// Exam B (foreign questions)
+	w = do(t, srv, "POST", "/api/teacher/exams", teacherToken, map[string]interface{}{
+		"title": "Exam B", "duration": 30,
+		"start_time": now.Add(-time.Hour).Format(time.RFC3339),
+		"end_time":   now.Add(time.Hour).Format(time.RFC3339),
+	})
+	examBID := parseJSON(t, w)["exam"].(map[string]interface{})["id"].(float64)
+	w = do(t, srv, "POST", fmt.Sprintf("/api/teacher/exams/%.0f/questions", examBID), teacherToken, map[string]interface{}{
+		"questions": []map[string]interface{}{{
+			"prompt": "QB?", "option_a": "A", "option_b": "B", "option_c": "C", "option_d": "D",
+			"correct_option": "B",
+		}},
+	})
+	qBID := parseJSON(t, w)["questions"].([]interface{})[0].(map[string]interface{})["id"].(float64)
+	do(t, srv, "PATCH", fmt.Sprintf("/api/teacher/exams/%.0f/publish", examBID), teacherToken, nil)
+
+	do(t, srv, "POST", "/api/auth/register", "", map[string]interface{}{
+		"full_name": "IDOR Student", "email": "idor@exam.local", "password": "password123",
+	})
+	w = do(t, srv, "POST", "/api/auth/login", "", map[string]interface{}{
+		"email": "idor@exam.local", "password": "password123",
+	})
+	studentToken := getString(parseJSON(t, w), "token")
+
+	// Start Exam A
+	w = do(t, srv, "POST", fmt.Sprintf("/api/student/exams/%.0f/start", examAID), studentToken, nil)
+	attemptID := parseJSON(t, w)["attempt"].(map[string]interface{})["id"].(float64)
+
+	// Try to save a question belonging to Exam B → must 400
+	w = do(t, srv, "POST", fmt.Sprintf("/api/student/attempts/%.0f/save", attemptID), studentToken, map[string]interface{}{
+		"answers": []map[string]interface{}{
+			{"question_id": int(qBID), "chosen_option": "A"},
+		},
+	})
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("IDOR foreign question_id: want 400, got %d — %s", w.Code, w.Body)
+	}
+
+	// Valid question from Exam A still works
+	w = do(t, srv, "POST", fmt.Sprintf("/api/student/attempts/%.0f/save", attemptID), studentToken, map[string]interface{}{
+		"question_id": int(qAID), "chosen_option": "A",
+	})
+	if w.Code != http.StatusOK {
+		t.Fatalf("valid save: want 200, got %d — %s", w.Code, w.Body)
+	}
+}
+
+func TestSecurity_InvalidChosenOption(t *testing.T) {
+	srv := setupTestServer(t)
+	models.SeedData(config.DB)
+	now := time.Now()
+
+	w := do(t, srv, "POST", "/api/auth/login", "", map[string]interface{}{
+		"email": "teacher@test.com", "password": "123456",
+	})
+	teacherToken := getString(parseJSON(t, w), "token")
+
+	w = do(t, srv, "POST", "/api/teacher/exams", teacherToken, map[string]interface{}{
+		"title": "Opt Test", "duration": 30,
+		"start_time": now.Add(-time.Hour).Format(time.RFC3339),
+		"end_time":   now.Add(time.Hour).Format(time.RFC3339),
+	})
+	examID := parseJSON(t, w)["exam"].(map[string]interface{})["id"].(float64)
+	w = do(t, srv, "POST", fmt.Sprintf("/api/teacher/exams/%.0f/questions", examID), teacherToken, map[string]interface{}{
+		"questions": []map[string]interface{}{{
+			"prompt": "Q?", "option_a": "A", "option_b": "B", "option_c": "C", "option_d": "D",
+			"correct_option": "A",
+		}},
+	})
+	qID := parseJSON(t, w)["questions"].([]interface{})[0].(map[string]interface{})["id"].(float64)
+	do(t, srv, "PATCH", fmt.Sprintf("/api/teacher/exams/%.0f/publish", examID), teacherToken, nil)
+
+	do(t, srv, "POST", "/api/auth/register", "", map[string]interface{}{
+		"full_name": "Opt Student", "email": "opt@exam.local", "password": "password123",
+	})
+	w = do(t, srv, "POST", "/api/auth/login", "", map[string]interface{}{
+		"email": "opt@exam.local", "password": "password123",
+	})
+	studentToken := getString(parseJSON(t, w), "token")
+
+	w = do(t, srv, "POST", fmt.Sprintf("/api/student/exams/%.0f/start", examID), studentToken, nil)
+	attemptID := parseJSON(t, w)["attempt"].(map[string]interface{})["id"].(float64)
+
+	w = do(t, srv, "POST", fmt.Sprintf("/api/student/attempts/%.0f/save", attemptID), studentToken, map[string]interface{}{
+		"answers": []map[string]interface{}{
+			{"question_id": int(qID), "chosen_option": "Z"},
+		},
+	})
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("chosen_option=Z: want 400, got %d — %s", w.Code, w.Body)
+	}
+}
+
+func TestTeacher_Stats_OnlyCompleted(t *testing.T) {
+	srv := setupTestServer(t)
+	models.SeedData(config.DB)
+	now := time.Now()
+
+	w := do(t, srv, "POST", "/api/auth/login", "", map[string]interface{}{
+		"email": "teacher@test.com", "password": "123456",
+	})
+	teacherToken := getString(parseJSON(t, w), "token")
+
+	w = do(t, srv, "POST", "/api/teacher/exams", teacherToken, map[string]interface{}{
+		"title": "Stats Exam", "duration": 60,
+		"start_time": now.Add(-time.Hour).Format(time.RFC3339),
+		"end_time":   now.Add(2 * time.Hour).Format(time.RFC3339),
+	})
+	examID := parseJSON(t, w)["exam"].(map[string]interface{})["id"].(float64)
+	w = do(t, srv, "POST", fmt.Sprintf("/api/teacher/exams/%.0f/questions", examID), teacherToken, map[string]interface{}{
+		"questions": []map[string]interface{}{{
+			"prompt": "Q?", "option_a": "A", "option_b": "B", "option_c": "C", "option_d": "D",
+			"correct_option": "A", "points": 5.0,
+		}},
+	})
+	qID := parseJSON(t, w)["questions"].([]interface{})[0].(map[string]interface{})["id"].(float64)
+	do(t, srv, "PATCH", fmt.Sprintf("/api/teacher/exams/%.0f/publish", examID), teacherToken, nil)
+
+	// Student 1: complete with score 5
+	do(t, srv, "POST", "/api/auth/register", "", map[string]interface{}{
+		"full_name": "S1", "email": "s1stats@exam.local", "password": "password123",
+	})
+	w = do(t, srv, "POST", "/api/auth/login", "", map[string]interface{}{
+		"email": "s1stats@exam.local", "password": "password123",
+	})
+	s1Token := getString(parseJSON(t, w), "token")
+	w = do(t, srv, "POST", fmt.Sprintf("/api/student/exams/%.0f/start", examID), s1Token, nil)
+	a1 := parseJSON(t, w)["attempt"].(map[string]interface{})["id"].(float64)
+	do(t, srv, "POST", fmt.Sprintf("/api/student/attempts/%.0f/submit", a1), s1Token, map[string]interface{}{
+		"answers": []map[string]interface{}{{"question_id": int(qID), "chosen_option": "A"}},
+	})
+
+	// Student 2: start but leave in_progress (score still 0) — must NOT skew avg/min/max
+	do(t, srv, "POST", "/api/auth/register", "", map[string]interface{}{
+		"full_name": "S2", "email": "s2stats@exam.local", "password": "password123",
+	})
+	w = do(t, srv, "POST", "/api/auth/login", "", map[string]interface{}{
+		"email": "s2stats@exam.local", "password": "password123",
+	})
+	s2Token := getString(parseJSON(t, w), "token")
+	do(t, srv, "POST", fmt.Sprintf("/api/student/exams/%.0f/start", examID), s2Token, nil)
+
+	w = do(t, srv, "GET", fmt.Sprintf("/api/teacher/exams/%.0f/results", examID), teacherToken, nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("results: want 200, got %d — %s", w.Code, w.Body)
+	}
+	body := parseJSON(t, w)
+	stats := body["statistics"].(map[string]interface{})
+	if stats["total_students"].(float64) != 2 {
+		t.Errorf("total_students: want 2, got %v", stats["total_students"])
+	}
+	if stats["avg_score"].(float64) != 5.0 {
+		t.Errorf("avg_score should ignore in_progress: want 5.0, got %v", stats["avg_score"])
+	}
+	if stats["max_score"].(float64) != 5.0 {
+		t.Errorf("max_score: want 5.0, got %v", stats["max_score"])
+	}
+	if stats["min_score"].(float64) != 5.0 {
+		t.Errorf("min_score should ignore in_progress zero: want 5.0, got %v", stats["min_score"])
+	}
+}
+
+func TestAuth_EmailNormalization(t *testing.T) {
+	srv := setupTestServer(t)
+
+	w := do(t, srv, "POST", "/api/auth/register", "", map[string]interface{}{
+		"full_name": "Norm User", "email": "  Norm.User@Exam.LOCAL ", "password": "password123",
+	})
+	if w.Code != http.StatusCreated {
+		t.Fatalf("register: want 201, got %d — %s", w.Code, w.Body)
+	}
+	email := getString(parseJSON(t, w), "user", "email")
+	if email != "norm.user@exam.local" {
+		t.Errorf("email not normalized: got %q", email)
+	}
+
+	w = do(t, srv, "POST", "/api/auth/login", "", map[string]interface{}{
+		"email": "NORM.USER@EXAM.LOCAL", "password": "password123",
+	})
+	if w.Code != http.StatusOK {
+		t.Fatalf("login with different case: want 200, got %d — %s", w.Code, w.Body)
 	}
 }

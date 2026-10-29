@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 	"time"
@@ -47,13 +48,18 @@ func TeacherCreateExam(c *gin.Context) {
 		return
 	}
 
-	// Generate a unique exam code
+	// Generate a unique exam code (include soft-deleted rows via Unscoped)
 	var examCode string
 	for {
 		examCode = utils.GenerateExamCode()
 		var existing models.Exam
-		if config.DB.Where("exam_code = ?", examCode).First(&existing).Error != nil {
+		err := config.DB.Unscoped().Where("exam_code = ?", examCode).First(&existing).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			break // code not taken
+		}
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to allocate exam code"})
+			return
 		}
 	}
 
@@ -172,7 +178,10 @@ func TeacherAddQuestions(c *gin.Context) {
 
 func TeacherDeleteQuestion(c *gin.Context) {
 	teacherID, _ := c.Get("user_id")
-	questionID := c.Param("question_id")
+	questionID, ok := parseUintParam(c, "question_id")
+	if !ok {
+		return
+	}
 
 	var question models.Question
 	if err := config.DB.First(&question, questionID).Error; err != nil {
@@ -180,7 +189,7 @@ func TeacherDeleteQuestion(c *gin.Context) {
 		return
 	}
 
-	// Ensure the question belongs to one of this teacher's exams
+	// Strict ownership: question must belong to a draft exam owned by this teacher
 	var exam models.Exam
 	if err := config.DB.Where("id = ? AND teacher_id = ?", question.ExamID, teacherID).First(&exam).Error; err != nil {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied"})
@@ -247,6 +256,9 @@ func TeacherGetResults(c *gin.Context) {
 		return
 	}
 
+	// Auto-grade any expired in-progress attempts before reporting
+	gradeExpiredAttempts(exam.ID)
+
 	var results []StudentResult
 	config.DB.Table("exam_attempts ea").
 		Select("ea.id as attempt_id, ea.user_id, u.full_name, u.email, ea.score, ea.correct_count, ea.wrong_count, ea.status, ea.submitted_at, ea.started_at").
@@ -262,11 +274,19 @@ func TeacherGetResults(c *gin.Context) {
 		MinScore      float64 `json:"min_score"`
 	}
 	stats := Stats{TotalStudents: len(results)}
-	if len(results) > 0 {
+
+	// Only aggregate scores from completed attempts
+	completed := make([]StudentResult, 0)
+	for _, r := range results {
+		if r.Status == "completed" {
+			completed = append(completed, r)
+		}
+	}
+	if len(completed) > 0 {
 		sum := 0.0
-		stats.MaxScore = results[0].Score
-		stats.MinScore = results[0].Score
-		for _, r := range results {
+		stats.MaxScore = completed[0].Score
+		stats.MinScore = completed[0].Score
+		for _, r := range completed {
 			sum += r.Score
 			if r.Score > stats.MaxScore {
 				stats.MaxScore = r.Score
@@ -275,7 +295,7 @@ func TeacherGetResults(c *gin.Context) {
 				stats.MinScore = r.Score
 			}
 		}
-		stats.AvgScore = sum / float64(len(results))
+		stats.AvgScore = sum / float64(len(completed))
 	}
 
 	c.JSON(http.StatusOK, gin.H{

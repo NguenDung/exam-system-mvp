@@ -104,6 +104,17 @@ export default function ExamTakingPage() {
   const loadExam = useCallback(async () => {
     try {
       const { data } = await studentAPI.startExam(exam_id);
+
+      // Auto-submitted / already completed → go straight to results
+      if (
+        data.auto_submitted ||
+        data.attempt?.status === 'completed' ||
+        (data.remaining_seconds === 0 && data.attempt?.id && !data.questions?.length)
+      ) {
+        navigate(`/student/attempts/${data.attempt.id}/result`, { replace: true });
+        return;
+      }
+
       setAttempt(data.attempt);
       setQuestions(data.questions || []);
       setRemainingSeconds(Math.max(0, data.remaining_seconds));
@@ -115,7 +126,13 @@ export default function ExamTakingPage() {
       });
       setAnswers(savedMap);
     } catch (err) {
-      alert(err.response?.data?.error || 'Không thể tải bài thi');
+      const payload = err.response?.data;
+      // Backend may return 400 with completed attempt when already submitted
+      if (payload?.attempt?.id && payload?.attempt?.status === 'completed') {
+        navigate(`/student/attempts/${payload.attempt.id}/result`, { replace: true });
+        return;
+      }
+      alert(payload?.error || 'Không thể tải bài thi');
       navigate('/student');
     } finally {
       setLoading(false);
@@ -136,13 +153,23 @@ export default function ExamTakingPage() {
     try {
       await studentAPI.saveAnswers(attempt.id, { answers: answersArray });
       setSaveStatus('saved');
-    } catch {
+    } catch (err) {
+      const payload = err.response?.data;
+      // 409 Conflict / auto-submit on timeout → redirect to results
+      if (payload?.auto_submitted && (payload?.attempt?.id || attempt.id)) {
+        navigate(`/student/attempts/${payload.attempt?.id || attempt.id}/result`, { replace: true });
+        return;
+      }
+      if (payload?.attempt?.status === 'completed') {
+        navigate(`/student/attempts/${payload.attempt.id}/result`, { replace: true });
+        return;
+      }
       setSaveStatus('error');
     } finally {
       if (saveStatusTimerRef.current) clearTimeout(saveStatusTimerRef.current);
       saveStatusTimerRef.current = setTimeout(() => setSaveStatus(''), 3000);
     }
-  }, [attempt]);
+  }, [attempt, navigate]);
 
   // ── Periodic auto-save every 60s ─────────────────────────────────────────
   useEffect(() => {
@@ -171,10 +198,17 @@ export default function ExamTakingPage() {
       chosen_option: opt,
     }));
     try {
-      await studentAPI.submitExam(attempt.id, { answers: answersArray });
-      navigate(`/student/attempts/${attempt.id}/result`, { replace: true });
+      const { data } = await studentAPI.submitExam(attempt.id, { answers: answersArray });
+      const resultId = data?.attempt?.id || attempt.id;
+      navigate(`/student/attempts/${resultId}/result`, { replace: true });
     } catch (err) {
-      alert(err.response?.data?.error || 'Nộp bài thất bại');
+      const payload = err.response?.data;
+      // Already submitted / auto-graded → still go to results if we have an attempt id
+      if (payload?.attempt?.id || attempt.id) {
+        navigate(`/student/attempts/${payload?.attempt?.id || attempt.id}/result`, { replace: true });
+        return;
+      }
+      alert(payload?.error || 'Nộp bài thất bại');
       setSubmitting(false);
     }
   }, [attempt, submitting, navigate]);
