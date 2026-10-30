@@ -9,6 +9,8 @@ import (
 func Migrate(db *gorm.DB) {
 	if err := db.AutoMigrate(
 		&User{},
+		&Classroom{},
+		&ClassroomMember{},
 		&Exam{},
 		&Question{},
 		&ExamAttempt{},
@@ -16,8 +18,6 @@ func Migrate(db *gorm.DB) {
 		&Appeal{},
 		&AuditLog{},
 		&Notification{},
-		&Classroom{},
-		&ClassroomMember{},
 	); err != nil {
 		log.Fatalf("AutoMigrate failed: %v", err)
 	}

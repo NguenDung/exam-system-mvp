@@ -65,6 +65,8 @@ Hệ thống được tổ chức theo mô hình Client-Server phân tầng, tá
 
 2. **Cơ sở dữ liệu - PostgreSQL 15 & SQLite In-Memory**:
    - Môi trường chạy thực tế dùng PostgreSQL 15 trong Docker: hỗ trợ transaction ACID, khóa bi quan `SELECT ... FOR UPDATE` chống double-submit, câu lệnh nguyên tử `ON CONFLICT DO UPDATE` cho auto-save và cascade foreign key khi xóa đề thi hoặc sinh viên.
+   - **Thứ tự AutoMigrate chuẩn hóa (Topological Order)**: Sắp xếp các model theo đúng quan hệ phụ thuộc khóa ngoại (`User` -> `Classroom` -> `ClassroomMember` -> `Exam` -> `Question` -> ...) bảo đảm không xảy ra lỗi thiếu bảng tham chiếu (`relation does not exist`) khi PostgreSQL khởi tạo foreign key constraints.
+   - **Xử lý Seed dữ liệu với Unscoped Query**: Khi khởi tạo dữ liệu mẫu, hệ thống dùng `Unscoped()` để kiểm tra và khôi phục các bản ghi mẫu (như đề thi `IT2026`) nếu trước đó bị xóa mềm (`deleted_at IS NOT NULL`), tránh xung đột vi phạm ràng buộc khóa duy nhất `UNIQUE (exam_code)`.
    - Môi trường kiểm thử dùng SQLite in-memory: cấu hình chế độ `WAL (Write-Ahead Logging)` và `busy_timeout=5000` (`PRAGMA journal_mode=WAL;` và `PRAGMA busy_timeout=5000;`) giúp các tiến trình đọc/ghi song song không bị lỗi `database is locked`.
 
 3. **Frontend - React 19, Vite & TailwindCSS**:

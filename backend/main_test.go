@@ -216,6 +216,8 @@ func setupTestServer(t *testing.T) *gin.Engine {
 	// Migrate schema
 	if err := db.AutoMigrate(
 		&models.User{},
+		&models.Classroom{},
+		&models.ClassroomMember{},
 		&models.Exam{},
 		&models.Question{},
 		&models.ExamAttempt{},
@@ -223,8 +225,6 @@ func setupTestServer(t *testing.T) *gin.Engine {
 		&models.Appeal{},
 		&models.AuditLog{},
 		&models.Notification{},
-		&models.Classroom{},
-		&models.ClassroomMember{},
 	); err != nil {
 		t.Fatalf("AutoMigrate failed: %v", err)
 	}

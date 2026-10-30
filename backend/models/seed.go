@@ -35,14 +35,14 @@ func SeedData(db *gorm.DB) {
 	}
 
 	var exam Exam
-	err := db.Where("exam_code = ?", "IT2026").First(&exam).Error
+	err := db.Unscoped().Where("exam_code = ?", "IT2026").First(&exam).Error
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		log.Printf("Seed: failed to find sample exam: %v", err)
 		return
 	}
 
+	now := time.Now()
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		now := time.Now()
 		exam = Exam{
 			TeacherID:   teacher.ID,
 			ExamCode:    "IT2026",
@@ -57,6 +57,14 @@ func SeedData(db *gorm.DB) {
 			log.Printf("Seed: failed to create sample exam: %v", err)
 			return
 		}
+	} else if exam.DeletedAt.Valid {
+		db.Unscoped().Model(&exam).Updates(map[string]interface{}{
+			"deleted_at":   nil,
+			"status":       "published",
+			"start_time":   now.Add(-1 * time.Hour),
+			"end_time":     now.Add(7 * 24 * time.Hour),
+			"published_at": &now,
+		})
 	}
 
 	var questionCount int64
