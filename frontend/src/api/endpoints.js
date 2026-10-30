@@ -71,4 +71,10 @@ export const notificationAPI = {
   getAll: () => api.get('/notifications'),
   markAsRead: (id) => api.patch(`/notifications/${id}/read`),
   markAllAsRead: () => api.patch('/notifications/read-all'),
+  delete: (id) => api.delete(`/notifications/${id}`),
+  clearRead: () => api.delete('/notifications/clear-read'),
+};
+
+export const scheduleAPI = {
+  getSchedule: () => api.get('/exams/schedule'),
 };

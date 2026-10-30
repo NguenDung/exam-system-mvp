@@ -40,6 +40,7 @@ export default function TeacherLayout() {
             </div>
             <nav className="flex gap-2">
               <NavItem to="/teacher" end>Đề thi</NavItem>
+              <NavItem to="/schedule">Lịch thi</NavItem>
               <NavItem to="/classes">Lớp học</NavItem>
               <NavItem to="/teacher/students">Sinh viên</NavItem>
               <NavItem to="/directory">Danh bạ</NavItem>

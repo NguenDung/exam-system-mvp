@@ -115,3 +115,45 @@ func MarkAllNotificationsAsRead(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"message": "All notifications marked as read"})
 }
+
+func DeleteNotification(c *gin.Context) {
+	userIDVal, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+	userID := userIDVal.(uint)
+
+	notifID, ok := parseUintParam(c, "id")
+	if !ok {
+		return
+	}
+
+	res := config.DB.Where("id = ? AND user_id = ?", notifID, userID).Delete(&models.Notification{})
+	if res.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete notification"})
+		return
+	}
+	if res.RowsAffected == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Notification not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Notification deleted successfully"})
+}
+
+func ClearReadNotifications(c *gin.Context) {
+	userIDVal, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+	userID := userIDVal.(uint)
+
+	if err := config.DB.Where("user_id = ? AND is_read = true", userID).Delete(&models.Notification{}).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to clear read notifications"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Read notifications cleared successfully"})
+}

@@ -97,6 +97,7 @@ func SetupRouter() *gin.Engine {
 		common.GET("/users/directory", handlers.GetDirectory)
 		common.GET("/classes", handlers.ListClasses)
 		common.GET("/classes/:id", handlers.GetClassDetail)
+		common.GET("/exams/schedule", handlers.GetExamSchedule)
 	}
 
 	notifications := api.Group("/notifications")
@@ -105,6 +106,8 @@ func SetupRouter() *gin.Engine {
 		notifications.GET("", handlers.GetNotifications)
 		notifications.PATCH("/:id/read", handlers.MarkNotificationAsRead)
 		notifications.PATCH("/read-all", handlers.MarkAllNotificationsAsRead)
+		notifications.DELETE("/clear-read", handlers.ClearReadNotifications)
+		notifications.DELETE("/:id", handlers.DeleteNotification)
 	}
 
 	return r

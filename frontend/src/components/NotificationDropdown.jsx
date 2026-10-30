@@ -16,7 +16,7 @@ export default function NotificationDropdown() {
       setNotifications(data.notifications || []);
       setUnreadCount(data.unread_count || 0);
     } catch {
-      // Bỏ qua lỗi polling nền
+      // Polling background error ignored
     }
   }, []);
 
@@ -62,7 +62,7 @@ export default function NotificationDropdown() {
       );
       setUnreadCount((c) => Math.max(0, c - 1));
     } catch {
-      // Bỏ qua lỗi
+      // Ignore
     }
   };
 
@@ -83,11 +83,37 @@ export default function NotificationDropdown() {
       setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
       setUnreadCount(0);
     } catch {
-      // Bỏ qua lỗi
+      // Ignore
     } finally {
       setLoading(false);
     }
   };
+
+  const handleDeleteNotification = async (e, id) => {
+    e.stopPropagation();
+    try {
+      await notificationAPI.delete(id);
+      const target = notifications.find((n) => n.id === id);
+      setNotifications((prev) => prev.filter((n) => n.id !== id));
+      if (target && !target.is_read) {
+        setUnreadCount((c) => Math.max(0, c - 1));
+      }
+    } catch {
+      // Ignore
+    }
+  };
+
+  const handleClearRead = async (e) => {
+    e.stopPropagation();
+    try {
+      await notificationAPI.clearRead();
+      setNotifications((prev) => prev.filter((n) => !n.is_read));
+    } catch {
+      // Ignore
+    }
+  };
+
+  const hasReadNotifications = notifications.some((n) => n.is_read);
 
   return (
     <div className="relative" ref={dropdownRef}>
@@ -117,16 +143,28 @@ export default function NotificationDropdown() {
                 </span>
               )}
             </div>
-            {unreadCount > 0 && (
-              <button
-                type="button"
-                onClick={handleMarkAllAsRead}
-                disabled={loading}
-                className="text-xs text-indigo-600 hover:text-indigo-800 font-medium hover:underline disabled:opacity-50"
-              >
-                Đánh dấu đã đọc tất cả
-              </button>
-            )}
+            <div className="flex items-center gap-2">
+              {unreadCount > 0 && (
+                <button
+                  type="button"
+                  onClick={handleMarkAllAsRead}
+                  disabled={loading}
+                  className="text-xs text-indigo-600 hover:text-indigo-800 font-medium hover:underline disabled:opacity-50"
+                >
+                  Đọc hết
+                </button>
+              )}
+              {hasReadNotifications && (
+                <button
+                  type="button"
+                  onClick={handleClearRead}
+                  className="text-xs text-slate-500 hover:text-red-600 font-medium hover:underline"
+                  title="Xóa tất cả thông báo đã đọc"
+                >
+                  Xóa đã đọc
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="max-h-80 overflow-y-auto divide-y divide-slate-100">
@@ -139,29 +177,42 @@ export default function NotificationDropdown() {
                 <div
                   key={item.id}
                   onClick={() => handleItemClick(item)}
-                  className={`p-3.5 transition-colors cursor-pointer ${
+                  className={`group relative p-3.5 transition-colors cursor-pointer ${
                     item.is_read
                       ? 'bg-white hover:bg-slate-50'
                       : 'bg-indigo-50/50 hover:bg-indigo-50/80 border-l-2 border-indigo-600'
                   }`}
                 >
                   <div className="flex items-start justify-between gap-2">
-                    <p className={`text-xs font-semibold leading-snug ${item.is_read ? 'text-slate-800' : 'text-slate-900'}`}>
+                    <p className={`text-xs font-semibold leading-snug pr-6 ${item.is_read ? 'text-slate-800' : 'text-slate-900'}`}>
                       {!item.is_read && (
                         <span className="inline-block w-1.5 h-1.5 rounded-full bg-indigo-600 mr-1.5 align-middle" />
                       )}
                       {item.title}
                     </p>
-                    <span className="text-[10px] text-slate-400 whitespace-nowrap">
-                      {new Date(item.created_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
-                    </span>
+                    <button
+                      type="button"
+                      onClick={(e) => handleDeleteNotification(e, item.id)}
+                      className="absolute top-3 right-3 text-slate-400 hover:text-red-600 p-1 rounded hover:bg-slate-100 transition-colors"
+                      title="Xóa thông báo này"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
                   </div>
                   <p className="text-xs text-slate-600 mt-1 leading-relaxed">
                     {item.message}
                   </p>
-                  <p className="text-[10px] text-slate-400 mt-1.5">
-                    {new Date(item.created_at).toLocaleDateString('vi-VN')}
-                  </p>
+                  <div className="flex items-center justify-between text-[10px] text-slate-400 mt-1.5">
+                    <span>
+                      {new Date(item.created_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}{' '}
+                      - {new Date(item.created_at).toLocaleDateString('vi-VN')}
+                    </span>
+                    {item.target_url && (
+                      <span className="text-indigo-600 group-hover:underline">Xem chi tiết</span>
+                    )}
+                  </div>
                 </div>
               ))
             )}

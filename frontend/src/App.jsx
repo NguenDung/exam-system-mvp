@@ -20,6 +20,7 @@ import ProfilePage from './pages/ProfilePage';
 import DirectoryPage from './pages/DirectoryPage';
 import ClassroomsPage from './pages/ClassroomsPage';
 import ClassDetailPage from './pages/ClassDetailPage';
+import ExamSchedulePage from './pages/ExamSchedulePage';
 
 function SharedRoleLayout() {
   const { user } = useAuth();
@@ -60,6 +61,7 @@ export default function App() {
           {/* Shared Authenticated Routes */}
           <Route element={<ProtectedRoute />}>
             <Route element={<SharedRoleLayout />}>
+              <Route path="/schedule" element={<ExamSchedulePage />} />
               <Route path="/classes" element={<ClassroomsPage />} />
               <Route path="/classes/:id" element={<ClassDetailPage />} />
               <Route path="/directory" element={<DirectoryPage />} />

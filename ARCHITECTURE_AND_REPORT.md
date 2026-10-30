@@ -834,12 +834,15 @@ Các request yêu cầu xác thực cần gửi kèm Header:
 | `POST` | `/api/student/attempts/:id/submit` | Student | `{answers: [...]}` (tùy chọn) | `200`, `400`, `404` | Nộp bài thi và chấm điểm tự động |
 | `GET` | `/api/student/attempts/:id/result` | Student | Không | `200`, `400`, `404` | Xem điểm số và kết quả bài làm sau khi nộp |
 
-#### F. Nhóm Thông báo nội bộ
+#### F. Nhóm Thông báo nội bộ và Lịch thi
 | Method | Endpoint | Quyền hạn | Tham số / Body | Mã HTTP | Mô tả chức năng |
 | :--- | :--- | :--- | :--- | :--- | :--- |
+| `GET` | `/api/exams/schedule` | Auth | Không | `200`, `401` | Lấy thời khóa biểu lịch thi chia 3 nhóm (đang mở, sắp diễn ra, đã kết thúc) kèm đồng hồ đếm ngược |
 | `GET` | `/api/notifications` | Auth | Không | `200` | Lấy 20 thông báo mới nhất kèm số lượng chưa đọc |
 | `PATCH`| `/api/notifications/:id/read` | Auth | Không | `200`, `404` | Đánh dấu một thông báo là đã đọc |
 | `PATCH`| `/api/notifications/read-all` | Auth | Không | `200` | Đánh dấu toàn bộ thông báo là đã đọc |
+| `DELETE`| `/api/notifications/:id` | Auth | Không | `200`, `404` | Xóa thủ công một thông báo khỏi danh sách |
+| `DELETE`| `/api/notifications/clear-read` | Auth | Không | `200` | Dọn dẹp nhanh toàn bộ các thông báo đã đọc |
 
 ---
 

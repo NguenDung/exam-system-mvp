@@ -40,6 +40,7 @@ export default function StudentLayout() {
             </div>
             <nav className="flex flex-wrap gap-1 sm:gap-2">
               <NavItem to="/student" end>Đề thi</NavItem>
+              <NavItem to="/schedule">Lịch thi</NavItem>
               <NavItem to="/classes">Lớp học</NavItem>
               <NavItem to="/student/history">Lịch sử thi</NavItem>
               <NavItem to="/directory">Danh bạ</NavItem>

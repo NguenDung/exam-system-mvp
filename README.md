@@ -48,9 +48,16 @@
 ### 8. Phúc khảo bài thi và thông báo có điều hướng sâu
 - **Quy trình phúc khảo 4 trạng thái**: Sinh viên xem lại bài làm sau khi thi và có thể gửi đơn phúc khảo (tối đa 1 đơn mỗi bài thi). Trạng thái xử lý tuân theo máy trạng thái: `PENDING` -> `REPLIED` -> `REJECTED` hoặc `RESOLVED`.
 - **Thông báo điều hướng sâu (Deep-link Navigation)**: Tự động gửi thông báo khi có đơn phúc khảo mới, có phản hồi phúc khảo, sửa điểm, cấp quyền thi lại hoặc tham gia lớp học. Mỗi thông báo lưu kèm `target_url` cho phép bấm vào là chuyển hướng ngay đến đúng màn hình chi tiết tương ứng.
+- **Quản lý danh sách thông báo**: Hỗ trợ đánh dấu đã đọc từng thông báo hoặc toàn bộ, xóa từng thông báo thủ công hoặc nút xóa nhanh toàn bộ thông báo đã đọc để tránh làm dài danh sách.
 - **Polling thời gian thực**: Frontend kiểm tra thông báo nền định kỳ mỗi 5 giây để cập nhật tức thời số lượng thông báo mới.
 
-### 9. Xuất bảng điểm CSV và bảo mật
+### 9. Thời khóa biểu & Lịch thi trực quan (/schedule)
+- **Phân nhóm thông minh theo mốc thời gian**: Tự động nhóm các kỳ thi thành 3 nhóm trạng thái: "Đang diễn ra", "Sắp diễn ra" và "Đã kết thúc".
+- **Đồng hồ đếm ngược trực tiếp**: Hiển thị thời gian còn lại (đối với ca thi đang mở) hoặc thời gian chờ mở ca thi (đối với ca thi sắp diễn ra) cập nhật theo từng giây.
+- **Lọc theo phạm vi & Lớp học**: Sinh viên chỉ thấy các ca thi toàn trường hoặc thuộc các lớp học phần mình đã ghi danh. Giảng viên theo dõi toàn bộ các ca thi do mình quản lý kèm số lượt sinh viên đã thi.
+- **Điều hướng nhanh**: Cung cấp nút CTA "Vào phòng thi ngay", "Tiếp tục làm bài", "Xem kết quả" (Sinh viên) hoặc "Cấu hình đề", "Xem bảng điểm" (Giảng viên).
+
+### 10. Xuất bảng điểm CSV và bảo mật
 - **Xuất CSV UTF-8 BOM**: API `GET /api/teacher/exams/:id/results/export` xuất bảng điểm dạng CSV có gắn UTF-8 BOM (`\xef\xbb\xbf`) để mở trực tiếp bằng Excel không bị lỗi font tiếng Việt.
 - **Rate Limiting**: Giới hạn 15 request/phút/IP trên các endpoint nhạy cảm (`/api/auth/login`, `/api/student/exams/lookup`) bằng sliding window in-memory.
 - **HTTP Security Headers**: Middleware tự động gắn `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin` và giới hạn request body tối đa 2MB.
