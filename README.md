@@ -200,3 +200,19 @@ cd backend
 go test -v ./...
 ```
 Tất cả các test case đều chạy trên SQLite in-memory với các bảng và ràng buộc tương tự môi trường thật.
+
+---
+
+## Tài liệu API & Kiểm thử với Postman / Swagger
+
+Hệ thống được trang bị đầy đủ tài liệu API chuẩn công nghiệp nằm trong thư mục `docs/`:
+
+1. **Postman Collection (`docs/exam_system_postman_collection.json`)**:
+   - Chứa toàn bộ các REST API được phân nhóm theo nghiệp vụ (Auth, Exam Management, Exam Taking Flow, History & Appeals, Profile, Notifications).
+   - Tích hợp sẵn biến môi trường `baseUrl` (`http://localhost:8081`).
+   - Tự động trích xuất và lưu Bearer JWT token sau khi gọi API đăng nhập, không cần copy/paste thủ công.
+   - **Cách sử dụng**: Mở phần mềm Postman -> Chọn nút **Import** -> Kéo thả tệp `docs/exam_system_postman_collection.json`.
+
+2. **OpenAPI / Swagger 3.0 Specification (`docs/openapi.yaml`)**:
+   - Đặc tả cấu trúc Request/Response, DTOs, mã trạng thái HTTP theo chuẩn OpenAPI 3.0.
+   - Có thể mở trực tiếp trên [Swagger Editor](https://editor.swagger.io) hoặc import vào các công cụ API testing khác.

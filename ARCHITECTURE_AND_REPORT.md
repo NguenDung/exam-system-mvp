@@ -8,53 +8,49 @@
 
 ## 1. TỔNG QUAN KIẾN TRÚC HỆ THỐNG VÀ CƠ SỞ DỮ LIỆU
 
-### 1.1. Mô hình kiến trúc phân tầng
+### 1.1. Mô hình kiến trúc phân tầng chuẩn Enterprise (Clean Layered Architecture)
 
-Hệ thống được tổ chức theo mô hình Client-Server phân tầng, tách biệt giữa ứng dụng giao diện (Frontend React SPA) và máy chủ API (Backend Golang Gin).
+Hệ thống được thiết kế theo kiến trúc phân tầng chuẩn mực (Layered Architecture kết hợp Dependency Injection & Interface), đảm bảo tách biệt hoàn toàn giữa giao diện Web, xử lý nghiệp vụ và truy xuất cơ sở dữ liệu:
 
 ```
-+---------------------------------------------------------------------------------------------------+
-|                                      CLIENT LAYER (TRÌNH DUYỆT)                                   |
-|   React 19 + Vite + TailwindCSS + React Router v6 + Axios                                         |
-|   - Phân hệ Giảng viên: Đề thi, ngân hàng câu hỏi, lớp học phần, sinh viên, bảng điểm, phúc khảo   |
-|   - Phân hệ Sinh viên: Danh sách đề thi, phòng thi 2 cột (Question Palette), lịch sử và phúc khảo  |
-|   - Thành phần chung: Hồ sơ cá nhân (Avatar URL/Base64), Danh bạ người dùng, Thông báo (5s)       |
-+---------------------------------------------------------------------------------------------------+
-                                                  |
-                                          HTTP / REST (JSON)
-                                 Authorization: Bearer <JWT Token>
-                                                  v
-+---------------------------------------------------------------------------------------------------+
-|                                      BACKEND LAYER (GOLANG)                                       |
-|  +---------------------------------------------------------------------------------------------+  |
-|  | Gin Gonic Web Engine (Cổng 8081) + CORS Middleware                                          |  |
-|  +---------------------------------------------------------------------------------------------+  |
-|  | Global Security Middleware: Security Headers (nosniff, DENY, strict-origin) & Body Limit 2MB |  |
-|  +---------------------------------------------------------------------------------------------+  |
-|  | Rate Limiting Middleware: In-Memory Sliding Window (15 req/phút/IP cho Login và Lookup)     |  |
-|  +---------------------------------------------------------------------------------------------+  |
-|  | Authentication & RBAC Middleware: JWT HMAC-SHA256 Verification & Role Guard                 |  |
-|  +---------------------------------------------------------------------------------------------+  |
-|  | Handlers (Bộ điều khiển nghiệp vụ):                                                         |  |
-|  |   - Auth Handler: Đăng ký, đăng nhập, cấp JWT Token                                         |  |
-|  |   - Teacher CRUD Handler: Quản lý đề thi, nhập câu hỏi hàng loạt, quản lý sinh viên        |  |
-|  |   - Student Handler: Khảo thí, xáo trộn câu hỏi theo seed, auto-save (UPSERT), nộp bài       |  |
-|  |   - Anti-Cheat & Audit Handler: Ghi nhận vi phạm chuyển tab, audit log, xuất CSV UTF-8 BOM  |  |
-|  |   - Appeals Handler: Quy trình phúc khảo 4 trạng thái (PENDING, REPLIED, REJECTED, RESOLVED)|  |
-|  |   - Notifications Handler: Tạo thông báo điều hướng sâu (target_url), polling 5s            |  |
-|  |   - User & Class Handler: Hồ sơ cá nhân, danh bạ người dùng, phân quyền và lớp học phần     |  |
-|  +---------------------------------------------------------------------------------------------+  |
-|  | Data Access Layer: GORM ORM (Transactions, Khóa dòng FOR UPDATE, Prepared Statements)       |  |
-|  +---------------------------------------------------------------------------------------------+  |
-+---------------------------------------------------------------------------------------------------+
-                                                  |
-                                          Database Driver (TCP)
-                                                  v
-+---------------------------------------------------------------------------------------------------+
-|                                    PERSISTENCE LAYER (RDBMS)                                      |
-|   PostgreSQL 15 (Môi trường chạy chính) / SQLite In-Memory + WAL Mode (Môi trường kiểm thử tự động)|
-|   10 bảng quan hệ (3NF) + 3 chỉ mục Unique Composite + Ràng buộc Foreign Key Cascade             |
-+---------------------------------------------------------------------------------------------------+
+[CLIENT LAYER - React 19 SPA]
+              │
+              ▼ HTTP / REST (JSON) + Bearer JWT Token
+┌────────────────────────────────────────────────────────────────────────┐
+│                        TRANSPORT / HANDLER LAYER                       │
+│  - Gin Gonic Router + Security Middleware (CORS, Rate Limit, Headers)  │
+│  - Handlers: Nhận HTTP request, bind dữ liệu vào DTO Request,         │
+│    gọi Service và trả về DTO Response / HTTP Status Codes              │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │
+                         DTO Request / Response
+                                    │
+                                    ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│                        BUSINESS SERVICE LAYER                          │
+│  - Thuần Go, không phụ thuộc vào Web Framework (Gin Context)           │
+│  - Chứa toàn bộ quy tắc nghiệp vụ: Tính điểm, xáo trộn đề theo seed,   │
+│    kiểm soát hạn nộp bài, máy trạng thái phúc khảo, thông báo ngầm     │
+│  - Giao tiếp với tầng dữ liệu qua Repository Interfaces (Loose Coupling)│
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │
+                               Interface
+                                    │
+                                    ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│                        REPOSITORY / DATA ACCESS LAYER                  │
+│  - Triển khai các Interface truy xuất dữ liệu (GORM PostgreSQL / SQLite)│
+│  - Quản lý Transactions, Atomic UPSERT, chống SQL Injection           │
+│  - Cho phép thay thế công nghệ lưu trữ mà không phải sửa tầng Service  │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │
+                                    ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│                        PERSISTENCE / DATABASE LAYER                    │
+│  - PostgreSQL 15 (Môi trường vận hành thực tế / Docker)                │
+│  - SQLite 3 WAL Mode & busy_timeout=5000 (Môi trường kiểm thử tự động)  │
+│  - 10 bảng quan hệ (3NF) + 3 chỉ mục Unique Composite + Foreign Keys  │
+└────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### 1.2. Công nghệ lựa chọn và lý do kỹ thuật

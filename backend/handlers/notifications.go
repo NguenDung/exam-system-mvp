@@ -1,47 +1,38 @@
 package handlers
 
 import (
-	"log"
+	"errors"
 	"net/http"
-	"time"
 
 	"exam-system-mvp/config"
-	"exam-system-mvp/models"
+	"exam-system-mvp/repository"
+	"exam-system-mvp/service"
 
 	"github.com/gin-gonic/gin"
 )
 
-func CreateNotification(userID uint, title, message string, targetURL ...string) {
-	if userID == 0 || title == "" || message == "" {
-		return
-	}
-
-	defer func() {
-		if r := recover(); r != nil {
-			log.Printf("CreateNotification panic: %v", r)
-		}
-	}()
-
-	var target string
-	if len(targetURL) > 0 {
-		target = targetURL[0]
-	}
-
-	notif := models.Notification{
-		UserID:    userID,
-		Title:     title,
-		Message:   message,
-		TargetURL: target,
-		IsRead:    false,
-		CreatedAt: time.Now(),
-	}
-
-	if err := config.DB.Create(&notif).Error; err != nil {
-		log.Printf("CreateNotification error: %v", err)
-	}
+type NotificationHandler struct {
+	service service.NotificationService
 }
 
-func GetNotifications(c *gin.Context) {
+func NewNotificationHandler(svc service.NotificationService) *NotificationHandler {
+	return &NotificationHandler{service: svc}
+}
+
+func getDefaultNotificationService() service.NotificationService {
+	repo := repository.NewNotificationRepository(config.DB)
+	return service.NewNotificationService(repo)
+}
+
+func getDefaultNotificationHandler() *NotificationHandler {
+	return NewNotificationHandler(getDefaultNotificationService())
+}
+
+func CreateNotification(userID uint, title, message string, targetURL ...string) {
+	getDefaultNotificationService().CreateNotification(userID, title, message, targetURL...)
+}
+
+func (h *NotificationHandler) GetNotifications(c *gin.Context) {
 	userIDVal, exists := c.Get("user_id")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
@@ -49,27 +40,16 @@ func GetNotifications(c *gin.Context) {
 	}
 	userID := userIDVal.(uint)
 
-	var notifications []models.Notification
-	if err := config.DB.Where("user_id = ?", userID).
-		Order("created_at DESC, id DESC").
-		Limit(20).
-		Find(&notifications).Error; err != nil {
+	res, err := h.service.GetNotifications(userID)
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load notifications"})
 		return
 	}
 
-	var unreadCount int64
-	config.DB.Model(&models.Notification{}).
-		Where("user_id = ? AND is_read = false", userID).
-		Count(&unreadCount)
-
-	c.JSON(http.StatusOK, gin.H{
-		"notifications": notifications,
-		"unread_count":  unreadCount,
-	})
+	c.JSON(http.StatusOK, res)
 }
 
-func MarkNotificationAsRead(c *gin.Context) {
+func (h *NotificationHandler) MarkNotificationAsRead(c *gin.Context) {
 	userIDVal, exists := c.Get("user_id")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
@@ -82,23 +62,20 @@ func MarkNotificationAsRead(c *gin.Context) {
 		return
 	}
 
-	var notif models.Notification
-	if err := config.DB.Where("id = ? AND user_id = ?", notifID, userID).First(&notif).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Notification not found"})
-		return
-	}
-
-	if !notif.IsRead {
-		if err := config.DB.Model(&notif).Update("is_read", true).Error; err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update notification"})
+	err := h.service.MarkAsRead(notifID, userID)
+	if err != nil {
+		if errors.Is(err, service.ErrNotificationNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Notification not found"})
 			return
 		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update notification"})
+		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Notification marked as read"})
 }
 
-func MarkAllNotificationsAsRead(c *gin.Context) {
+func (h *NotificationHandler) MarkAllNotificationsAsRead(c *gin.Context) {
 	userIDVal, exists := c.Get("user_id")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
@@ -106,9 +83,7 @@ func MarkAllNotificationsAsRead(c *gin.Context) {
 	}
 	userID := userIDVal.(uint)
 
-	if err := config.DB.Model(&models.Notification{}).
-		Where("user_id = ? AND is_read = false", userID).
-		Update("is_read", true).Error; err != nil {
+	if err := h.service.MarkAllAsRead(userID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to mark notifications as read"})
 		return
 	}
@@ -116,7 +91,7 @@ func MarkAllNotificationsAsRead(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "All notifications marked as read"})
 }
 
-func DeleteNotification(c *gin.Context) {
+func (h *NotificationHandler) DeleteNotification(c *gin.Context) {
 	userIDVal, exists := c.Get("user_id")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
@@ -129,20 +104,20 @@ func DeleteNotification(c *gin.Context) {
 		return
 	}
 
-	res := config.DB.Where("id = ? AND user_id = ?", notifID, userID).Delete(&models.Notification{})
-	if res.Error != nil {
+	err := h.service.DeleteNotification(notifID, userID)
+	if err != nil {
+		if errors.Is(err, service.ErrNotificationNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Notification not found"})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete notification"})
-		return
-	}
-	if res.RowsAffected == 0 {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Notification not found"})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Notification deleted successfully"})
 }
 
-func ClearReadNotifications(c *gin.Context) {
+func (h *NotificationHandler) ClearReadNotifications(c *gin.Context) {
 	userIDVal, exists := c.Get("user_id")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
@@ -150,10 +125,30 @@ func ClearReadNotifications(c *gin.Context) {
 	}
 	userID := userIDVal.(uint)
 
-	if err := config.DB.Where("user_id = ? AND is_read = true", userID).Delete(&models.Notification{}).Error; err != nil {
+	if err := h.service.ClearReadNotifications(userID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to clear read notifications"})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Read notifications cleared successfully"})
+}
+
+func GetNotifications(c *gin.Context) {
+	getDefaultNotificationHandler().GetNotifications(c)
+}
+
+func MarkNotificationAsRead(c *gin.Context) {
+	getDefaultNotificationHandler().MarkNotificationAsRead(c)
+}
+
+func MarkAllNotificationsAsRead(c *gin.Context) {
+	getDefaultNotificationHandler().MarkAllNotificationsAsRead(c)
+}
+
+func DeleteNotification(c *gin.Context) {
+	getDefaultNotificationHandler().DeleteNotification(c)
+}
+
+func ClearReadNotifications(c *gin.Context) {
+	getDefaultNotificationHandler().ClearReadNotifications(c)
 }
