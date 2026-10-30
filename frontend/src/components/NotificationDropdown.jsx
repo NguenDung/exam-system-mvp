@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { notificationAPI } from '../api/endpoints';
 
 export default function NotificationDropdown() {
@@ -7,6 +8,7 @@ export default function NotificationDropdown() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
   const dropdownRef = useRef(null);
+  const navigate = useNavigate();
 
   const fetchNotifications = useCallback(async () => {
     try {
@@ -14,13 +16,13 @@ export default function NotificationDropdown() {
       setNotifications(data.notifications || []);
       setUnreadCount(data.unread_count || 0);
     } catch {
-      // Silently ignore background polling failures
+      // Bỏ qua lỗi polling nền
     }
   }, []);
 
   useEffect(() => {
     fetchNotifications();
-    const interval = setInterval(fetchNotifications, 30000);
+    const interval = setInterval(fetchNotifications, 5000);
     return () => clearInterval(interval);
   }, [fetchNotifications]);
 
@@ -60,7 +62,17 @@ export default function NotificationDropdown() {
       );
       setUnreadCount((c) => Math.max(0, c - 1));
     } catch {
-      // Silently ignore
+      // Bỏ qua lỗi
+    }
+  };
+
+  const handleItemClick = async (item) => {
+    if (!item.is_read) {
+      await handleMarkAsRead(item.id, false);
+    }
+    setIsOpen(false);
+    if (item.target_url) {
+      navigate(item.target_url);
     }
   };
 
@@ -71,7 +83,7 @@ export default function NotificationDropdown() {
       setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
       setUnreadCount(0);
     } catch {
-      // Silently ignore
+      // Bỏ qua lỗi
     } finally {
       setLoading(false);
     }
@@ -126,7 +138,7 @@ export default function NotificationDropdown() {
               notifications.map((item) => (
                 <div
                   key={item.id}
-                  onClick={() => handleMarkAsRead(item.id, item.is_read)}
+                  onClick={() => handleItemClick(item)}
                   className={`p-3.5 transition-colors cursor-pointer ${
                     item.is_read
                       ? 'bg-white hover:bg-slate-50'

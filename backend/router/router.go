@@ -64,6 +64,12 @@ func SetupRouter() *gin.Engine {
 		teacher.POST("/students", handlers.TeacherCreateStudent)
 		teacher.PUT("/students/:id", handlers.TeacherUpdateStudent)
 		teacher.DELETE("/students/:id", handlers.TeacherDeleteStudent)
+		teacher.PATCH("/users/:id/role", handlers.TeacherUpdateUserRole)
+		teacher.POST("/classes", handlers.TeacherCreateClass)
+		teacher.PUT("/classes/:id", handlers.TeacherUpdateClass)
+		teacher.DELETE("/classes/:id", handlers.TeacherDeleteClass)
+		teacher.POST("/classes/:id/members", handlers.TeacherAddClassMember)
+		teacher.DELETE("/classes/:id/members/:studentId", handlers.TeacherRemoveClassMember)
 	}
 
 	student := api.Group("/student")
@@ -80,6 +86,17 @@ func SetupRouter() *gin.Engine {
 		student.POST("/attempts/:attempt_id/submit", handlers.StudentSubmitExam)
 		student.POST("/attempts/:attempt_id/violation", handlers.StudentRecordViolation)
 		student.GET("/attempts/:attempt_id/result", handlers.StudentGetResult)
+		student.POST("/classes/join", handlers.StudentJoinClass)
+	}
+
+	common := api.Group("")
+	common.Use(middleware.AuthRequired())
+	{
+		common.GET("/profile", handlers.GetProfile)
+		common.PUT("/profile", handlers.UpdateProfile)
+		common.GET("/users/directory", handlers.GetDirectory)
+		common.GET("/classes", handlers.ListClasses)
+		common.GET("/classes/:id", handlers.GetClassDetail)
 	}
 
 	notifications := api.Group("/notifications")

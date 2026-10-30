@@ -27,6 +27,7 @@ type UpdateExamInput struct {
 	EndTime         *time.Time `json:"end_time"`
 	Status          *string    `json:"status"`
 	IsPublished     *bool      `json:"is_published"`
+	ClassroomID     *uint      `json:"classroom_id"`
 }
 
 // TeacherUpdateExam updates an existing exam.
@@ -86,6 +87,10 @@ func TeacherUpdateExam(c *gin.Context) {
 	if !newEndTime.After(newStartTime) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "end_time must be after start_time"})
 		return
+	}
+
+	if input.ClassroomID != nil {
+		updates["classroom_id"] = input.ClassroomID
 	}
 
 	// Status / IsPublished handling
@@ -436,7 +441,7 @@ func TeacherUpdateAttemptScore(c *gin.Context) {
 	}
 	_ = config.DB.Create(&audit)
 
-	CreateNotification(attempt.UserID, "Cập nhật điểm thi", fmt.Sprintf("Giảng viên đã hiệu chỉnh điểm thi của bạn trên đề thi \"%s\" thành %.2f điểm.", exam.Title, input.Score))
+	CreateNotification(attempt.UserID, "Cập nhật điểm thi", fmt.Sprintf("Giảng viên đã hiệu chỉnh điểm thi của bạn trên đề thi \"%s\" thành %.2f điểm.", exam.Title, input.Score), fmt.Sprintf("/student/history/%d", attempt.ID))
 
 	config.DB.First(&attempt, attempt.ID)
 	c.JSON(http.StatusOK, gin.H{
@@ -495,7 +500,7 @@ func TeacherResetAttempt(c *gin.Context) {
 		return
 	}
 
-	CreateNotification(attempt.UserID, "Được phép thi lại", fmt.Sprintf("Lượt thi của bạn trên đề thi \"%s\" đã được giảng viên thiết lập lại. Bạn có thể bắt đầu thi lại từ đầu.", exam.Title))
+	CreateNotification(attempt.UserID, "Được phép thi lại", fmt.Sprintf("Lượt thi của bạn trên đề thi \"%s\" đã được giảng viên thiết lập lại. Bạn có thể bắt đầu thi lại từ đầu.", exam.Title), "/student")
 
 	c.JSON(http.StatusOK, gin.H{"message": "Attempt reset successfully. Student can now retake this exam."})
 }
@@ -768,10 +773,17 @@ func StudentGetAvailableExams(c *gin.Context) {
 		gradeExpiredAttempts(eid)
 	}
 
+	var enrolledClassIDs []uint
+	config.DB.Model(&models.ClassroomMember{}).Where("student_id = ?", userID).Pluck("classroom_id", &enrolledClassIDs)
+
 	var exams []models.Exam
-	if err := config.DB.Where("status = ?", "published").
-		Order("start_time DESC, id DESC").
-		Find(&exams).Error; err != nil {
+	examQuery := config.DB.Where("status = ?", "published")
+	if len(enrolledClassIDs) > 0 {
+		examQuery = examQuery.Where("classroom_id IS NULL OR classroom_id IN ?", enrolledClassIDs)
+	} else {
+		examQuery = examQuery.Where("classroom_id IS NULL")
+	}
+	if err := examQuery.Order("start_time DESC, id DESC").Find(&exams).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load exams"})
 		return
 	}

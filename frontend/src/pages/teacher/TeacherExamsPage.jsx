@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { teacherAPI } from '../../api/endpoints';
+import { teacherAPI, classroomAPI } from '../../api/endpoints';
 import Spinner from '../../components/Spinner';
 
 function StatusBadge({ status }) {
@@ -22,9 +22,15 @@ function CreateExamModal({ onClose, onCreated }) {
     duration: 30,
     start_time: '',
     end_time: '',
+    classroom_id: '',
   });
+  const [classes, setClasses] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    classroomAPI.list().then((res) => setClasses(res.data.classes || [])).catch(() => {});
+  }, []);
 
   const handleChange = (e) => setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
 
@@ -38,6 +44,7 @@ function CreateExamModal({ onClose, onCreated }) {
         duration: parseInt(form.duration, 10),
         start_time: new Date(form.start_time).toISOString(),
         end_time: new Date(form.end_time).toISOString(),
+        classroom_id: form.classroom_id ? parseInt(form.classroom_id, 10) : null,
       };
       const { data } = await teacherAPI.createExam(payload);
       onCreated(data.exam);
@@ -77,6 +84,22 @@ function CreateExamModal({ onClose, onCreated }) {
               className="input resize-none"
               placeholder="Ví dụ: Đề thi 40 câu trắc nghiệm kiến thức SQL, chuẩn hóa dữ liệu..."
             />
+          </div>
+          <div>
+            <label className="label">Gán cho Lớp học (tùy chọn)</label>
+            <select
+              name="classroom_id"
+              value={form.classroom_id || ''}
+              onChange={handleChange}
+              className="input"
+            >
+              <option value="">Công khai cho tất cả sinh viên</option>
+              {classes.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name} ({c.code})
+                </option>
+              ))}
+            </select>
           </div>
           <div>
             <label className="label">Thời lượng làm bài (phút) *</label>
@@ -136,9 +159,15 @@ function EditExamModal({ exam, onClose, onUpdated }) {
     start_time: exam.start_time ? new Date(exam.start_time).toISOString().slice(0, 16) : '',
     end_time: exam.end_time ? new Date(exam.end_time).toISOString().slice(0, 16) : '',
     is_published: exam.status === 'published',
+    classroom_id: exam.classroom_id || '',
   });
+  const [classes, setClasses] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    classroomAPI.list().then((res) => setClasses(res.data.classes || [])).catch(() => {});
+  }, []);
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -157,6 +186,7 @@ function EditExamModal({ exam, onClose, onUpdated }) {
         start_time: form.start_time ? new Date(form.start_time).toISOString() : exam.start_time,
         end_time: form.end_time ? new Date(form.end_time).toISOString() : exam.end_time,
         is_published: form.is_published,
+        classroom_id: form.classroom_id ? parseInt(form.classroom_id, 10) : null,
       };
       const { data } = await teacherAPI.updateExam(exam.id, payload);
       onUpdated(data.exam);
@@ -194,6 +224,22 @@ function EditExamModal({ exam, onClose, onUpdated }) {
               onChange={handleChange}
               className="input resize-none"
             />
+          </div>
+          <div>
+            <label className="label">Gán cho Lớp học (tùy chọn)</label>
+            <select
+              name="classroom_id"
+              value={form.classroom_id || ''}
+              onChange={handleChange}
+              className="input"
+            >
+              <option value="">Công khai cho tất cả sinh viên</option>
+              {classes.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name} ({c.code})
+                </option>
+              ))}
+            </select>
           </div>
           <div>
             <label className="label">Thời lượng làm bài (phút) *</label>

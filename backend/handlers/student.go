@@ -161,6 +161,17 @@ func StudentLookupExam(c *gin.Context) {
 		return
 	}
 
+	if exam.ClassroomID != nil {
+		var memberCount int64
+		config.DB.Model(&models.ClassroomMember{}).
+			Where("classroom_id = ? AND student_id = ?", *exam.ClassroomID, userID).
+			Count(&memberCount)
+		if memberCount == 0 {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Bạn không thuộc lớp học được giao đề thi này"})
+			return
+		}
+	}
+
 	gradeExpiredAttempts(exam.ID)
 
 	now := time.Now()
@@ -250,6 +261,17 @@ func StudentStartExam(c *gin.Context) {
 	if err := config.DB.Where("id = ? AND status = 'published'", examID).First(&exam).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Exam not found or not published"})
 		return
+	}
+
+	if exam.ClassroomID != nil {
+		var memberCount int64
+		config.DB.Model(&models.ClassroomMember{}).
+			Where("classroom_id = ? AND student_id = ?", *exam.ClassroomID, userID).
+			Count(&memberCount)
+		if memberCount == 0 {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Bạn không thuộc lớp học được giao đề thi này"})
+			return
+		}
 	}
 
 	now := time.Now()

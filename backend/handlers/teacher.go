@@ -24,10 +24,12 @@ func TeacherListExams(c *gin.Context) {
 }
 
 type CreateExamInput struct {
-	Title     string    `json:"title" binding:"required"`
-	Duration  int       `json:"duration" binding:"required,min=1"`
-	StartTime time.Time `json:"start_time" binding:"required"`
-	EndTime   time.Time `json:"end_time" binding:"required"`
+	Title       string    `json:"title" binding:"required"`
+	Description string    `json:"description"`
+	Duration    int       `json:"duration" binding:"required,min=1"`
+	StartTime   time.Time `json:"start_time" binding:"required"`
+	EndTime     time.Time `json:"end_time" binding:"required"`
+	ClassroomID *uint     `json:"classroom_id"`
 }
 
 func TeacherCreateExam(c *gin.Context) {
@@ -59,13 +61,15 @@ func TeacherCreateExam(c *gin.Context) {
 	}
 
 	exam := models.Exam{
-		TeacherID: teacherID.(uint),
-		ExamCode:  examCode,
-		Title:     input.Title,
-		Duration:  input.Duration,
-		StartTime: input.StartTime,
-		EndTime:   input.EndTime,
-		Status:    "draft",
+		TeacherID:   teacherID.(uint),
+		ClassroomID: input.ClassroomID,
+		ExamCode:    examCode,
+		Title:       input.Title,
+		Description: input.Description,
+		Duration:    input.Duration,
+		StartTime:   input.StartTime,
+		EndTime:     input.EndTime,
+		Status:      "draft",
 	}
 
 	if err := config.DB.Create(&exam).Error; err != nil {

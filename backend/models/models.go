@@ -22,6 +22,10 @@ type User struct {
 	PasswordHash string         `gorm:"not null" json:"-"`
 	FullName     string         `gorm:"not null;size:255" json:"full_name"`
 	Role         string         `gorm:"not null;default:'student';size:20;check:chk_users_role,role IN ('teacher','student')" json:"role"`
+	AvatarURL    string         `gorm:"type:text" json:"avatar_url"`
+	Bio          string         `gorm:"type:text" json:"bio"`
+	Department   string         `gorm:"size:255" json:"department"`
+	StudentCode  string         `gorm:"size:50;index" json:"student_code"`
 	CreatedAt    time.Time      `json:"created_at"`
 	UpdatedAt    time.Time      `json:"updated_at"`
 	DeletedAt    gorm.DeletedAt `gorm:"index" json:"-"`
@@ -33,6 +37,7 @@ type User struct {
 type Exam struct {
 	ID          uint           `gorm:"primaryKey;autoIncrement" json:"id"`
 	TeacherID   uint           `gorm:"not null;index" json:"teacher_id"`
+	ClassroomID *uint          `gorm:"index" json:"classroom_id,omitempty"`
 	ExamCode    string         `gorm:"uniqueIndex;size:20" json:"exam_code"`
 	Title       string         `gorm:"not null;size:500" json:"title"`
 	Description string         `gorm:"type:text" json:"description"`
@@ -159,8 +164,34 @@ type Notification struct {
 	UserID    uint      `gorm:"not null;index" json:"user_id"`
 	Title     string    `gorm:"not null;size:255" json:"title"`
 	Message   string    `gorm:"not null;type:text" json:"message"`
+	TargetURL string    `gorm:"size:500" json:"target_url"`
 	IsRead    bool      `gorm:"not null;default:false;index" json:"is_read"`
 	CreatedAt time.Time `gorm:"not null;index" json:"created_at"`
 
 	User User `gorm:"foreignKey:UserID" json:"-"`
+}
+
+type Classroom struct {
+	ID          uint           `gorm:"primaryKey;autoIncrement" json:"id"`
+	Name        string         `gorm:"not null;size:255" json:"name"`
+	Code        string         `gorm:"uniqueIndex;not null;size:20" json:"code"`
+	Description string         `gorm:"type:text" json:"description"`
+	TeacherID   uint           `gorm:"not null;index" json:"teacher_id"`
+	CreatedAt   time.Time      `json:"created_at"`
+	UpdatedAt   time.Time      `json:"updated_at"`
+	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"`
+
+	Teacher User              `gorm:"foreignKey:TeacherID" json:"teacher,omitempty"`
+	Members []ClassroomMember `gorm:"foreignKey:ClassroomID;constraint:OnDelete:CASCADE" json:"members,omitempty"`
+	Exams   []Exam            `gorm:"foreignKey:ClassroomID" json:"exams,omitempty"`
+}
+
+type ClassroomMember struct {
+	ID          uint      `gorm:"primaryKey;autoIncrement" json:"id"`
+	ClassroomID uint      `gorm:"not null;index" json:"classroom_id"`
+	StudentID   uint      `gorm:"not null;index" json:"student_id"`
+	JoinedAt    time.Time `gorm:"not null" json:"joined_at"`
+
+	Classroom Classroom `gorm:"foreignKey:ClassroomID" json:"-"`
+	Student   User      `gorm:"foreignKey:StudentID" json:"student,omitempty"`
 }

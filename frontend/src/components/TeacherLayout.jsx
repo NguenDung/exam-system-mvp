@@ -1,12 +1,12 @@
-import { useNavigate, NavLink, Outlet } from 'react-router-dom';
+import { useNavigate, NavLink, Outlet, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import NotificationDropdown from './NotificationDropdown';
 
-function NavItem({ to, children }) {
+function NavItem({ to, end, children }) {
   return (
     <NavLink
       to={to}
-      end={to === '/teacher'}
+      end={end}
       className={({ isActive }) =>
         `px-3 py-2 rounded-md text-sm font-medium transition-colors ${
           isActive ? 'bg-slate-800 text-white' : 'text-slate-300 hover:bg-slate-700 hover:text-white'
@@ -27,6 +27,8 @@ export default function TeacherLayout() {
     navigate('/login');
   };
 
+  const initial = (user?.full_name || 'G').charAt(0).toUpperCase();
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
       <header className="bg-slate-900 border-b border-slate-800">
@@ -37,13 +39,33 @@ export default function TeacherLayout() {
               <span className="bg-slate-700 text-slate-300 text-xs px-2 py-0.5 rounded font-medium">Giảng viên</span>
             </div>
             <nav className="flex gap-2">
-              <NavItem to="/teacher">Đề thi</NavItem>
+              <NavItem to="/teacher" end>Đề thi</NavItem>
+              <NavItem to="/classes">Lớp học</NavItem>
               <NavItem to="/teacher/students">Sinh viên</NavItem>
+              <NavItem to="/directory">Danh bạ</NavItem>
+              <NavItem to="/profile">Hồ sơ</NavItem>
             </nav>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
             <NotificationDropdown />
-            <span className="text-slate-300 text-sm hidden sm:block">{user?.full_name}</span>
+            <Link
+              to="/profile"
+              className="flex items-center gap-2 px-2 py-1 rounded-md text-slate-300 hover:text-white hover:bg-slate-800 transition-colors"
+              title="Xem và chỉnh sửa hồ sơ"
+            >
+              {user?.avatar_url ? (
+                <img
+                  src={user.avatar_url}
+                  alt={user.full_name}
+                  className="w-7 h-7 rounded-full object-cover border border-slate-600 bg-slate-800"
+                />
+              ) : (
+                <div className="w-7 h-7 rounded-full bg-slate-700 text-slate-200 flex items-center justify-center font-bold text-xs border border-slate-600">
+                  {initial}
+                </div>
+              )}
+              <span className="text-sm font-medium hidden md:block max-w-[140px] truncate">{user?.full_name}</span>
+            </Link>
             <button onClick={handleLogout} className="btn-secondary btn-sm bg-slate-800 text-slate-200 border-slate-700 hover:bg-slate-700">
               Đăng xuất
             </button>

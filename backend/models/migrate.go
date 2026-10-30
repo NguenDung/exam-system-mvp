@@ -16,6 +16,8 @@ func Migrate(db *gorm.DB) {
 		&Appeal{},
 		&AuditLog{},
 		&Notification{},
+		&Classroom{},
+		&ClassroomMember{},
 	); err != nil {
 		log.Fatalf("AutoMigrate failed: %v", err)
 	}
@@ -34,5 +36,10 @@ func Migrate(db *gorm.DB) {
 	_ = db.Exec(`
 		CREATE UNIQUE INDEX IF NOT EXISTS idx_attempt_answers_attempt_question
 		ON attempt_answers (attempt_id, question_id)
+	`).Error
+
+	_ = db.Exec(`
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_classroom_members_class_student
+		ON classroom_members (classroom_id, student_id)
 	`).Error
 }

@@ -1,12 +1,30 @@
 import api from './axios';
 
-// ── Auth ─────────────────────────────────────────────────────────────────────
 export const authAPI = {
   login: (data) => api.post('/auth/login', data),
   register: (data) => api.post('/auth/register', data),
 };
 
-// ── Teacher ──────────────────────────────────────────────────────────────────
+export const profileAPI = {
+  getProfile: () => api.get('/profile'),
+  updateProfile: (data) => api.put('/profile', data),
+};
+
+export const directoryAPI = {
+  getDirectory: (params) => api.get('/users/directory', { params }),
+};
+
+export const classroomAPI = {
+  list: () => api.get('/classes'),
+  get: (id) => api.get(`/classes/${id}`),
+  create: (data) => api.post('/teacher/classes', data),
+  update: (id, data) => api.put(`/teacher/classes/${id}`, data),
+  delete: (id) => api.delete(`/teacher/classes/${id}`),
+  addMember: (id, data) => api.post(`/teacher/classes/${id}/members`, data),
+  removeMember: (id, studentId) => api.delete(`/teacher/classes/${id}/members/${studentId}`),
+  join: (code) => api.post('/student/classes/join', { code }),
+};
+
 export const teacherAPI = {
   listExams: () => api.get('/teacher/exams'),
   createExam: (data) => api.post('/teacher/exams', data),
@@ -30,11 +48,11 @@ export const teacherAPI = {
   createStudent: (data) => api.post('/teacher/students', data),
   updateStudent: (studentId, data) => api.put(`/teacher/students/${studentId}`, data),
   deleteStudent: (studentId) => api.delete(`/teacher/students/${studentId}`),
+  updateUserRole: (id, role) => api.patch(`/teacher/users/${id}/role`, { role }),
   getAuditLogs: () => api.get('/teacher/audit-logs'),
   exportResultsCSV: (examId) => api.get(`/teacher/exams/${examId}/results/export`, { responseType: 'blob' }),
 };
 
-// ── Student ──────────────────────────────────────────────────────────────────
 export const studentAPI = {
   getAvailableExams: () => api.get('/student/exams/available'),
   lookupExam: (code) => api.get(`/student/exams/lookup?code=${code}`),
@@ -49,7 +67,6 @@ export const studentAPI = {
   getResult: (attemptId) => api.get(`/student/attempts/${attemptId}/result`),
 };
 
-// ── Notifications ────────────────────────────────────────────────────────────
 export const notificationAPI = {
   getAll: () => api.get('/notifications'),
   markAsRead: (id) => api.patch(`/notifications/${id}/read`),

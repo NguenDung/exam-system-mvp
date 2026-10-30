@@ -223,6 +223,8 @@ func setupTestServer(t *testing.T) *gin.Engine {
 		&models.Appeal{},
 		&models.AuditLog{},
 		&models.Notification{},
+		&models.Classroom{},
+		&models.ClassroomMember{},
 	); err != nil {
 		t.Fatalf("AutoMigrate failed: %v", err)
 	}
@@ -230,6 +232,7 @@ func setupTestServer(t *testing.T) *gin.Engine {
 	// SQLite unique index for (exam_id, user_id) and (attempt_id, question_id)
 	db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_ea_exam_user ON exam_attempts(exam_id, user_id)`)
 	db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_aa_attempt_question ON attempt_answers(attempt_id, question_id)`)
+	db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_classroom_members_class_student ON classroom_members(classroom_id, student_id)`)
 
 	models.SeedData(db)
 
@@ -2088,5 +2091,183 @@ func TestSecurityMiddleware_HeadersAndBodyLimit(t *testing.T) {
 	srv.ServeHTTP(wLarge, req)
 	if wLarge.Code != http.StatusBadRequest && wLarge.Code != http.StatusRequestEntityTooLarge {
 		t.Errorf("expected request exceeding 2MB to be rejected with 400 or 413, got %d", wLarge.Code)
+	}
+}
+
+func TestUserProfileAndDirectory(t *testing.T) {
+	srv := setupTestServer(t)
+	studentToken := loginUser(t, srv, "student@test.com", "123456")
+
+	// 1. Get initial profile
+	wGet := do(t, srv, "GET", "/api/profile", studentToken, nil)
+	if wGet.Code != http.StatusOK {
+		t.Fatalf("get profile failed: %d %s", wGet.Code, wGet.Body.String())
+	}
+
+	// 2. Update profile
+	avatar := "https://example.com/avatar.png"
+	bio := "Sinh viên Khoa CNTT"
+	dept := "Khoa Công nghệ Thông tin"
+	code := "SV202601"
+	wPut := do(t, srv, "PUT", "/api/profile", studentToken, gin.H{
+		"avatar_url":   avatar,
+		"bio":          bio,
+		"department":   dept,
+		"student_code": code,
+	})
+	if wPut.Code != http.StatusOK {
+		t.Fatalf("update profile failed: %d %s", wPut.Code, wPut.Body.String())
+	}
+
+	// 3. Verify updated profile
+	wCheck := do(t, srv, "GET", "/api/profile", studentToken, nil)
+	var checkRes struct {
+		User struct {
+			AvatarURL   string `json:"avatar_url"`
+			Bio         string `json:"bio"`
+			Department  string `json:"department"`
+			StudentCode string `json:"student_code"`
+		} `json:"user"`
+	}
+	json.Unmarshal(wCheck.Body.Bytes(), &checkRes)
+	if checkRes.User.Bio != bio || checkRes.User.StudentCode != code {
+		t.Errorf("profile fields not updated properly: %+v", checkRes.User)
+	}
+
+	// 4. Directory search
+	wDir := do(t, srv, "GET", "/api/users/directory?q=SV202601", studentToken, nil)
+	if wDir.Code != http.StatusOK {
+		t.Fatalf("directory search failed: %d %s", wDir.Code, wDir.Body.String())
+	}
+	var dirRes struct {
+		Users []struct {
+			ID          uint   `json:"id"`
+			FullName    string `json:"full_name"`
+			StudentCode string `json:"student_code"`
+		} `json:"users"`
+	}
+	json.Unmarshal(wDir.Body.Bytes(), &dirRes)
+	if len(dirRes.Users) == 0 || dirRes.Users[0].StudentCode != code {
+		t.Errorf("directory search did not find user by student_code: %+v", dirRes.Users)
+	}
+}
+
+func TestTeacher_UserRoleManagement(t *testing.T) {
+	srv := setupTestServer(t)
+	teacherToken := loginUser(t, srv, "teacher@test.com", "123456")
+
+	// Student ID 2 (student@test.com)
+	wPromote := do(t, srv, "PATCH", "/api/teacher/users/2/role", teacherToken, gin.H{
+		"role": "teacher",
+	})
+	if wPromote.Code != http.StatusOK {
+		t.Fatalf("promote user failed: %d %s", wPromote.Code, wPromote.Body.String())
+	}
+
+	// Revert back to student
+	wDemote := do(t, srv, "PATCH", "/api/teacher/users/2/role", teacherToken, gin.H{
+		"role": "student",
+	})
+	if wDemote.Code != http.StatusOK {
+		t.Fatalf("demote user failed: %d %s", wDemote.Code, wDemote.Body.String())
+	}
+
+	// Cannot change own role
+	wSelf := do(t, srv, "PATCH", "/api/teacher/users/1/role", teacherToken, gin.H{
+		"role": "student",
+	})
+	if wSelf.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 when changing own role, got %d", wSelf.Code)
+	}
+}
+
+func TestClassroom_FullWorkflow(t *testing.T) {
+	srv := setupTestServer(t)
+	teacherToken := loginUser(t, srv, "teacher@test.com", "123456")
+	studentToken := loginUser(t, srv, "student@test.com", "123456")
+
+	// 1. Teacher creates a classroom
+	wCreate := do(t, srv, "POST", "/api/teacher/classes", teacherToken, gin.H{
+		"name":        "Lớp Lập trình Web Nâng cao",
+		"description": "Lớp học thực hành phát triển ứng dụng Go + React",
+	})
+	if wCreate.Code != http.StatusCreated {
+		t.Fatalf("create class failed: %d %s", wCreate.Code, wCreate.Body.String())
+	}
+
+	var createRes struct {
+		Class struct {
+			ID   uint   `json:"id"`
+			Code string `json:"code"`
+			Name string `json:"name"`
+		} `json:"class"`
+	}
+	json.Unmarshal(wCreate.Body.Bytes(), &createRes)
+	classID := createRes.Class.ID
+	classCode := createRes.Class.Code
+	if classID == 0 || classCode == "" {
+		t.Fatalf("invalid class created: %+v", createRes.Class)
+	}
+
+	// 2. Teacher updates classroom
+	wUpdate := do(t, srv, "PUT", fmt.Sprintf("/api/teacher/classes/%d", classID), teacherToken, gin.H{
+		"description": "Mô tả đã cập nhật",
+	})
+	if wUpdate.Code != http.StatusOK {
+		t.Fatalf("update class failed: %d", wUpdate.Code)
+	}
+
+	// 3. Student joins classroom using class code
+	wJoin := do(t, srv, "POST", "/api/student/classes/join", studentToken, gin.H{
+		"code": classCode,
+	})
+	if wJoin.Code != http.StatusOK {
+		t.Fatalf("student join class failed: %d %s", wJoin.Code, wJoin.Body.String())
+	}
+
+	// 4. Joining again should return 409
+	wJoinAgain := do(t, srv, "POST", "/api/student/classes/join", studentToken, gin.H{
+		"code": classCode,
+	})
+	if wJoinAgain.Code != http.StatusConflict {
+		t.Errorf("expected 409 on joining again, got %d", wJoinAgain.Code)
+	}
+
+	// 5. List classes for teacher and student
+	wTeacherList := do(t, srv, "GET", "/api/classes", teacherToken, nil)
+	if wTeacherList.Code != http.StatusOK {
+		t.Fatalf("teacher list classes failed: %d", wTeacherList.Code)
+	}
+
+	wStudentList := do(t, srv, "GET", "/api/classes", studentToken, nil)
+	if wStudentList.Code != http.StatusOK {
+		t.Fatalf("student list classes failed: %d", wStudentList.Code)
+	}
+
+	// 6. Get class detail
+	wDetail := do(t, srv, "GET", fmt.Sprintf("/api/classes/%d", classID), studentToken, nil)
+	if wDetail.Code != http.StatusOK {
+		t.Fatalf("get class detail failed: %d %s", wDetail.Code, wDetail.Body.String())
+	}
+
+	// 7. Teacher removes member
+	wRemove := do(t, srv, "DELETE", fmt.Sprintf("/api/teacher/classes/%d/members/2", classID), teacherToken, nil)
+	if wRemove.Code != http.StatusOK {
+		t.Fatalf("remove member failed: %d", wRemove.Code)
+	}
+
+	// 8. Teacher re-adds member by email
+	studentEmail := "student@test.com"
+	wAdd := do(t, srv, "POST", fmt.Sprintf("/api/teacher/classes/%d/members", classID), teacherToken, gin.H{
+		"email": studentEmail,
+	})
+	if wAdd.Code != http.StatusCreated {
+		t.Fatalf("add member by email failed: %d %s", wAdd.Code, wAdd.Body.String())
+	}
+
+	// 9. Teacher deletes class
+	wDelete := do(t, srv, "DELETE", fmt.Sprintf("/api/teacher/classes/%d", classID), teacherToken, nil)
+	if wDelete.Code != http.StatusOK {
+		t.Fatalf("delete class failed: %d", wDelete.Code)
 	}
 }

@@ -142,10 +142,14 @@ func Login(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"token": token,
 		"user": gin.H{
-			"id":        user.ID,
-			"full_name": user.FullName,
-			"email":     user.Email,
-			"role":      user.Role,
+			"id":           user.ID,
+			"full_name":    user.FullName,
+			"email":        user.Email,
+			"role":         user.Role,
+			"avatar_url":   user.AvatarURL,
+			"bio":          user.Bio,
+			"department":   user.Department,
+			"student_code": user.StudentCode,
 		},
 		"expires_at": time.Now().Add(24 * time.Hour).Unix(),
 	})

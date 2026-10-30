@@ -11,7 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func CreateNotification(userID uint, title, message string) {
+func CreateNotification(userID uint, title, message string, targetURL ...string) {
 	if userID == 0 || title == "" || message == "" {
 		return
 	}
@@ -22,10 +22,16 @@ func CreateNotification(userID uint, title, message string) {
 		}
 	}()
 
+	var target string
+	if len(targetURL) > 0 {
+		target = targetURL[0]
+	}
+
 	notif := models.Notification{
 		UserID:    userID,
 		Title:     title,
 		Message:   message,
+		TargetURL: target,
 		IsRead:    false,
 		CreatedAt: time.Now(),
 	}
