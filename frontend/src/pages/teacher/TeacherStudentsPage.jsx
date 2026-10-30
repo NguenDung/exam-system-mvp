@@ -119,7 +119,6 @@ export default function TeacherStudentsPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-200 pb-5">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900">Quản lý sinh viên</h1>
-          <p className="text-sm text-slate-500 mt-1">Danh sách tài khoản sinh viên và lịch sử khảo thí trong hệ thống</p>
         </div>
         <button
           onClick={openCreateModal}
@@ -199,7 +198,7 @@ export default function TeacherStudentsPage() {
                     </span>
                   </td>
                   <td className="px-6 py-4 text-slate-500 text-xs">
-                    {student.created_at ? new Date(student.created_at).toLocaleDateString('vi-VN') : '—'}
+                    {student.created_at ? new Date(student.created_at).toLocaleDateString('vi-VN') : '-'}
                   </td>
                   <td className="px-6 py-4 text-right space-x-2">
                     <button

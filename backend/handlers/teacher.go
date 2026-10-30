@@ -14,8 +14,6 @@ import (
 	"gorm.io/gorm"
 )
 
-// ─── GET /api/teacher/exams ──────────────────────────────────────────────────
-
 func TeacherListExams(c *gin.Context) {
 	teacherID, _ := c.Get("user_id")
 
@@ -24,8 +22,6 @@ func TeacherListExams(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"exams": exams})
 }
-
-// ─── POST /api/teacher/exams ─────────────────────────────────────────────────
 
 type CreateExamInput struct {
 	Title     string    `json:"title" binding:"required"`
@@ -48,14 +44,13 @@ func TeacherCreateExam(c *gin.Context) {
 		return
 	}
 
-	// Generate a unique exam code (include soft-deleted rows via Unscoped)
 	var examCode string
 	for {
 		examCode = utils.GenerateExamCode()
 		var existing models.Exam
 		err := config.DB.Unscoped().Where("exam_code = ?", examCode).First(&existing).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			break // code not taken
+			break
 		}
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to allocate exam code"})
@@ -81,8 +76,6 @@ func TeacherCreateExam(c *gin.Context) {
 	c.JSON(http.StatusCreated, gin.H{"exam": exam})
 }
 
-// ─── GET /api/teacher/exams/:id ──────────────────────────────────────────────
-
 func TeacherGetExam(c *gin.Context) {
 	teacherID, _ := c.Get("user_id")
 	examID := c.Param("id")
@@ -97,8 +90,6 @@ func TeacherGetExam(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"exam": exam})
 }
-
-// ─── POST /api/teacher/exams/:id/questions ───────────────────────────────────
 
 type QuestionInput struct {
 	SortOrder     int     `json:"sort_order"`
@@ -135,7 +126,6 @@ func TeacherAddQuestions(c *gin.Context) {
 		return
 	}
 
-	// Determine current max sort_order
 	var maxOrder int
 	config.DB.Model(&models.Question{}).Where("exam_id = ?", exam.ID).
 		Select("COALESCE(MAX(sort_order), 0)").Scan(&maxOrder)
@@ -174,8 +164,6 @@ func TeacherAddQuestions(c *gin.Context) {
 	})
 }
 
-// ─── DELETE /api/teacher/questions/:question_id ──────────────────────────────
-
 func TeacherDeleteQuestion(c *gin.Context) {
 	teacherID, _ := c.Get("user_id")
 	questionID, ok := parseUintParam(c, "question_id")
@@ -189,7 +177,6 @@ func TeacherDeleteQuestion(c *gin.Context) {
 		return
 	}
 
-	// Strict ownership: question must belong to a draft exam owned by this teacher
 	var exam models.Exam
 	if err := config.DB.Where("id = ? AND teacher_id = ?", question.ExamID, teacherID).First(&exam).Error; err != nil {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied"})
@@ -203,8 +190,6 @@ func TeacherDeleteQuestion(c *gin.Context) {
 	config.DB.Delete(&question)
 	c.JSON(http.StatusOK, gin.H{"message": "Question deleted successfully"})
 }
-
-// ─── PATCH /api/teacher/exams/:id/publish ────────────────────────────────────
 
 func TeacherPublishExam(c *gin.Context) {
 	teacherID, _ := c.Get("user_id")
@@ -240,8 +225,6 @@ func TeacherPublishExam(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Exam published successfully", "exam": exam})
 }
 
-// ─── GET /api/teacher/exams/:id/results ──────────────────────────────────────
-
 type StudentResult struct {
 	AttemptID      uint       `json:"attempt_id"`
 	UserID         uint       `json:"user_id"`
@@ -267,7 +250,6 @@ func TeacherGetResults(c *gin.Context) {
 		return
 	}
 
-	// Auto-grade any expired in-progress attempts before reporting
 	gradeExpiredAttempts(exam.ID)
 
 	var results []StudentResult
@@ -286,7 +268,6 @@ func TeacherGetResults(c *gin.Context) {
 	}
 	stats := Stats{TotalStudents: len(results)}
 
-	// Only aggregate scores from completed attempts
 	completed := make([]StudentResult, 0)
 	for _, r := range results {
 		if r.Status == "completed" {
@@ -315,8 +296,6 @@ func TeacherGetResults(c *gin.Context) {
 		"results":    results,
 	})
 }
-
-// ─── helper: parse uint param ─────────────────────────────────────────────────
 
 func parseUintParam(c *gin.Context, param string) (uint, bool) {
 	v, err := strconv.ParseUint(c.Param(param), 10, 64)

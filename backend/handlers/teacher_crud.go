@@ -18,8 +18,6 @@ import (
 	"gorm.io/gorm"
 )
 
-// ─── 1. Exam CRUD Extensions ───────────────────────────────────────────────────
-
 type UpdateExamInput struct {
 	Title           *string    `json:"title"`
 	Description     *string    `json:"description"`
@@ -183,8 +181,6 @@ func TeacherDeleteExam(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"message": "Exam and all related records deleted successfully"})
 }
-
-// ─── 2. Question CRUD Extensions ──────────────────────────────────────────────
 
 type UpdateQuestionInput struct {
 	Prompt        string  `json:"prompt" binding:"required"`
@@ -383,8 +379,6 @@ func TeacherBulkAddQuestions(c *gin.Context) {
 	})
 }
 
-// ─── 3. Score & Attempt Management ───────────────────────────────────────────
-
 type UpdateAttemptScoreInput struct {
 	Score float64 `json:"score"`
 	Note  string  `json:"note"`
@@ -505,8 +499,6 @@ func TeacherResetAttempt(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"message": "Attempt reset successfully. Student can now retake this exam."})
 }
-
-// ─── 4. Student Account Management (Teacher CRUD) ────────────────────────────
 
 type StudentListItem struct {
 	ID                uint      `json:"id"`
@@ -745,8 +737,6 @@ func TeacherDeleteStudent(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"message": "Student account and related history deleted successfully"})
 }
-
-// ─── 5. Student Portal: Available Exams ───────────────────────────────────────
 
 type AvailableExamItem struct {
 	ID            uint                `json:"id"`

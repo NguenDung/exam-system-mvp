@@ -11,8 +11,6 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// CreateNotification safely records a notification for a user.
-// It never panics or disrupts the calling request if an error occurs.
 func CreateNotification(userID uint, title, message string) {
 	if userID == 0 || title == "" || message == "" {
 		return
@@ -20,7 +18,7 @@ func CreateNotification(userID uint, title, message string) {
 
 	defer func() {
 		if r := recover(); r != nil {
-			log.Printf("[Notification Panic] Recovered from panic in CreateNotification: %v", r)
+			log.Printf("CreateNotification panic: %v", r)
 		}
 	}()
 
@@ -33,12 +31,10 @@ func CreateNotification(userID uint, title, message string) {
 	}
 
 	if err := config.DB.Create(&notif).Error; err != nil {
-		log.Printf("[Notification Error] Failed to create notification for user %d: %v", userID, err)
+		log.Printf("CreateNotification error: %v", err)
 	}
 }
 
-// GetNotifications returns the latest 20 notifications for the current user and their unread count.
-// GET /api/notifications
 func GetNotifications(c *gin.Context) {
 	userIDVal, exists := c.Get("user_id")
 	if !exists {
@@ -67,8 +63,6 @@ func GetNotifications(c *gin.Context) {
 	})
 }
 
-// MarkNotificationAsRead marks a single notification as read.
-// PATCH /api/notifications/:id/read
 func MarkNotificationAsRead(c *gin.Context) {
 	userIDVal, exists := c.Get("user_id")
 	if !exists {
@@ -98,8 +92,6 @@ func MarkNotificationAsRead(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Notification marked as read"})
 }
 
-// MarkAllNotificationsAsRead marks all unread notifications for the current user as read.
-// PATCH /api/notifications/read-all
 func MarkAllNotificationsAsRead(c *gin.Context) {
 	userIDVal, exists := c.Get("user_id")
 	if !exists {

@@ -12,7 +12,7 @@ const APPEAL_STATUS = {
 };
 
 function formatDate(value) {
-  return value ? new Date(value).toLocaleString('vi-VN') : '—';
+  return value ? new Date(value).toLocaleString('vi-VN') : '-';
 }
 
 export default function StudentHistoryDetailPage() {
@@ -77,13 +77,13 @@ export default function StudentHistoryDetailPage() {
           <p className="mt-1 text-sm font-medium text-slate-800">{formatDate(detail.submitted_at)}</p>
         </div>
         <div>
-          <p className="text-xs text-slate-500 uppercase tracking-wide">Mã kỳ thi</p>
+          <p className="text-xs text-slate-500 uppercase tracking-wide">Mã đề</p>
           <p className="mt-1 font-mono text-sm font-bold text-slate-900">{detail.exam.exam_code}</p>
         </div>
       </section>
 
       <div>
-        <h2 className="mb-4 text-base font-bold text-slate-900 uppercase tracking-wide">Đối soát câu hỏi và đáp án</h2>
+        <h2 className="mb-4 text-base font-bold text-slate-900 uppercase tracking-wide">Chi tiết bài làm</h2>
         {detail.answers.length === 0 ? (
           <div className="bg-white rounded-lg border border-slate-200 p-8 text-center text-slate-500">
             Bài thi không có câu hỏi.
@@ -147,12 +147,12 @@ export default function StudentHistoryDetailPage() {
 
       {detail.appeals?.length > 0 && (
         <section className="bg-white rounded-lg border border-slate-200 p-5">
-          <h2 className="mb-3 font-bold text-slate-900 text-sm uppercase tracking-wide">Lịch sử khiếu nại đã gửi</h2>
+          <h2 className="mb-3 font-bold text-slate-900 text-sm uppercase tracking-wide">Lịch sử phúc khảo</h2>
           <div className="space-y-3">
             {detail.appeals.map((appeal) => (
               <div key={appeal.id} className="rounded border border-slate-200 p-4 bg-slate-50">
                 <div className="flex flex-wrap justify-between gap-2 text-sm">
-                  <strong className="text-slate-900">{appeal.title || 'Khiếu nại điểm thi'}</strong>
+                  <strong className="text-slate-900">{appeal.title || 'Đơn phúc khảo'}</strong>
                   <span className="rounded px-2 py-0.5 text-xs font-semibold bg-amber-100 text-amber-800">
                     {APPEAL_STATUS[appeal.status] || appeal.status}
                   </span>

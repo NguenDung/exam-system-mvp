@@ -28,7 +28,6 @@ import (
 	"gorm.io/gorm/logger"
 )
 
-// ─── Custom SQLite Driver for Tests ──────────────────────────────────────────
 // SQLite returns expression results (such as COALESCE(e.published_at, ...))
 // with an empty decltype, causing go-sqlite3 to yield raw strings instead of
 // time.Time. This driver wrapper detects timestamp/datetime columns by name
@@ -198,8 +197,6 @@ func (r *testRows) Next(dest []driver.Value) error {
 	return nil
 }
 
-// ─── Test helpers ─────────────────────────────────────────────────────────────
-
 func setupTestServer(t *testing.T) *gin.Engine {
 	t.Helper()
 
@@ -300,8 +297,6 @@ func getUint(m map[string]interface{}, keys ...string) uint {
 	return uint(getFloat(m, keys...))
 }
 
-// ─── Full integration test ────────────────────────────────────────────────────
-
 // TestMVP_FullFlow runs all 6 use-cases sequentially in a single test to share
 // state (tokens, IDs) across the flow.
 func TestMVP_FullFlow(t *testing.T) {
@@ -310,9 +305,8 @@ func TestMVP_FullFlow(t *testing.T) {
 	var teacherToken, studentToken, examCode string
 	var examID, q1ID, q2ID, attemptID float64
 
-	// ══════════════════════════════════════════════════════════════════════════
 	// UC01 – Register & Login
-	// ══════════════════════════════════════════════════════════════════════════
+
 	t.Run("UC01_Register_Student", func(t *testing.T) {
 		w := do(t, srv, "POST", "/api/auth/register", "", map[string]interface{}{
 			"full_name": "Học Sinh Test",
@@ -401,9 +395,8 @@ func TestMVP_FullFlow(t *testing.T) {
 		}
 	})
 
-	// ══════════════════════════════════════════════════════════════════════════
 	// UC02 – Teacher creates exam, adds questions, publishes
-	// ══════════════════════════════════════════════════════════════════════════
+
 	t.Run("UC02_Create_Exam", func(t *testing.T) {
 		now := time.Now()
 		w := do(t, srv, "POST", "/api/teacher/exams", teacherToken, map[string]interface{}{
@@ -513,9 +506,8 @@ func TestMVP_FullFlow(t *testing.T) {
 		}
 	})
 
-	// ══════════════════════════════════════════════════════════════════════════
 	// UC03 – Student looks up exam by code
-	// ══════════════════════════════════════════════════════════════════════════
+
 	t.Run("UC03_Lookup_Exam_By_Code", func(t *testing.T) {
 		// Student looks up created exam by code
 		w2 := do(t, srv, "GET", "/api/student/exams/lookup?code="+examCode, studentToken, nil)
@@ -538,9 +530,8 @@ func TestMVP_FullFlow(t *testing.T) {
 		}
 	})
 
-	// ══════════════════════════════════════════════════════════════════════════
 	// UC04 – Student starts exam, saves answer, resumes
-	// ══════════════════════════════════════════════════════════════════════════
+
 	t.Run("UC04_Start_Exam", func(t *testing.T) {
 		url := fmt.Sprintf("/api/student/exams/%.0f/start", examID)
 		w := do(t, srv, "POST", url, studentToken, map[string]bool{"confirmed": true})
@@ -619,9 +610,8 @@ func TestMVP_FullFlow(t *testing.T) {
 		}
 	})
 
-	// ══════════════════════════════════════════════════════════════════════════
 	// UC05 – Submit and auto-grade
-	// ══════════════════════════════════════════════════════════════════════════
+
 	t.Run("UC05_Submit_With_Answers", func(t *testing.T) {
 		url := fmt.Sprintf("/api/student/attempts/%.0f/submit", attemptID)
 		// Q1: A (correct, 1pt), Q2: A (wrong, correct=C, 0pt)
@@ -662,9 +652,8 @@ func TestMVP_FullFlow(t *testing.T) {
 		}
 	})
 
-	// ══════════════════════════════════════════════════════════════════════════
 	// UC06 – View results (student & teacher)
-	// ══════════════════════════════════════════════════════════════════════════
+
 	t.Run("UC06_Student_View_Result", func(t *testing.T) {
 		url := fmt.Sprintf("/api/student/attempts/%.0f/result", attemptID)
 		w := do(t, srv, "GET", url, studentToken, nil)
@@ -730,9 +719,7 @@ func TestMVP_FullFlow(t *testing.T) {
 	_ = getFloat
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
 // Individual focused tests
-// ══════════════════════════════════════════════════════════════════════════════
 
 func TestHealth(t *testing.T) {
 	srv := setupTestServer(t)
@@ -925,8 +912,6 @@ func TestStudent_GradingAccuracy(t *testing.T) {
 		t.Errorf("correct+wrong should equal total questions (4), got %.0f", totalCounted)
 	}
 }
-
-// ─── Security & business-rule focused tests ───────────────────────────────────
 
 func TestSecurity_SQLi_DeleteQuestion_InvalidID(t *testing.T) {
 	srv := setupTestServer(t)

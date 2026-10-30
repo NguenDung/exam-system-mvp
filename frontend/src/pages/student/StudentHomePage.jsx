@@ -121,8 +121,7 @@ export default function StudentHomePage() {
       <div>
         <div className="flex items-center justify-between mb-4 border-b border-slate-200 pb-3">
           <div>
-            <h1 className="text-xl font-bold tracking-tight text-slate-900">Danh sách bài thi đang mở</h1>
-            <p className="text-sm text-slate-500 mt-0.5">Các bài thi chính thức đang trong thời gian mở đề khảo thí</p>
+            <h1 className="text-xl font-bold tracking-tight text-slate-900">Đề thi đang mở</h1>
           </div>
           <button onClick={fetchAvailableExams} className="btn-secondary btn-sm">Làm mới</button>
         </div>
@@ -224,8 +223,8 @@ export default function StudentHomePage() {
 
       {/* Section 2: Tra cứu kỳ thi thủ công bằng mã */}
       <div className="card max-w-2xl mx-auto border border-slate-200">
-        <h2 className="text-base font-bold text-slate-900 mb-1">Tra cứu đề thi bằng mã code</h2>
-        <p className="text-slate-500 text-xs mb-4">Nhập mã phòng thi / mã đề thi do giám thị hoặc giảng viên cung cấp</p>
+        <h2 className="text-base font-bold text-slate-900 mb-1">Vào thi bằng mã đề</h2>
+        <p className="text-slate-500 text-xs mb-4">Nhập mã đề thi để vào phòng thi</p>
 
         <form onSubmit={handleLookup} className="flex gap-2">
           <input
@@ -339,7 +338,7 @@ export default function StudentHomePage() {
                         <code className="bg-slate-100 px-2 py-0.5 rounded font-mono text-slate-800 text-xs">{a.exam_code}</code>
                       </td>
                       <td className="px-5 py-3.5 text-center font-bold text-slate-900">
-                        {a.status === 'completed' ? Number(a.score).toFixed(2) : '—'}
+                        {a.status === 'completed' ? Number(a.score).toFixed(2) : '-'}
                       </td>
                       <td className="px-5 py-3.5 text-center text-xs">
                         {a.status === 'completed' ? (
@@ -348,7 +347,7 @@ export default function StudentHomePage() {
                             <span className="text-slate-400"> / </span>
                             <span className="text-red-600 font-semibold">{a.wrong_count}</span>
                           </span>
-                        ) : '—'}
+                        ) : '-'}
                       </td>
                       <td className="px-5 py-3.5 text-center">
                         <span className={`px-2.5 py-0.5 rounded text-xs font-semibold ${

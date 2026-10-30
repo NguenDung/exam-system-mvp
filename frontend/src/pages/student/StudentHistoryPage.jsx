@@ -13,7 +13,7 @@ const APPEAL_STATUS = {
 };
 
 function formatDate(value) {
-  return value ? new Date(value).toLocaleString('vi-VN') : '—';
+  return value ? new Date(value).toLocaleString('vi-VN') : '-';
 }
 
 function AppealModal({ submission, onClose, onSuccess }) {
@@ -26,7 +26,7 @@ function AppealModal({ submission, onClose, onSuccess }) {
     event.preventDefault();
     const trimmed = content.trim();
     if (trimmed.length < 10 || trimmed.length > 1000) {
-      setError('Nội dung khiếu nại phải từ 10 đến 1000 ký tự.');
+      setError('Nội dung phúc khảo phải từ 10 đến 1000 ký tự.');
       return;
     }
 
@@ -40,7 +40,7 @@ function AppealModal({ submission, onClose, onSuccess }) {
       });
       onSuccess();
     } catch (requestError) {
-      setError(requestError.response?.data?.error || 'Gửi đơn khiếu nại không thành công. Vui lòng thử lại.');
+      setError(requestError.response?.data?.error || 'Gửi đơn phúc khảo không thành công. Vui lòng thử lại.');
     } finally {
       setSubmitting(false);
     }
@@ -56,7 +56,7 @@ function AppealModal({ submission, onClose, onSuccess }) {
         className="w-full max-w-lg space-y-4 rounded-lg bg-white p-6 shadow-xl border border-slate-200"
       >
         <div>
-          <h2 id="appeal-title" className="text-lg font-bold text-slate-900">Gửi đơn khiếu nại điểm thi</h2>
+          <h2 id="appeal-title" className="text-lg font-bold text-slate-900">Gửi đơn phúc khảo</h2>
           <p className="mt-0.5 text-xs text-slate-500">Môn thi: {submission.exam_title}</p>
         </div>
         <div>
@@ -91,7 +91,7 @@ function AppealModal({ submission, onClose, onSuccess }) {
             Hủy bỏ
           </button>
           <button type="submit" disabled={submitting || content.trim().length < 10} className="btn-primary">
-            {submitting ? <Spinner size="sm" /> : 'Gửi đơn khiếu nại'}
+            {submitting ? <Spinner size="sm" /> : 'Gửi đơn phúc khảo'}
           </button>
         </div>
       </form>
@@ -148,7 +148,6 @@ export default function StudentHistoryPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-xl font-bold text-slate-900">Lịch sử bài làm</h1>
-        <p className="mt-0.5 text-sm text-slate-500">Danh sách các bài thi đã hoàn thành và trạng thái phúc khảo</p>
       </div>
 
       <form onSubmit={handleSearch} className="bg-white rounded-lg border border-slate-200 p-4 flex flex-col gap-3 sm:flex-row">
@@ -166,9 +165,9 @@ export default function StudentHistoryPage() {
             setPage(1);
           }}
           className="input sm:max-w-xs"
-          aria-label="Lọc theo trạng thái khiếu nại"
+          aria-label="Lọc theo trạng thái phúc khảo"
         >
-          <option value="">Tất cả trạng thái khiếu nại</option>
+          <option value="">Tất cả trạng thái phúc khảo</option>
           {Object.entries(APPEAL_STATUS).map(([value, label]) => (
             <option key={value} value={value}>{label}</option>
           ))}
@@ -204,7 +203,7 @@ export default function StudentHistoryPage() {
                   <th className="px-4 py-3 font-semibold">Bắt đầu làm</th>
                   <th className="px-4 py-3 font-semibold">Nộp bài lúc</th>
                   <th className="px-4 py-3 text-center font-semibold">Điểm số</th>
-                  <th className="px-4 py-3 font-semibold">Khiếu nại</th>
+                  <th className="px-4 py-3 font-semibold">Phúc khảo</th>
                   <th className="px-4 py-3 font-semibold text-right">Thao tác</th>
                 </tr>
               </thead>
@@ -242,7 +241,7 @@ export default function StudentHistoryPage() {
                           }}
                           className="btn-secondary btn-sm"
                         >
-                          Khiếu nại
+                          Phúc khảo
                         </button>
                       </div>
                     </td>
@@ -282,7 +281,7 @@ export default function StudentHistoryPage() {
           onClose={() => setSelectedSubmission(null)}
           onSuccess={() => {
             setSelectedSubmission(null);
-            setNotice('Gửi đơn khiếu nại thành công. Giảng viên phụ trách sẽ xem xét và phản hồi.');
+            setNotice('Gửi đơn phúc khảo thành công.');
             setRefreshKey((key) => key + 1);
           }}
         />

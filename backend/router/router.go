@@ -11,11 +11,9 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// SetupRouter configures and returns the Gin engine with all routes.
 func SetupRouter() *gin.Engine {
 	r := gin.Default()
 
-	// ── CORS ──────────────────────────────────────────────────────────────────
 	r.Use(cors.New(cors.Config{
 		AllowOrigins:     []string{"http://localhost:5173", "http://localhost:3000"},
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
@@ -25,24 +23,20 @@ func SetupRouter() *gin.Engine {
 		MaxAge:           12 * time.Hour,
 	}))
 
-	// ── Security Headers & Body Size Limit (2MB) ──────────────────────────────
 	r.Use(middleware.SecurityMiddleware(2 * 1024 * 1024))
 
-	// ── Health check ──────────────────────────────────────────────────────────
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "ok", "service": "exam-system-mvp"})
 	})
 
 	api := r.Group("/api")
 
-	// ── Auth routes (public) ──────────────────────────────────────────────────
 	auth := api.Group("/auth")
 	{
 		auth.POST("/register", handlers.Register)
 		auth.POST("/login", middleware.IPRateLimit(15, time.Minute), handlers.Login)
 	}
 
-	// ── Teacher routes ────────────────────────────────────────────────────────
 	teacher := api.Group("/teacher")
 	teacher.Use(middleware.AuthRequired(), middleware.RequireRole(models.RoleTeacher))
 	{
@@ -72,7 +66,6 @@ func SetupRouter() *gin.Engine {
 		teacher.DELETE("/students/:id", handlers.TeacherDeleteStudent)
 	}
 
-	// ── Student routes ────────────────────────────────────────────────────────
 	student := api.Group("/student")
 	student.Use(middleware.AuthRequired(), middleware.RequireRole(models.RoleStudent))
 	{
@@ -89,7 +82,6 @@ func SetupRouter() *gin.Engine {
 		student.GET("/attempts/:attempt_id/result", handlers.StudentGetResult)
 	}
 
-	// ── Notification routes (authenticated users) ─────────────────────────────
 	notifications := api.Group("/notifications")
 	notifications.Use(middleware.AuthRequired())
 	{

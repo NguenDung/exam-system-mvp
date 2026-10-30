@@ -1,24 +1,24 @@
 # BÁO CÁO THIẾT KẾ KIẾN TRÚC VÀ ĐẶC TẢ YÊU CẦU PHẦN MỀM
-## DỰ ÁN: HỆ THỐNG THI TRẮC NGHIỆM TRỰC TUYẾN ĐẠI HỌC (UNIVERSITY EXAMINATION SYSTEM)
-**Vai trò báo cáo**: Senior System Architect & Business Analyst (BA)  
-**Phiên bản hệ thống**: MVP v2.0 (Bản nâng cấp toàn diện ngày 30/10/2026)  
-**Môi trường triển khai**: Golang 1.21+ (Gin Engine) | React 19 (Vite) | PostgreSQL 15 / SQLite In-Memory  
+## DỰ ÁN: HỆ THỐNG THI TRẮC NGHIỆM TRỰC TUYẾN ĐẠI HỌC
+- **Hệ thống**: Online Exam System
+- **Kiến trúc**: Client-Server (REST API)
+- **Công nghệ**: Golang 1.21+ (Gin) | React 19 (Vite) | PostgreSQL 15 / SQLite In-Memory
 
 ---
 
-## 1. TỔNG QUAN KIẾN TRÚC HỆ THỐNG & THIẾT KẾ CƠ SỞ DỮ LIỆU
+## 1. TỔNG QUAN KIẾN TRÚC HỆ THỐNG VÀ CƠ SỞ DỮ LIỆU
 
-### 1.1. Mô hình Kiến trúc Phân tầng (Layered Clean Architecture)
+### 1.1. Mô hình kiến trúc phân tầng
 
-Hệ thống được thiết kế theo mô hình **Client-Server phân tầng độc lập (Layered Architecture)**, tách rời hoàn toàn giữa giao diện người dùng (Frontend Single Page Application - SPA) và dịch vụ xử lý dữ liệu trung tâm (Backend RESTful API). Mô hình này bảo đảm tính module hóa, dễ dàng mở rộng quy mô, nâng cao tính bảo mật và đơn giản hóa quá trình bảo trì.
+Hệ thống được tổ chức theo mô hình Client-Server phân tầng, tách biệt giữa ứng dụng giao diện (Frontend React SPA) và máy chủ API (Backend Golang Gin).
 
 ```
 +---------------------------------------------------------------------------------------------------+
 |                                      CLIENT LAYER (TRÌNH DUYỆT)                                   |
-|   React 19 + Vite + TailwindCSS + React Router v6 + Axios Interceptor                             |
-|   - Phân hệ Giảng viên: Quản trị Đề thi, Ngân hàng câu hỏi, Quản lý sinh viên, Bảng điểm, Appeals |
-|   - Phân hệ Sinh viên: Cổng kỳ thi, Phòng thi 2 cột chuẩn hóa (Question Palette), Lịch sử & Phúc khảo|
-|   - Component chung: Notification Dropdown (auto-polling 30s), Toast & Modal xác nhận             |
+|   React 19 + Vite + TailwindCSS + React Router v6 + Axios                                         |
+|   - Phân hệ Giảng viên: Quản lý đề thi, ngân hàng câu hỏi, sinh viên, bảng điểm, đơn phúc khảo    |
+|   - Phân hệ Sinh viên: Danh sách đề mở, phòng thi 2 cột (Question Palette), lịch sử và phúc khảo   |
+|   - Thành phần chung: Dropdown thông báo (polling 30s), Toast và Modal xác nhận                    |
 +---------------------------------------------------------------------------------------------------+
                                                   |
                                           HTTP / REST (JSON)
@@ -31,19 +31,19 @@ Hệ thống được thiết kế theo mô hình **Client-Server phân tầng �
 |  +---------------------------------------------------------------------------------------------+  |
 |  | Global Security Middleware: Security Headers (nosniff, DENY, strict-origin) & Body Limit 2MB |  |
 |  +---------------------------------------------------------------------------------------------+  |
-|  | Rate Limiting Middleware: In-Memory Sliding Window (15 req/phút/IP cho Login & Lookup)      |  |
+|  | Rate Limiting Middleware: In-Memory Sliding Window (15 req/phút/IP cho Login và Lookup)     |  |
 |  +---------------------------------------------------------------------------------------------+  |
 |  | Authentication & RBAC Middleware: JWT HMAC-SHA256 Verification & Role Guard                 |  |
 |  +---------------------------------------------------------------------------------------------+  |
 |  | Handlers (Bộ điều khiển nghiệp vụ):                                                         |  |
-|  |   - Auth Handler: Đăng ký, Đăng nhập, Cấp phát JWT Token                                    |  |
-|  |   - Teacher CRUD Handler: Quản lý Đề thi, Nhập câu hỏi hàng loạt, Quản lý sinh viên         |  |
-|  |   - Student Handler: Khảo thí, Xáo trộn câu hỏi tất định, Auto-save (UPSERT), Auto-submit   |  |
-|  |   - Anti-Cheat & Audit Handler: Ghi nhận vi phạm chuyển Tab, Audit Logs, Xuất CSV UTF-8 BOM |  |
-|  |   - Appeals Handler: Quy trình Phúc khảo 4 trạng thái (PENDING, REPLIED, REJECTED, RESOLVED)|  |
-|  |   - Notifications Handler: Thông báo tự động phi phong tỏa (Fail-safe, defer recover)       |  |
+|  |   - Auth Handler: Đăng ký, đăng nhập, cấp JWT Token                                         |  |
+|  |   - Teacher CRUD Handler: Quản lý đề thi, nhập câu hỏi hàng loạt, quản lý sinh viên        |  |
+|  |   - Student Handler: Khảo thí, xáo trộn câu hỏi theo seed, auto-save (UPSERT), nộp bài       |  |
+|  |   - Anti-Cheat & Audit Handler: Ghi nhận vi phạm chuyển tab, audit log, xuất CSV UTF-8 BOM  |  |
+|  |   - Appeals Handler: Quy trình phúc khảo 4 trạng thái (PENDING, REPLIED, REJECTED, RESOLVED)|  |
+|  |   - Notifications Handler: Tạo thông báo sự kiện, polling và đánh dấu đã đọc                |  |
 |  +---------------------------------------------------------------------------------------------+  |
-|  | Data Access Layer: GORM ORM (DB Transactions, Pessimistic Locking FOR UPDATE, Prepared Stmt)|  |
+|  | Data Access Layer: GORM ORM (Transactions, Khóa dòng FOR UPDATE, Prepared Statements)       |  |
 |  +---------------------------------------------------------------------------------------------+  |
 +---------------------------------------------------------------------------------------------------+
                                                   |
@@ -51,31 +51,31 @@ Hệ thống được thiết kế theo mô hình **Client-Server phân tầng �
                                                   v
 +---------------------------------------------------------------------------------------------------+
 |                                    PERSISTENCE LAYER (RDBMS)                                      |
-|   PostgreSQL 15 (Môi trường Production) / SQLite In-Memory + WAL Mode (Môi trường Test CI/CD)     |
-|   8 Normalized Tables (3NF) + 2 Unique Composite Indexes + Cascading Foreign Key Constraints       |
+|   PostgreSQL 15 (Môi trường chạy chính) / SQLite In-Memory + WAL Mode (Môi trường kiểm thử tự động)|
+|   8 bảng quan hệ (3NF) + 2 chỉ mục Unique Composite + Ràng buộc Foreign Key Cascade              |
 +---------------------------------------------------------------------------------------------------+
 ```
 
-### 1.2. Công nghệ Lựa chọn (Tech Stack) & Cơ sở Lập luận Kỹ thuật
+### 1.2. Công nghệ lựa chọn và lý do kỹ thuật
 
-1. **Ngôn ngữ Backend - Golang & Gin Framework**:
-   - Khả năng xử lý hàng chục nghìn kết nối đồng thời với mô hình Goroutine tiêu tốn rất ít RAM (khoảng 2KB mỗi routine), đáp ứng xuất sắc kịch bản hàng trăm hoặc hàng nghìn thí sinh nộp bài hoặc tự động lưu bài (auto-save) cùng một giây.
-   - Gin Framework xây dựng trên cây Radix tree cho tốc độ routing cực nhanh, độ trễ xử lý ở mức micro-giây.
+1. **Backend - Golang & Gin Framework**:
+   - Go biên dịch ra file nhị phân duy nhất, khởi động nhanh và tiêu thụ ít bộ nhớ. Mô hình goroutine xử lý I/O non-blocking phù hợp với kịch bản nhiều thí sinh cùng lưu bài hoặc nộp bài đồng thời.
+   - Gin Framework sử dụng cây radix tree định tuyến đường dẫn nhanh, cú pháp middleware rõ ràng và dễ bảo trì.
 
 2. **Cơ sở dữ liệu - PostgreSQL 15 & SQLite In-Memory**:
-   - Trong môi trường sản xuất (Docker), PostgreSQL cung cấp đầy đủ các chuẩn ACID, khóa dòng bi quan (`SELECT ... FOR UPDATE`), câu lệnh nguyên tử `ON CONFLICT DO UPDATE` (Atomic UPSERT) và ràng buộc toàn vẹn khóa ngoại tầng (Cascading Deletions).
-   - Trong môi trường kiểm thử tự động (Unit & Integration Testing), SQLite in-memory được cấu hình ở chế độ **WAL (Write-Ahead Logging)** và **Busy Timeout 5000ms** (`EnableSQLitePragmas`), cho phép đọc và ghi song song, loại bỏ hoàn toàn lỗi khóa bảng `database is locked (5)` khi chạy kiểm thử đồng thời.
+   - Môi trường chạy thực tế dùng PostgreSQL 15 trong Docker: hỗ trợ transaction ACID, khóa bi quan `SELECT ... FOR UPDATE` chống double-submit, câu lệnh nguyên tử `ON CONFLICT DO UPDATE` cho auto-save và cascade foreign key khi xóa đề thi hoặc sinh viên.
+   - Môi trường kiểm thử dùng SQLite in-memory: cấu hình chế độ `WAL (Write-Ahead Logging)` và `busy_timeout=5000` (`PRAGMA journal_mode=WAL;` và `PRAGMA busy_timeout=5000;`) giúp các tiến trình đọc/ghi song song không bị lỗi `database is locked`.
 
 3. **Frontend - React 19, Vite & TailwindCSS**:
-   - Sử dụng Vite tối ưu hóa tốc độ build và Hot Module Replacement (HMR).
-   - TailwindCSS đem lại giao diện học thuật tối giản, nhất quán, loại bỏ toàn bộ emoji phi quy chuẩn, đáp ứng thẩm mỹ của hệ thống khảo thí đại học chính quy.
-   - Axios Interceptor tự động xử lý đính kèm Bearer JWT Token vào mọi request có yêu cầu xác thực và xử lý lỗi tập trung.
+   - Vite tối ưu tốc độ bundle và hot module replacement trong quá trình phát triển.
+   - Giao diện sử dụng TailwindCSS với bảng màu trung tính, thiết kế tối giản, tập trung vào trải nghiệm thi cử nghiêm túc.
+   - Axios Interceptor tự động đính kèm token xác thực `Bearer` vào header và chuyển tiếp mã lỗi từ backend.
 
 ---
 
-### 1.3. Sơ đồ Thực thể Liên kết (Mermaid ERD Diagram)
+### 1.3. Sơ đồ thực thể liên kết (Mermaid ERD Diagram)
 
-Toàn bộ hệ thống được xây dựng trên **8 bảng chuẩn hóa 3NF**, bảo đảm không trùng lặp dữ liệu, duy trì toàn vẹn dữ liệu thông qua các khóa chính, khóa ngoại và chỉ mục tổng hợp duy nhất.
+Hệ thống gồm **8 bảng quan hệ chuẩn hóa 3NF**, bảo đảm không trùng lặp dữ liệu và duy trì ràng buộc qua khóa ngoại và chỉ mục:
 
 ```mermaid
 erDiagram
@@ -93,156 +93,156 @@ erDiagram
     questions ||--o{ attempt_answers : "answered for"
 
     users {
-        bigint id PK "Khóa chính tự tăng"
-        varchar email UK "Email chuẩn hóa chữ thường, duy nhất"
-        varchar password_hash "Mật khẩu băm Bcrypt an toàn"
-        varchar full_name "Họ và tên người dùng"
+        bigint id PK "Khóa chính"
+        varchar email UK "Email duy nhất, chữ thường"
+        varchar password_hash "Mật khẩu băm Bcrypt"
+        varchar full_name "Họ và tên"
         varchar role "Vai trò: teacher hoặc student"
-        timestamp created_at "Thời điểm tạo tài khoản"
-        timestamp updated_at "Thời điểm cập nhật tài khoản"
-        timestamp deleted_at "Hỗ trợ xóa mềm (Soft delete)"
+        timestamp created_at "Ngày tạo"
+        timestamp updated_at "Ngày cập nhật"
+        timestamp deleted_at "Hỗ trợ soft delete"
     }
 
     exams {
-        bigint id PK "Khóa chính tự tăng"
+        bigint id PK "Khóa chính"
         bigint teacher_id FK "Khóa ngoại trỏ về users.id"
-        varchar exam_code UK "Mã đề thi định danh, duy nhất (VD: IT2026)"
-        varchar title "Tiêu đề kỳ thi / môn thi"
-        text description "Mô tả chi tiết và quy chế phòng thi"
-        int duration "Thời lượng làm bài (tính bằng phút)"
-        timestamp start_time "Thời điểm bắt đầu mở đề thi"
-        timestamp end_time "Thời điểm đóng đề thi"
-        timestamp published_at "Thời điểm xuất bản đề thi chính thức"
-        varchar status "Trạng thái đề: draft hoặc published"
-        timestamp created_at "Thời điểm tạo đề"
-        timestamp updated_at "Thời điểm cập nhật đề"
-        timestamp deleted_at "Hỗ trợ xóa mềm (Soft delete)"
+        varchar exam_code UK "Mã đề thi định danh (VD: IT2026)"
+        varchar title "Tiêu đề bài thi"
+        text description "Mô tả ca thi"
+        int duration "Thời lượng làm bài (phút)"
+        timestamp start_time "Thời điểm mở đề"
+        timestamp end_time "Thời điểm đóng đề"
+        timestamp published_at "Thời điểm xuất bản đề"
+        varchar status "Trạng thái: draft hoặc published"
+        timestamp created_at "Ngày tạo"
+        timestamp updated_at "Ngày cập nhật"
+        timestamp deleted_at "Soft delete"
     }
 
     questions {
-        bigint id PK "Khóa chính tự tăng"
+        bigint id PK "Khóa chính"
         bigint exam_id FK "Khóa ngoại trỏ về exams.id (CASCADE)"
-        int sort_order "Thứ tự sắp xếp mặc định của câu hỏi"
-        text prompt "Nội dung câu hỏi trắc nghiệm"
-        text option_a "Phương án lựa chọn A"
-        text option_b "Phương án lựa chọn B"
-        text option_c "Phương án lựa chọn C"
-        text option_d "Phương án lựa chọn D"
-        varchar correct_option "Đáp án đúng: A, B, C hoặc D"
-        decimal points "Trọng số điểm của câu hỏi (mặc định 1.00)"
-        timestamp created_at "Thời điểm tạo câu hỏi"
-        timestamp updated_at "Thời điểm cập nhật câu hỏi"
+        int sort_order "Thứ tự sắp xếp mặc định"
+        text prompt "Nội dung câu hỏi"
+        text option_a "Phương án A"
+        text option_b "Phương án B"
+        text option_c "Phương án C"
+        text option_d "Phương án D"
+        varchar correct_option "Đáp án đúng (A, B, C, D)"
+        decimal points "Trọng số điểm (mặc định 1.00)"
+        timestamp created_at "Ngày tạo"
+        timestamp updated_at "Ngày cập nhật"
     }
 
     exam_attempts {
-        bigint id PK "Khóa chính tự tăng (Dùng làm seed trộn đề)"
+        bigint id PK "Khóa chính (Seed xáo trộn câu hỏi)"
         bigint exam_id FK "Khóa ngoại trỏ về exams.id (CASCADE)"
         bigint user_id FK "Khóa ngoại trỏ về users.id (CASCADE)"
         varchar status "Trạng thái: in_progress hoặc completed"
-        decimal score "Tổng điểm đạt được (làm tròn 2 chữ số)"
-        text teacher_note "Ghi chú can thiệp điểm của giảng viên"
-        int violation_count "Số lần vi phạm rời màn hình (Max = 3)"
-        int correct_count "Số lượng câu trả lời đúng"
-        int wrong_count "Số lượng câu trả lời sai hoặc bỏ trống"
-        timestamp started_at "Thời điểm sinh viên bấm bắt đầu thi"
-        timestamp last_saved_at "Thời điểm tự động lưu bài gần nhất"
-        timestamp submitted_at "Thời điểm nộp bài hoặc bị thu bài"
+        decimal score "Điểm số đạt được"
+        text teacher_note "Ghi chú điều chỉnh điểm của giảng viên"
+        int violation_count "Số lần vi phạm rời màn hình (tối đa 3)"
+        int correct_count "Số câu làm đúng"
+        int wrong_count "Số câu làm sai hoặc bỏ trống"
+        timestamp started_at "Thời điểm bắt đầu làm bài"
+        timestamp last_saved_at "Thời điểm lưu bài gần nhất"
+        timestamp submitted_at "Thời điểm nộp bài hoặc thu bài"
     }
 
     attempt_answers {
-        bigint id PK "Khóa chính tự tăng"
+        bigint id PK "Khóa chính"
         bigint attempt_id FK "Khóa ngoại trỏ về exam_attempts.id (CASCADE)"
         bigint question_id FK "Khóa ngoại trỏ về questions.id"
-        varchar chosen_option "Lựa chọn của thí sinh: A, B, C, D hoặc NULL"
-        boolean is_correct "Đánh dấu đúng/sai sau khi chấm"
-        decimal points_awarded "Điểm số đạt được cho câu hỏi này"
-        timestamp updated_at "Thời điểm cập nhật câu trả lời"
+        varchar chosen_option "Phương án đã chọn: A, B, C, D hoặc NULL"
+        boolean is_correct "Đánh dấu đúng hay sai"
+        decimal points_awarded "Điểm đạt được cho câu hỏi"
+        timestamp updated_at "Thời điểm lưu đáp án"
     }
 
     appeals {
-        bigint id PK "Khóa chính tự tăng"
+        bigint id PK "Khóa chính"
         bigint exam_id FK "Khóa ngoại trỏ về exams.id (CASCADE)"
         bigint submission_id FK "Khóa ngoại trỏ về exam_attempts.id"
         bigint student_id FK "Khóa ngoại trỏ về users.id"
         bigint teacher_id FK "Khóa ngoại trỏ về users.id"
-        varchar title "Tiêu đề yêu cầu khiếu nại / phúc khảo"
-        text content "Nội dung giải trình khiếu nại của sinh viên"
+        varchar title "Tiêu đề yêu cầu phúc khảo"
+        text content "Nội dung giải trình phúc khảo"
         varchar status "Trạng thái: PENDING, REPLIED, REJECTED, RESOLVED"
-        text teacher_response "Phản hồi giải trình của giảng viên"
-        timestamp responded_at "Thời điểm giảng viên gửi phản hồi"
-        timestamp created_at "Thời điểm gửi đơn khiếu nại"
-        timestamp updated_at "Thời điểm cập nhật đơn khiếu nại"
+        text teacher_response "Phản hồi của giảng viên"
+        timestamp responded_at "Thời điểm gửi phản hồi"
+        timestamp created_at "Thời điểm gửi đơn"
+        timestamp updated_at "Thời điểm cập nhật đơn"
     }
 
     audit_logs {
-        bigint id PK "Khóa chính tự tăng"
-        bigint actor_id FK "Khóa ngoại trỏ về users.id (Giảng viên)"
-        varchar action "Hành động can thiệp: UPDATE_SCORE hoặc RESET_ATTEMPT"
+        bigint id PK "Khóa chính"
+        bigint actor_id FK "Khóa ngoại trỏ về users.id (người thực hiện)"
+        varchar action "Hành động: UPDATE_SCORE hoặc RESET_ATTEMPT"
         bigint target_id "ID của đối tượng bị can thiệp (attempt_id)"
-        text details "Chi tiết giải trình: điểm cũ -> điểm mới, lý do"
-        timestamp created_at "Thời điểm thực hiện hành vi kiểm toán"
+        text details "Chi tiết giải trình thao tác"
+        timestamp created_at "Thời điểm thao tác"
     }
 
     notifications {
-        bigint id PK "Khóa chính tự tăng"
-        bigint user_id FK "Khóa ngoại trỏ về users.id (Người nhận)"
-        varchar title "Tiêu đề thông báo tóm tắt sự kiện"
-        text message "Nội dung thông báo chi tiết"
-        boolean is_read "Trạng thái đã đọc (true/false)"
-        timestamp created_at "Thời điểm phát hành thông báo"
+        bigint id PK "Khóa chính"
+        bigint user_id FK "Khóa ngoại trỏ về users.id (người nhận)"
+        varchar title "Tiêu đề thông báo"
+        text message "Nội dung chi tiết"
+        boolean is_read "Trạng thái đã đọc"
+        timestamp created_at "Thời điểm gửi"
     }
 ```
 
 ---
 
-### 1.4. Phân tích Chi tiết 8 Bảng Dữ liệu & Thiết lập Tối ưu
+### 1.4. Chi tiết các bảng dữ liệu và thiết lập kỹ thuật
 
-| STT | Tên Bảng | Mục đích Nghiệp vụ & Ràng buộc Kỹ thuật |
+| STT | Tên bảng | Mục đích lưu trữ và ràng buộc |
 | :--- | :--- | :--- |
-| 1 | `users` | Quản lý định danh người dùng. Phân quyền thông qua cột `role` (`teacher` hoặc `student`). Cột `email` có ràng buộc `UNIQUE` và được chuẩn hóa chữ thường. Mật khẩu được mã hóa an toàn bằng thuật toán băm Bcrypt. Cột `deleted_at` hỗ trợ xóa mềm (Soft Delete). |
-| 2 | `exams` | Lưu trữ thông tin đề thi do Giảng viên tạo (`teacher_id`). Mã đề thi `exam_code` là duy nhất toàn hệ thống. Cột `status` quản lý trạng thái vòng đời của đề (`draft` -> `published`). Khung giờ mở đề được kiểm soát chặt chẽ qua cặp mốc `start_time` và `end_time`. |
-| 3 | `questions` | Lưu trữ ngân hàng câu hỏi trắc nghiệm trực thuộc đề thi (`exam_id`). Bao gồm 4 phương án lựa chọn độc lập (`option_a`, `option_b`, `option_c`, `option_d`), đáp án chuẩn `correct_option` và trọng số điểm `points`. Ràng buộc khóa ngoại tầng `ON DELETE CASCADE` tự động xóa câu hỏi khi đề thi bị xóa. |
-| 4 | `exam_attempts` | Đại diện cho một phiên làm bài thi độc nhất của một sinh viên cho một đề thi. Cột `status` chuyển từ `in_progress` sang `completed` khi nộp bài hoặc bị cưỡng chế thu bài do hết giờ / quá số lần vi phạm. Trường `violation_count` đếm số lần thí sinh chuyển tab hoặc thu nhỏ cửa sổ. ID của bảng được dùng làm seed sinh số ngẫu nhiên phục vụ xáo trộn câu hỏi. |
-| 5 | `attempt_answers` | Lưu chi tiết phương án thí sinh đã chọn cho từng câu hỏi (`chosen_option`). Cột `is_correct` và `points_awarded` được cập nhật trong giao dịch chấm điểm tự động. |
-| 6 | `appeals` | Quản lý quy trình khiếu nại / phúc khảo điểm thi giữa sinh viên và giảng viên. Ràng buộc trạng thái chặt chẽ theo máy trạng thái: `PENDING` -> `REPLIED` / `REJECTED` / `RESOLVED`. |
-| 7 | `audit_logs` | Lưu trữ nhật ký kiểm toán bất biến (Immutable Audit Trail) đối với các hành vi can thiệp nhạy cảm của giảng viên (Hiệu chỉnh điểm số `UPDATE_SCORE`, Xóa lượt thi cho thi lại `RESET_ATTEMPT`), phục vụ công tác thanh tra khảo thí. |
-| 8 | `notifications` | Quản lý hệ thống thông báo nội bộ thời gian thực gửi tới giảng viên và sinh viên khi phát sinh các sự kiện: khiếu nại mới, phản hồi khiếu nại, hiệu chỉnh điểm, cấp quyền thi lại. |
+| 1 | `users` | Quản lý tài khoản. Phân quyền qua cột `role` (`teacher` hoặc `student`). Cột `email` có ràng buộc `UNIQUE` và được chuẩn hóa chữ thường. Mật khẩu băm bằng Bcrypt. Cột `deleted_at` hỗ trợ soft delete. |
+| 2 | `exams` | Lưu thông tin ca thi do Giảng viên tạo (`teacher_id`). Mã đề thi `exam_code` là duy nhất. Cột `status` quản lý vòng đời đề (`draft` -> `published`). Khung giờ mở đề kiểm soát qua `start_time` và `end_time`. |
+| 3 | `questions` | Ngân hàng câu hỏi trắc nghiệm của đề thi (`exam_id`). Gồm 4 phương án lựa chọn (`option_a` đến `option_d`), đáp án đúng `correct_option` và trọng số điểm `points`. Ràng buộc `ON DELETE CASCADE` dọn dẹp câu hỏi khi đề thi bị xóa. |
+| 4 | `exam_attempts` | Đại diện cho một lượt làm bài của sinh viên cho một đề thi. Cột `status` chuyển từ `in_progress` sang `completed` khi nộp bài hoặc bị thu bài. Cột `violation_count` đếm số lần sinh viên rời màn hình. ID của bản ghi được dùng làm seed xáo trộn thứ tự câu hỏi. |
+| 5 | `attempt_answers` | Lưu phương án sinh viên đã chọn cho từng câu hỏi (`chosen_option`). Cột `is_correct` và `points_awarded` được cập nhật khi hệ thống chấm điểm. |
+| 6 | `appeals` | Lưu trữ đơn phúc khảo kết quả thi. Quản lý trạng thái theo máy trạng thái: `PENDING` -> `REPLIED` / `REJECTED` / `RESOLVED`. |
+| 7 | `audit_logs` | Lưu nhật ký kiểm toán đối với các thao tác can thiệp của giảng viên (sửa điểm `UPDATE_SCORE`, xóa lượt thi cho thi lại `RESET_ATTEMPT`). |
+| 8 | `notifications` | Lưu các thông báo nội bộ gửi đến người dùng: có đơn phúc khảo mới, phản hồi phúc khảo, điều chỉnh điểm thi, cấp quyền làm lại bài. |
 
-#### Hai Chỉ mục Tổng hợp Duy nhất (Unique Composite Indexes)
+#### Hai chỉ mục tổng hợp duy nhất (Unique Composite Indexes)
 1. **`idx_exam_attempts_exam_user` trên `exam_attempts(exam_id, user_id)`**:
-   - **Mục đích**: Bảo đảm nguyên tắc khảo thí tối cao: Mỗi sinh viên chỉ được phép có duy nhất một lượt làm bài cho một đề thi. Ngăn chặn triệt để hành vi cố tình mở nhiều tab để tạo nhiều bài thi cùng lúc.
-   - **Cơ chế Reset Attempt**: Khi giảng viên cho phép thí sinh thi lại (`DELETE /api/teacher/attempts/:id`), bản ghi lượt thi cũ bị xóa vĩnh viễn trong Transaction, qua đó giải phóng chỉ mục này và cho phép sinh viên bắt đầu một lượt làm bài mới hợp lệ.
+   - **Mục đích**: Bảo đảm mỗi sinh viên chỉ có một lượt làm bài cho một đề thi cụ thể, ngăn việc mở nhiều tab tạo nhiều bài thi cùng lúc.
+   - **Cơ chế cho thi lại**: Khi giảng viên cho phép sinh viên thi lại (`DELETE /api/teacher/attempts/:id`), bản ghi lượt thi cũ bị xóa trong transaction, giải phóng chỉ mục này để sinh viên có thể bắt đầu lượt làm bài mới.
 2. **`idx_attempt_answers_attempt_question` trên `attempt_answers(attempt_id, question_id)`**:
-   - **Mục đích**: Bảo đảm trong một bài thi, mỗi câu hỏi chỉ có duy nhất một câu trả lời.
-   - **Tối ưu hóa Atomic UPSERT**: Cho phép thực thi câu lệnh lưu đáp án tức thời:
+   - **Mục đích**: Bảo đảm mỗi câu hỏi trong một bài thi chỉ có duy nhất một câu trả lời được ghi nhận.
+   - **Tối ưu hóa câu lệnh lưu đáp án**: Thực thi lệnh UPSERT nguyên tử:
      ```sql
      INSERT INTO attempt_answers (attempt_id, question_id, chosen_option, is_correct, points_awarded, updated_at)
      VALUES (?, ?, ?, false, 0, ?)
      ON CONFLICT (attempt_id, question_id)
      DO UPDATE SET chosen_option = EXCLUDED.chosen_option, updated_at = EXCLUDED.updated_at;
      ```
-     Loại bỏ hoàn toàn việc phải chạy tuần tự hai câu lệnh `SELECT` kiểm tra và `UPDATE`, giảm tải 50% thao tác I/O xuống cơ sở dữ liệu.
+     Lệnh này tránh phải chạy tuần tự hai truy vấn `SELECT` rồi mới `UPDATE`, giảm số lần tương tác với database khi nhiều thí sinh lưu bài cùng lúc.
 
 ---
 
-## 2. SƠ ĐỒ USE CASE TỔNG QUÁT & PHÂN QUYỀN TÁC NHÂN (ACTORS)
+## 2. SƠ ĐỒ USE CASE VÀ PHÂN QUYỀN TÁC NHÂN
 
-### 2.1. Ma trận Phân quyền Tác nhân (Actors Permission Matrix)
+### 2.1. Phân quyền tác nhân (Actors)
 
-Hệ thống định nghĩa 4 tác nhân chính tham gia tương tác:
-1. **Khách vãng lai (Guest / Unauthenticated User)**: Người dùng chưa đăng nhập, chỉ có quyền đăng ký tài khoản sinh viên mới, đăng nhập hệ thống và kiểm tra trạng thái dịch vụ (`/health`).
-2. **Sinh viên (Student Actor)**: Người học có tài khoản hợp lệ, có quyền tra cứu đề thi đang mở, vào thi (với đề đã xáo trộn), tự động lưu bài, nộp bài, xem điểm số bài làm, xem lịch sử thi, nộp đơn khiếu nại và nhận thông báo cá nhân.
-3. **Giảng viên / Quản trị viên (Teacher / Admin Actor)**: Người phụ trách môn thi, có toàn quyền quản lý đề thi (soạn thảo, nhập câu hỏi hàng loạt, xuất bản, chỉnh sửa, xóa cascade), quản lý tài khoản sinh viên (CRUD, reset mật khẩu), xem bảng điểm, xuất bảng điểm CSV có UTF-8 BOM, hiệu chỉnh điểm thi, cho phép sinh viên thi lại, phản hồi/giải quyết đơn khiếu nại và tra cứu nhật ký kiểm toán (Audit Logs).
-4. **Hệ thống Tự động (Backend System / Cron)**: Tự động tính toán hạn chót nộp bài (Dual-Clock), tự động thu bài và chấm điểm khi hết giờ hoặc khi sinh viên vi phạm quy chế chuyển Tab 3 lần, tự động kích hoạt thông báo ngầm phi phong tỏa.
+Hệ thống có 4 tác nhân chính:
+1. **Khách vãng lai (Guest)**: Người dùng chưa đăng nhập, chỉ có thể đăng ký tài khoản sinh viên, đăng nhập và kiểm tra trạng thái dịch vụ (`/health`).
+2. **Sinh viên (Student)**: Tra cứu đề thi đang mở, vào làm bài (với đề đã xáo trộn câu hỏi), tự động lưu bài, nộp bài, xem kết quả, xem lịch sử thi, gửi đơn phúc khảo và nhận thông báo.
+3. **Giảng viên (Teacher)**: Soạn thảo đề thi, nhập câu hỏi hàng loạt, xuất bản đề, sửa/xóa đề, quản lý danh sách sinh viên, xem bảng điểm, xuất CSV có UTF-8 BOM, sửa điểm bài thi, cho sinh viên thi lại, phản hồi/xử lý đơn phúc khảo và tra cứu audit log.
+4. **Hệ thống (System)**: Tự động tính thời gian làm bài còn lại, thu bài và chấm điểm khi hết giờ hoặc khi thí sinh vi phạm chuyển tab 3 lần, kích hoạt thông báo ngầm.
 
-### 2.2. Sơ đồ Phân rã Chức năng Use Case Tổng quát (Mermaid Diagram)
+### 2.2. Sơ đồ Use Case tổng quát
 
 ```mermaid
 flowchart LR
     subgraph Tác_nhân["TÁC NHÂN HỆ THỐNG"]
         Guest["Khách vãng lai<br/>(Guest)"]
         Student["Sinh viên<br/>(Student)"]
-        Teacher["Giảng viên / Admin<br/>(Teacher)"]
+        Teacher["Giảng viên<br/>(Teacher)"]
         System["Hệ thống Backend<br/>(System)"]
     end
 
@@ -253,25 +253,25 @@ flowchart LR
     end
 
     subgraph Nhom_Teacher["QUẢN TRỊ KHẢO THÍ (TEACHER)"]
-        UC02["Quản lý Đề thi & Ngân hàng câu hỏi (CRUD, Bulk Import)"]
-        UC03["Quản lý Tài khoản Sinh viên (CRUD, Đổi mật khẩu)"]
-        UC05_T["Quản lý Điểm số, Cho thi lại & Xuất CSV chuẩn Excel"]
-        UC06_T["Tiếp nhận & Xử lý Khiếu nại (Reply, Reject, Resolve)"]
-        UC08["Tra cứu Nhật ký Kiểm toán (Audit Logs)"]
+        UC02["Quản lý đề thi & câu hỏi (CRUD, Bulk Import)"]
+        UC03["Quản lý sinh viên (CRUD, đổi mật khẩu)"]
+        UC05_T["Quản lý điểm số, cho thi lại & xuất CSV"]
+        UC06_T["Tiếp nhận & xử lý phúc khảo"]
+        UC08["Tra cứu nhật ký kiểm toán (Audit Logs)"]
     end
 
     subgraph Nhom_Student["PHÒNG THI & KHẢO THÍ (STUDENT)"]
-        UC04_1["Tra cứu đề thi đang mở & Xem trạng thái"]
-        UC04_2["Bắt đầu làm bài & Nhận đề thi xáo trộn tất định"]
-        UC04_3["Làm bài trên Question Palette & Auto-save"]
-        UC04_4["Nộp bài thi & Nhận kết quả chấm điểm"]
-        UC06_S["Xem Lịch sử thi & Nộp đơn Khiếu nại phúc khảo"]
+        UC04_1["Tra cứu đề thi đang mở & xem trạng thái"]
+        UC04_2["Bắt đầu làm bài & nhận đề xáo trộn theo seed"]
+        UC04_3["Làm bài trên Question Palette & auto-save"]
+        UC04_4["Nộp bài thi & xem kết quả chấm điểm"]
+        UC06_S["Xem lịch sử thi & nộp đơn phúc khảo"]
     end
 
     subgraph Nhom_System["GIÁM SÁT & TỰ ĐỘNG HÓA"]
-        UC04_Sys["Giám sát Chuyển Tab (Đình chỉ khi vi phạm >= 3)"]
-        UC05_Sys["Tự động chấm điểm khi hết giờ (Dual-Clock)"]
-        UC07["Phát hành Thông báo Tự động đa chiều"]
+        UC04_Sys["Giám sát chuyển tab (thu bài khi vi phạm >= 3)"]
+        UC05_Sys["Tự động chấm điểm khi hết giờ"]
+        UC07["Gửi thông báo tự động"]
     end
 
     Guest --> UC01_1
@@ -298,213 +298,211 @@ flowchart LR
 
 ---
 
-## 3. BẢNG ĐẶC TẢ CHI TIẾT TỪNG USE CASE (DETAILED USE CASE SPECIFICATIONS)
+## 3. BẢNG ĐẶC TẢ CHI TIẾT TỪNG USE CASE
 
-Dưới đây là 8 bảng đặc tả chuẩn mực kỹ thuật phần mềm bao phủ 100% chức năng cốt lõi của hệ thống:
-
-### UC01: Đăng ký, Đăng nhập & Kiểm soát Phiên truy cập
+### UC01: Đăng ký, đăng nhập và kiểm soát phiên làm việc
 
 | Thuộc tính | Đặc tả chi tiết |
 | :--- | :--- |
 | **Mã Use Case** | **UC01** |
-| **Tên Use Case** | Đăng ký, Đăng nhập & Kiểm soát Phiên truy cập |
+| **Tên Use Case** | Đăng ký, đăng nhập và kiểm soát phiên làm việc |
 | **Tác nhân** | Khách vãng lai, Sinh viên, Giảng viên |
-| **Mô tả ngắn** | Cung cấp cổng xác thực người dùng an toàn, cấp phát JSON Web Token (JWT) và bảo vệ hệ thống trước các cuộc tấn công Brute-force thông qua Rate Limiting. |
-| **Tiền điều kiện** | Hệ thống Backend hoạt động bình thường; người dùng có kết nối mạng tới cổng API 8081. |
-| **Hậu điều kiện** | Người dùng nhận được Access Token hợp lệ; thông tin tài khoản và vai trò được lưu vào Context phía Frontend. |
-| **Luồng sự kiện chính (Basic Flow)** | 1. Người dùng truy cập trang Đăng ký hoặc Đăng nhập trên giao diện React.<br/>2. Người dùng nhập thông tin: Họ tên, Email, Mật khẩu (đối với Đăng ký) hoặc Email, Mật khẩu (đối với Đăng nhập).<br/>3. Client gửi request `POST /api/auth/login` (kèm IP client).<br/>4. Middleware `IPRateLimit` kiểm tra tần suất gọi API từ IP hiện tại (ngưỡng tối đa 15 req/phút).<br/>5. Backend kiểm tra tính tồn tại của email trong bảng `users`.<br/>6. Backend thực hiện so khớp mật khẩu bằng hàm `bcrypt.CompareHashAndPassword`.<br/>7. Backend khởi tạo JWT Token chứa payload `{user_id, role, email, exp}` có chữ ký HMAC-SHA256.<br/>8. Backend trả về HTTP 200 kèm Token và thông tin User Profile.<br/>9. Frontend lưu Token vào `localStorage`, gắn mặc định vào Axios Authorization Header và chuyển hướng người dùng theo vai trò (`/student` hoặc `/teacher`). |
-| **Luồng rẽ nhánh / Ngoại lệ (Alternative & Exception Flows)** | - **A1. Tần suất vượt ngưỡng (Rate Limited)**: Nếu cùng 1 IP gửi quá 15 request trong vòng 1 phút, middleware trả về HTTP 429 Too Many Requests kèm thông báo "Quá nhiều yêu cầu đăng nhập. Vui lòng thử lại sau 1 phút".<br/>- **A2. Email trùng lặp khi đăng ký**: Nếu email đã tồn tại trong cơ sở dữ liệu, trả về HTTP 409 Conflict.<br/>- **A3. Sai mật khẩu hoặc email không tồn tại**: Trả về HTTP 401 Unauthorized kèm thông báo chung "Email hoặc mật khẩu không chính xác" (tránh lộ thông tin tài khoản tồn tại).<br/>- **A4. Token hết hạn hoặc không hợp lệ**: Middleware `AuthRequired` chặn request với mã HTTP 401, Frontend tự động xóa phiên đăng nhập và điều hướng về trang Login. |
+| **Mô tả ngắn** | Xác thực người dùng, cấp JSON Web Token (JWT) và giới hạn tần suất request bằng Rate Limiting. |
+| **Tiền điều kiện** | Backend đang hoạt động tại cổng 8081. |
+| **Hậu điều kiện** | Người dùng nhận access token; thông tin và vai trò được lưu vào React Context. |
+| **Luồng sự kiện chính** | 1. Người dùng vào trang đăng ký hoặc đăng nhập.<br/>2. Điền thông tin: Họ tên, email, mật khẩu (đăng ký) hoặc email, mật khẩu (đăng nhập).<br/>3. Gửi request `POST /api/auth/login`.<br/>4. Middleware `IPRateLimit` kiểm tra tần suất gọi API từ IP hiện tại (tối đa 15 request/phút).<br/>5. Backend kiểm tra email trong bảng `users`.<br/>6. Backend kiểm tra mật khẩu bằng `bcrypt.CompareHashAndPassword`.<br/>7. Backend tạo token JWT chứa payload `{user_id, role, email, exp}` ký bằng HMAC-SHA256.<br/>8. Trả về mã HTTP 200 kèm token và thông tin người dùng.<br/>9. Frontend lưu token vào `localStorage`, gắn vào header Authorization của Axios và chuyển hướng tới `/student` hoặc `/teacher`. |
+| **Luồng ngoại lệ** | - **A1. Tần suất vượt ngưỡng**: Quá 15 request/phút từ cùng một IP, trả về HTTP 429 Too Many Requests.<br/>- **A2. Trùng email khi đăng ký**: Trả về HTTP 409 Conflict.<br/>- **A3. Sai thông tin đăng nhập**: Trả về HTTP 401 Unauthorized kèm thông báo chung "Email hoặc mật khẩu không chính xác".<br/>- **A4. Token hết hạn hoặc không hợp lệ**: Middleware `AuthRequired` trả về HTTP 401, Frontend tự xóa token và chuyển về trang đăng nhập. |
 
 ---
 
-### UC02: Quản lý Đề thi & Ngân hàng Câu hỏi
+### UC02: Quản lý đề thi và ngân hàng câu hỏi
 
 | Thuộc tính | Đặc tả chi tiết |
 | :--- | :--- |
 | **Mã Use Case** | **UC02** |
-| **Tên Use Case** | Quản lý Đề thi & Ngân hàng Câu hỏi (Full CRUD & Bulk Import) |
-| **Tác nhân** | Giảng viên / Quản trị viên |
-| **Mô tả ngắn** | Cho phép Giảng viên tạo mới, chỉnh sửa, xuất bản, xóa tầng đề thi, quản lý từng câu hỏi lẻ hoặc nhập hàng loạt hàng chục câu hỏi từ văn bản phi cấu trúc / JSON. |
-| **Tiền điều kiện** | Giảng viên đã đăng nhập thành công với vai trò `teacher`. |
-| **Hậu điều kiện** | Đề thi và các câu hỏi được lưu trữ hoặc cập nhật nhất quán trong cơ sở dữ liệu; mã đề `exam_code` được sinh ngẫu nhiên duy nhất. |
-| **Luồng sự kiện chính (Basic Flow)** | 1. Giảng viên truy cập mục "Quản lý đề thi" và chọn "Tạo đề thi mới".<br/>2. Giảng viên điền tiêu đề, mô tả, thời lượng (phút), thời gian mở đề và đóng đề.<br/>3. Backend tạo bản ghi `exams` ở trạng thái `draft` và sinh mã `exam_code` 6 ký tự viết hoa.<br/>4. Giảng viên thêm câu hỏi theo 2 phương thức:<br/>&nbsp;&nbsp;&nbsp;&nbsp;a) **Thêm câu hỏi lẻ**: Nhập nội dung câu hỏi, 4 phương án A/B/C/D, chọn đáp án đúng và điểm số.<br/>&nbsp;&nbsp;&nbsp;&nbsp;b) **Nhập nhanh hàng loạt (Bulk Import)**: Dán văn bản có định dạng chuẩn (phân cách bằng `---`) hoặc mảng JSON. Bộ parser bóc tách tự động và gửi request `POST /api/teacher/exams/:id/questions/bulk`.<br/>5. Giảng viên chỉnh sửa câu hỏi (`PUT /api/teacher/questions/:id`) hoặc xóa câu hỏi (`DELETE /api/teacher/questions/:question_id`).<br/>6. Giảng viên bấm "Xuất bản đề thi" (`PATCH /api/teacher/exams/:id/publish`). Backend kiểm tra đề có ít nhất 1 câu hỏi, chuyển `status = 'published'` và gán `published_at = NOW()`.<br/>7. Giảng viên có thể chỉnh sửa thông tin đề thi (`PUT /api/teacher/exams/:id`) hoặc xóa đề thi (`DELETE /api/teacher/exams/:id`). Toàn bộ câu hỏi, bài làm, câu trả lời và khiếu nại phụ thuộc bị dọn sạch trong 1 Transaction duy nhất (Cascade). |
-| **Luồng rẽ nhánh / Ngoại lệ (Alternative & Exception Flows)** | - **A1. Xuất bản đề thi trống**: Nếu đề thi chưa có bất kỳ câu hỏi nào, Backend trả về HTTP 400 Bad Request ("Cannot publish an exam with no questions").<br/>- **A2. Chỉnh sửa câu hỏi khi đề đã xuất bản**: Backend từ chối với HTTP 400 để bảo đảm tính toàn vẹn dữ liệu cho thí sinh đang làm bài.<br/>- **A3. Vi phạm quyền sở hữu (IDOR)**: Nếu giảng viên cố tình thao tác trên đề thi hoặc câu hỏi do giảng viên khác tạo, Backend trả về HTTP 403 Forbidden hoặc HTTP 404 Not Found.<br/>- **A4. Lỗi định dạng khi Bulk Import**: Parser Frontend báo lỗi trực quan dòng vi phạm nếu thiếu phương án hoặc thiếu đáp án chuẩn. |
+| **Tên Use Case** | Quản lý đề thi và ngân hàng câu hỏi (CRUD và Bulk Import) |
+| **Tác nhân** | Giảng viên |
+| **Mô tả ngắn** | Cho phép Giảng viên tạo, sửa, xuất bản và xóa đề thi; thêm câu hỏi lẻ hoặc nhập nhanh câu hỏi hàng loạt từ văn bản/JSON. |
+| **Tiền điều kiện** | Giảng viên đã đăng nhập với vai trò `teacher`. |
+| **Hậu điều kiện** | Đề thi và câu hỏi được cập nhật vào database; mã đề `exam_code` được tạo tự động. |
+| **Luồng sự kiện chính** | 1. Giảng viên vào mục "Đề thi" và chọn "Tạo đề thi mới".<br/>2. Điền tiêu đề, mô tả, thời lượng (phút), thời gian mở và đóng đề.<br/>3. Backend tạo bản ghi `exams` ở trạng thái `draft` và sinh mã `exam_code` 6 ký tự viết hoa ngẫu nhiên.<br/>4. Giảng viên thêm câu hỏi theo 2 cách:<br/>&nbsp;&nbsp;&nbsp;&nbsp;a) **Thêm câu hỏi lẻ**: Nhập nội dung, 4 đáp án A/B/C/D, chọn đáp án đúng và điểm số.<br/>&nbsp;&nbsp;&nbsp;&nbsp;b) **Nhập hàng loạt (Bulk Import)**: Dán văn bản có phân cách `---` hoặc mảng JSON. Frontend parse dữ liệu và gửi `POST /api/teacher/exams/:id/questions/bulk`.<br/>5. Giảng viên sửa câu hỏi (`PUT /api/teacher/questions/:id`) hoặc xóa câu hỏi (`DELETE /api/teacher/questions/:question_id`).<br/>6. Giảng viên bấm "Xuất bản đề" (`PATCH /api/teacher/exams/:id/publish`). Backend kiểm tra đề có ít nhất 1 câu hỏi, đổi `status = 'published'` và gán `published_at = NOW()`.<br/>7. Giảng viên có thể sửa thông tin đề (`PUT /api/teacher/exams/:id`) hoặc xóa đề (`DELETE /api/teacher/exams/:id`). Khi xóa đề, transaction sẽ xóa kèm toàn bộ câu hỏi, lượt thi, câu trả lời và đơn phúc khảo liên quan. |
+| **Luồng ngoại lệ** | - **A1. Xuất bản đề chưa có câu hỏi**: Backend trả về HTTP 400 Bad Request.<br/>- **A2. Sửa câu hỏi khi đề đã xuất bản**: Backend từ chối với HTTP 400 để bảo đảm dữ liệu của thí sinh đang làm bài không bị thay đổi.<br/>- **A3. Thao tác trên đề của giảng viên khác**: Backend trả về HTTP 403 Forbidden hoặc HTTP 404 Not Found.<br/>- **A4. Lỗi định dạng khi Bulk Import**: Frontend hiển thị vị trí dòng lỗi nếu thiếu phương án hoặc thiếu đáp án đúng. |
 
 ---
 
-### UC03: Quản trị Tài khoản Sinh viên
+### UC03: Quản lý tài khoản sinh viên
 
 | Thuộc tính | Đặc tả chi tiết |
 | :--- | :--- |
 | **Mã Use Case** | **UC03** |
-| **Tên Use Case** | Quản trị Tài khoản Sinh viên (Full CRUD Student Management) |
-| **Tác nhân** | Giảng viên / Quản trị viên |
-| **Mô tả ngắn** | Cung cấp giao diện bảng quản trị học viên toàn trường: tìm kiếm, thống kê số lượng bài thi đã tham gia, tạo mới tài khoản sinh viên, chỉnh sửa thông tin và đặt lại mật khẩu. |
+| **Tên Use Case** | Quản lý tài khoản sinh viên (CRUD) |
+| **Tác nhân** | Giảng viên |
+| **Mô tả ngắn** | Xem danh sách sinh viên, tìm kiếm theo tên hoặc email, xem số lượt thi, tạo tài khoản mới, cập nhật thông tin, đặt lại mật khẩu và xóa tài khoản. |
 | **Tiền điều kiện** | Giảng viên đã đăng nhập với vai trò `teacher`. |
-| **Hậu điều kiện** | Tài khoản sinh viên được thêm mới, cập nhật hoặc xóa bỏ hoàn toàn khỏi hệ thống mà không để lại dữ liệu rác. |
-| **Luồng sự kiện chính (Basic Flow)** | 1. Giảng viên truy cập mục "Quản lý sinh viên" (`TeacherStudentsPage.jsx`).<br/>2. Giao diện gửi request `GET /api/teacher/students` kèm từ khóa tìm kiếm tùy chọn `?q=...`.<br/>3. Backend truy vấn danh sách `users` có `role = 'student'`, kết hợp tính toán số lượt thi (`total_attempts`) và số lượt hoàn thành (`completed_attempts`).<br/>4. **Tạo tài khoản mới**: Giảng viên bấm "Thêm sinh viên", nhập họ tên, email, mật khẩu khởi tạo. Backend băm mật khẩu Bcrypt và lưu vào bảng `users`.<br/>5. **Chỉnh sửa thông tin**: Giảng viên cập nhật họ tên, email hoặc nhập mật khẩu mới nếu sinh viên yêu cầu cấp lại mật khẩu (`PUT /api/teacher/students/:id`).<br/>6. **Xóa sinh viên**: Giảng viên bấm "Xóa" và xác nhận trên Modal an toàn. Backend mở Database Transaction xóa toàn bộ khiếu nại, câu trả lời, lượt thi của sinh viên trước khi xóa bản ghi tài khoản (`DELETE /api/teacher/students/:id`). |
-| **Luồng rẽ nhánh / Ngoại lệ (Alternative & Exception Flows)** | - **A1. Trùng lặp email sinh viên**: Khi tạo mới hoặc cập nhật email trùng với tài khoản khác, Backend trả về HTTP 409 Conflict.<br/>- **A2. Xóa tài khoản đang có dữ liệu thi**: Hệ thống thực hiện xóa tầng an toàn trong DB Transaction, bảo đảm không bị lỗi ràng buộc khóa ngoại (Foreign Key Constraint Violation). |
+| **Hậu điều kiện** | Dữ liệu tài khoản sinh viên được cập nhật trong database. |
+| **Luồng sự kiện chính** | 1. Giảng viên vào mục "Sinh viên" (`TeacherStudentsPage.jsx`).<br/>2. Gửi request `GET /api/teacher/students` kèm từ khóa tìm kiếm tùy chọn `?q=...`.<br/>3. Backend truy vấn danh sách `users` có `role = 'student'`, tính toán tổng số lượt thi và số bài đã nộp.<br/>4. **Thêm sinh viên**: Nhập họ tên, email, mật khẩu. Backend băm mật khẩu bằng Bcrypt và lưu vào bảng `users`.<br/>5. **Sửa thông tin**: Cập nhật họ tên, email hoặc nhập mật khẩu mới nếu cần đặt lại mật khẩu (`PUT /api/teacher/students/:id`).<br/>6. **Xóa sinh viên**: Xác nhận trên modal xóa. Backend mở database transaction xóa các đơn phúc khảo, câu trả lời, lượt thi của sinh viên trước khi xóa tài khoản (`DELETE /api/teacher/students/:id`). |
+| **Luồng ngoại lệ** | - **A1. Trùng email**: Backend trả về HTTP 409 Conflict.<br/>- **A2. Xóa sinh viên đã có bài thi**: Transaction xóa sạch dữ liệu liên quan mà không vi phạm ràng buộc khóa ngoại. |
 
 ---
 
-### UC04: Tổ chức Thi, Trộn đề động & Giám sát Chống gian lận
+### UC04: Vào phòng thi, trộn đề theo seed và giám sát chuyển tab
 
 | Thuộc tính | Đặc tả chi tiết |
 | :--- | :--- |
 | **Mã Use Case** | **UC04** |
-| **Tên Use Case** | Tổ chức Thi, Trộn đề động & Giám sát Chống gian lận |
-| **Tác nhân** | Sinh viên, Hệ thống Tự động |
-| **Mô tả ngắn** | Sinh viên vào phòng thi, nhận bộ câu hỏi đã xáo trộn ngẫu nhiên theo seed `attempt.ID`, tương tác với Bảng điều khiển câu hỏi (Question Palette), hệ thống tự động lưu bài (Auto-save) và giám sát vi phạm rời màn hình (Tab-switch). |
-| **Tiền điều kiện** | Sinh viên đã đăng nhập; đề thi đã xuất bản và đang trong khung giờ mở thi (`StartTime <= Now <= EndTime`). |
-| **Hậu điều kiện** | Lượt thi được tạo hoặc tiếp tục; câu trả lời được lưu vết; nếu vi phạm chuyển tab 3 lần bài thi tự động bị thu. |
-| **Luồng sự kiện chính (Basic Flow)** | 1. Sinh viên xem danh sách đề thi mở trên Cổng sinh viên (`GET /api/student/exams/available`) và bấm "Vào thi ngay".<br/>2. Sinh viên xác nhận cam kết quy chế thi và gửi request `POST /api/student/exams/:id/start` (`{confirmed: true}`).<br/>3. Backend tạo bản ghi `exam_attempts` mới (nếu chưa có) và tính toán thời gian còn lại `remaining_seconds` theo cơ chế Server-Authoritative.<br/>4. Backend chuyển đổi toàn bộ câu hỏi sang DTO `QuestionSafe` (ẩn hoàn toàn `correct_option`).<br/>5. **Xáo trộn tất định**: Backend dùng `attempt.ID` làm seed ngẫu nhiên để xáo trộn mảng câu hỏi. Thứ tự câu hỏi của mỗi sinh viên là duy nhất và không bị thay đổi khi tải lại trang (F5).<br/>6. Frontend hiển thị phòng thi 2 cột: Cột trái hiển thị câu hỏi hiện tại; Cột phải hiển thị Bảng điều khiển câu hỏi (Question Palette 1..N).<br/>7. Sinh viên nhấp chọn đáp án: Palette đổi sang màu Xanh lá; bấm "Đặt cờ xem lại": Palette đổi sang màu Vàng.<br/>8. Frontend kích hoạt tự động lưu đáp án (`POST /api/student/attempts/:id/save`) sau mỗi lần chọn và định kỳ 60s thông qua Atomic UPSERT.<br/>9. **Giám sát vi phạm**: Khi sinh viên chuyển tab hoặc rời cửa sổ, Frontend phát hiện qua `visibilitychange` và `window.onblur`, gửi `POST /api/student/attempts/:id/violation`. Backend tăng `violation_count`. Nếu `violation_count >= 3`, hệ thống tự động thu bài và chấm điểm ngay lập tức. |
-| **Luồng rẽ nhánh / Ngoại lệ (Alternative & Exception Flows)** | - **A1. Đề thi chưa đến giờ hoặc đã đóng**: Backend từ chối với HTTP 403 Forbidden.<br/>- **A2. Sinh viên đã nộp bài trước đó**: Backend từ chối tạo mới lượt thi với HTTP 400 Bad Request.<br/>- **A3. Khôi phục bài thi dở dang (Resume Exam)**: Nếu sinh viên bị ngắt kết nối mạng hoặc đóng trình duyệt, khi vào lại hệ thống tải lại toàn bộ đáp án đã lưu trước đó và giữ nguyên thứ tự câu hỏi đã xáo trộn.<br/>- **A4. Hết thời gian làm bài**: Đồng hồ đếm ngược về 00:00, hệ thống tự động khóa giao diện và gọi API nộp bài cưỡng chế. |
+| **Tên Use Case** | Vào phòng thi, trộn đề theo seed và giám sát chuyển tab |
+| **Tác nhân** | Sinh viên, Hệ thống |
+| **Mô tả ngắn** | Sinh viên vào thi, nhận câu hỏi được xáo trộn theo seed `attempt.ID`, thao tác trên Question Palette, hệ thống tự động lưu bài và phát hiện việc chuyển tab. |
+| **Tiền điều kiện** | Sinh viên đã đăng nhập; đề thi đã xuất bản và đang trong khung giờ mở (`StartTime <= Now <= EndTime`). |
+| **Hậu điều kiện** | Lượt thi được tạo hoặc tiếp tục; câu trả lời được lưu lại; nếu vi phạm chuyển tab 3 lần bài thi tự động thu bài. |
+| **Luồng sự kiện chính** | 1. Sinh viên xem danh sách đề thi mở (`GET /api/student/exams/available`) và chọn đề thi.<br/>2. Xác nhận vào thi, gửi request `POST /api/student/exams/:id/start` (`{confirmed: true}`).<br/>3. Backend tạo bản ghi `exam_attempts` mới (nếu chưa có) và tính thời gian còn lại `remaining_seconds` dựa trên server.<br/>4. Backend chuyển danh sách câu hỏi sang DTO `QuestionSafe` (đã bỏ trường `correct_option`).<br/>5. **Xáo trộn câu hỏi**: Dùng `attempt.ID` làm seed ngẫu nhiên để xáo trộn mảng câu hỏi. Thứ tự câu hỏi của mỗi sinh viên là cố định khi tải lại trang.<br/>6. Frontend hiển thị phòng thi 2 cột: Cột trái hiển thị câu hỏi hiện tại, cột phải hiển thị bảng số câu hỏi (Question Palette 1..N).<br/>7. Sinh viên chọn đáp án: Palette đổi sang màu xanh lá; bấm "Đặt cờ": Palette đổi sang màu vàng.<br/>8. Frontend gửi request auto-save (`POST /api/student/attempts/:id/save`) khi chọn đáp án và định kỳ 60 giây.<br/>9. **Phát hiện chuyển tab**: Khi sinh viên rời màn hình thi, frontend bắt sự kiện `visibilitychange` và `window.onblur`, gửi `POST /api/student/attempts/:id/violation`. Backend tăng `violation_count`. Nếu đạt 3 lần, hệ thống tự động thu bài và chấm điểm. |
+| **Luồng ngoại lệ** | - **A1. Đề thi chưa mở hoặc đã đóng**: Trả về HTTP 403 Forbidden.<br/>- **A2. Sinh viên đã nộp bài trước đó**: Trả về HTTP 400 Bad Request.<br/>- **A3. Vào lại bài thi dở dang (Resume)**: Hệ thống tải lại các đáp án đã lưu trước đó và giữ nguyên thứ tự câu hỏi đã xáo trộn.<br/>- **A4. Hết giờ làm bài**: Khi đồng hồ đếm về 0, hệ thống tự động gọi API nộp bài. |
 
 ---
 
-### UC05: Chấm điểm Tự động & Quản lý Điểm số / Lượt thi
+### UC05: Chấm điểm tự động và quản lý điểm số / lượt làm bài
 
 | Thuộc tính | Đặc tả chi tiết |
 | :--- | :--- |
 | **Mã Use Case** | **UC05** |
-| **Tên Use Case** | Chấm điểm Tự động (ACID Transaction) & Quản lý Điểm số / Lượt thi |
-| **Tác nhân** | Sinh viên, Giảng viên, Hệ thống Tự động |
-| **Mô tả ngắn** | Hệ thống tự động chấm điểm bài thi bảo đảm tính toán vẹn ACID; Giảng viên xem thống kê phổ điểm, hiệu chỉnh điểm thi, cho phép sinh viên thi lại và xuất bảng điểm CSV chuẩn Microsoft Excel. |
-| **Tiền điều kiện** | Bài thi đã được nộp hoặc bị hệ thống thu bài. |
-| **Hậu điều kiện** | Điểm số được tính toán chính xác; các can thiệp của Giảng viên được ghi nhận vào nhật ký kiểm toán `audit_logs` và sinh thông báo gửi tới sinh viên. |
-| **Luồng sự kiện chính (Basic Flow)** | 1. Khi sinh viên bấm "Nộp bài" hoặc hết giờ: Request `POST /api/student/attempts/:id/submit` được gửi lên.<br/>2. Backend mở Database Transaction, khóa dòng bi quan `SELECT ... FOR UPDATE` trên bản ghi `exam_attempts`.<br/>3. Backend đối soát toàn bộ câu trả lời trong `attempt_answers` với đáp án chuẩn trong `questions`, cộng điểm các câu đúng và tính tổng điểm theo thang 10.<br/>4. Cập nhật `score`, `correct_count`, `wrong_count`, `status = 'completed'`, `submitted_at = NOW()` và Commit Transaction.<br/>5. **Giảng viên xem kết quả**: Giảng viên truy cập tab "Bảng điểm" xem danh sách điểm số, ĐTB, điểm Min, Max.<br/>6. **Hiệu chỉnh điểm thủ công**: Giảng viên chọn "Sửa điểm" (`PATCH /api/teacher/attempts/:id/score`), nhập điểm mới và ghi chú giải trình. Backend cập nhật điểm, tạo bản ghi `audit_logs` (`action = 'UPDATE_SCORE'`) và tạo thông báo gửi tới sinh viên.<br/>7. **Cho phép thi lại (Reset Attempt)**: Khi sinh viên gặp sự cố bất khả kháng, Giảng viên chọn "Cho thi lại" (`DELETE /api/teacher/attempts/:id`). Backend xóa toàn bộ lượt thi cũ trong Transaction, giải phóng Unique Index, ghi nhật ký `audit_logs` (`action = 'RESET_ATTEMPT'`) và thông báo cho sinh viên.<br/>8. **Xuất bảng điểm CSV**: Giảng viên bấm "Xuất bảng điểm (CSV)". Backend tự động chấm các bài thi quá hạn chưa nộp, gắn Byte Order Mark (UTF-8 BOM `\xef\xbb\xbf`) và trả về file CSV mở trực tiếp trên Excel không bị lỗi font tiếng Việt. |
-| **Luồng rẽ nhánh / Ngoại lệ (Alternative & Exception Flows)** | - **A1. Nộp bài trùng lặp (Double Submit)**: Do có khóa `FOR UPDATE`, request thứ hai đến sau sẽ thấy trạng thái đã là `completed` và bị từ chối với HTTP 400 Bad Request.<br/>- **A2. Trễ mạng khi nộp bài**: Backend áp dụng Grace Period 5 giây; nếu gửi trong vòng 5 giây sau deadline vẫn chấp nhận lưu bài; nếu quá 5 giây sẽ tự động kích hoạt hàm chấm bài dựa trên các đáp án đã lưu trước đó. |
+| **Tên Use Case** | Chấm điểm tự động và quản lý điểm số / lượt làm bài |
+| **Tác nhân** | Sinh viên, Giảng viên, Hệ thống |
+| **Mô tả ngắn** | Hệ thống chấm điểm tự động trong database transaction; Giảng viên xem kết quả, sửa điểm kèm lý do, cho sinh viên thi lại và xuất bảng điểm CSV. |
+| **Tiền điều kiện** | Bài thi đã nộp hoặc bị hệ thống thu bài. |
+| **Hậu điều kiện** | Điểm số được cập nhật; thao tác can thiệp của Giảng viên được ghi vào `audit_logs` và gửi thông báo đến sinh viên. |
+| **Luồng sự kiện chính** | 1. Sinh viên bấm "Nộp bài" hoặc hết giờ: Request `POST /api/student/attempts/:id/submit` được gửi lên.<br/>2. Backend mở transaction, dùng `SELECT ... FOR UPDATE` khóa bản ghi `exam_attempts`.<br/>3. Đối soát các câu trả lời trong `attempt_answers` với đáp án chuẩn trong `questions`, cộng điểm các câu đúng và tính tổng điểm.<br/>4. Cập nhật `score`, `correct_count`, `wrong_count`, đổi `status = 'completed'`, gán `submitted_at = NOW()` và commit transaction.<br/>5. **Giảng viên xem kết quả**: Vào tab "Bảng điểm" xem danh sách điểm số, điểm trung bình, điểm cao nhất, thấp nhất.<br/>6. **Sửa điểm thủ công**: Bấm "Sửa điểm" (`PATCH /api/teacher/attempts/:id/score`), nhập điểm mới và lý do giải trình. Backend cập nhật điểm, ghi log vào `audit_logs` (`action = 'UPDATE_SCORE'`) và tạo thông báo cho sinh viên.<br/>7. **Cho thi lại (Reset Attempt)**: Khi sinh viên gặp sự cố, giảng viên bấm "Cho thi lại" (`DELETE /api/teacher/attempts/:id`). Backend xóa lượt thi cũ trong transaction, giải phóng unique index, ghi log vào `audit_logs` (`action = 'RESET_ATTEMPT'`) và thông báo cho sinh viên.<br/>8. **Xuất bảng điểm CSV**: Bấm "Xuất CSV". Backend tự chấm các bài quá hạn chưa nộp, gắn mã UTF-8 BOM (`\xef\xbb\xbf`) vào đầu file CSV để Excel hiển thị đúng tiếng Việt. |
+| **Luồng ngoại lệ** | - **A1. Bấm nộp bài nhiều lần**: Nhờ khóa `FOR UPDATE`, request thứ hai thấy bài thi đã ở trạng thái `completed` và bị từ chối với HTTP 400 Bad Request.<br/>- **A2. Độ trễ mạng khi nộp bài**: Backend áp dụng thời gian ân hạn 5 giây; sau mốc deadline 5 giây sẽ từ chối lưu bài mới và tự chấm điểm dựa trên các đáp án đã lưu trước đó. |
 
 ---
 
-### UC06: Xem Lịch sử Bài làm & Quy trình Khiếu nại / Phúc khảo
+### UC06: Xem lịch sử bài thi và quy trình xử lý đơn phúc khảo
 
 | Thuộc tính | Đặc tả chi tiết |
 | :--- | :--- |
 | **Mã Use Case** | **UC06** |
-| **Tên Use Case** | Xem Lịch sử Bài làm & Quy trình Khiếu nại / Phúc khảo (Academic Appeals Workflow) |
+| **Tên Use Case** | Xem lịch sử bài thi và quy trình xử lý đơn phúc khảo |
 | **Tác nhân** | Sinh viên, Giảng viên |
-| **Mô tả ngắn** | Sinh viên tra cứu lịch sử các bài thi đã hoàn thành, xem chi tiết bài làm (đáp án đúng chỉ hiển thị sau khi đề thi đóng hoàn toàn), gửi đơn phúc khảo; Giảng viên phản hồi, chấp thuận hoặc từ chối đơn khiếu nại. |
-| **Tiền điều kiện** | Bài thi của sinh viên đã ở trạng thái `completed`. |
-| **Hậu điều kiện** | Đơn khiếu nại chuyển đổi trạng thái hợp lệ trên máy trạng thái; thông báo được phát hành hai chiều. |
-| **Luồng sự kiện chính (Basic Flow)** | 1. Sinh viên vào mục "Lịch sử thi" (`GET /api/student/history?page=1&page_size=10`).<br/>2. Sinh viên bấm xem chi tiết một bài thi (`GET /api/student/history/:submissionId`).<br/>3. **Bảo mật đáp án kép**: Nếu đề thi vẫn đang trong khung giờ mở (`Now < exam.EndTime`), trường `correct_option` của toàn bộ câu hỏi vẫn bị ẩn (`nil`). Chỉ khi đề thi đã kết thúc hoàn toàn (`Now >= exam.EndTime`), sinh viên mới được xem đáp án chuẩn.<br/>4. Sinh viên bấm "Khiếu nại kết quả thi", điền tiêu đề và nội dung giải trình (`POST /api/student/appeals`). Backend lưu bản ghi `appeals` với trạng thái `PENDING` và tạo thông báo gửi tới Giảng viên sở hữu đề thi.<br/>5. Giảng viên mở tab "Khiếu nại & Phúc khảo" (`GET /api/teacher/exams/:id/appeals`), lọc theo trạng thái (`PENDING`, `REPLIED`, `REJECTED`, `RESOLVED`).<br/>6. Giảng viên bấm xem chi tiết đơn khiếu nại và bài làm của sinh viên (`GET /api/teacher/appeals/:appealId`).<br/>7. Giảng viên xử lý đơn:<br/>&nbsp;&nbsp;&nbsp;&nbsp;a) **Phản hồi ý kiến**: Gửi giải trình (`PATCH /api/teacher/appeals/:appealId/reply`), trạng thái chuyển sang `REPLIED`.<br/>&nbsp;&nbsp;&nbsp;&nbsp;b) **Chấp thuận khiếu nại**: Bấm giải quyết (`PATCH /api/teacher/appeals/:appealId/resolve`), trạng thái chuyển sang `RESOLVED`.<br/>&nbsp;&nbsp;&nbsp;&nbsp;c) **Từ chối khiếu nại**: Bấm từ chối (`PATCH /api/teacher/appeals/:appealId/reject`), trạng thái chuyển sang `REJECTED`.<br/>8. Mọi thao tác xử lý của Giảng viên đều tự động kích hoạt thông báo gửi về tài khoản của Sinh viên. |
-| **Luồng rẽ nhánh / Ngoại lệ (Alternative & Exception Flows)** | - **A1. Khiếu nại trùng lặp**: Mỗi bài thi sinh viên chỉ được tạo tối đa 1 đơn khiếu nại. Nếu đã tồn tại đơn khiếu nại, Backend trả về HTTP 409 Conflict ("An appeal already exists for this submission").<br/>- **A2. Khiếu nại bài thi của người khác (IDOR)**: Backend kiểm tra `submission.UserID == currentUserID`, trả về HTTP 403 Forbidden nếu vi phạm. |
+| **Mô tả ngắn** | Sinh viên xem lại các bài thi đã làm, gửi đơn phúc khảo; Giảng viên xem chi tiết đơn, phản hồi, chấp thuận hoặc từ chối phúc khảo. |
+| **Tiền điều kiện** | Bài thi đã ở trạng thái `completed`. |
+| **Hậu điều kiện** | Đơn phúc khảo cập nhật trạng thái hợp lệ; thông báo được gửi hai chiều. |
+| **Luồng sự kiện chính** | 1. Sinh viên vào mục "Lịch sử thi" (`GET /api/student/history?page=1&page_size=10`).<br/>2. Xem chi tiết bài làm (`GET /api/student/history/:submissionId`).<br/>3. **Ẩn đáp án khi ca thi chưa kết thúc**: Nếu đề thi vẫn đang trong khung giờ mở (`Now < exam.EndTime`), trường `correct_option` của toàn bộ câu hỏi bị ẩn (`nil`). Chỉ khi ca thi kết thúc (`Now >= exam.EndTime`), sinh viên mới xem được đáp án đúng.<br/>4. Sinh viên bấm "Phúc khảo", nhập tiêu đề và nội dung (`POST /api/student/appeals`). Backend tạo bản ghi `appeals` ở trạng thái `PENDING` và gửi thông báo đến giảng viên.<br/>5. Giảng viên vào tab "Phúc khảo" (`GET /api/teacher/exams/:id/appeals`), lọc theo trạng thái (`PENDING`, `REPLIED`, `REJECTED`, `RESOLVED`).<br/>6. Giảng viên xem chi tiết đơn và bài làm của sinh viên (`GET /api/teacher/appeals/:appealId`).<br/>7. Xử lý đơn:<br/>&nbsp;&nbsp;&nbsp;&nbsp;a) **Phản hồi**: Gửi ý kiến (`PATCH /api/teacher/appeals/:appealId/reply`), trạng thái chuyển sang `REPLIED`.<br/>&nbsp;&nbsp;&nbsp;&nbsp;b) **Chấp thuận**: Bấm chấp thuận (`PATCH /api/teacher/appeals/:appealId/resolve`), trạng thái chuyển sang `RESOLVED`.<br/>&nbsp;&nbsp;&nbsp;&nbsp;c) **Từ chối**: Bấm từ chối (`PATCH /api/teacher/appeals/:appealId/reject`), trạng thái chuyển sang `REJECTED`.<br/>8. Thao tác xử lý của giảng viên tự động tạo thông báo gửi đến sinh viên. |
+| **Luồng ngoại lệ** | - **A1. Gửi phúc khảo lần thứ hai**: Mỗi bài thi chỉ được gửi tối đa 1 đơn phúc khảo. Nếu gửi thêm sẽ nhận lỗi HTTP 409 Conflict.<br/>- **A2. Phúc khảo bài thi của người khác (IDOR)**: Backend kiểm tra `submission.UserID == currentUserID`, trả về HTTP 403 Forbidden nếu vi phạm. |
 
 ---
 
-### UC07: Hệ thống Thông báo Nội bộ
+### UC07: Hệ thống thông báo nội bộ
 
 | Thuộc tính | Đặc tả chi tiết |
 | :--- | :--- |
 | **Mã Use Case** | **UC07** |
-| **Tên Use Case** | Hệ thống Thông báo Nội bộ (In-App Event-Driven Notifications) |
-| **Tác nhân** | Sinh viên, Giảng viên, Hệ thống Tự động |
-| **Mô tả ngắn** | Quản lý và phân phối thông báo sự kiện thời gian thực giữa Giảng viên và Sinh viên, tích hợp Dropdown thông báo trên thanh điều hướng với tính năng tự động đồng bộ (polling) và đánh dấu đã đọc. |
+| **Tên Use Case** | Hệ thống thông báo nội bộ (In-App Notifications) |
+| **Tác nhân** | Sinh viên, Giảng viên, Hệ thống |
+| **Mô tả ngắn** | Tạo và hiển thị thông báo sự kiện giữa Giảng viên và Sinh viên, tích hợp menu thông báo trên header với cơ chế polling 30 giây và đánh dấu đã đọc. |
 | **Tiền điều kiện** | Người dùng đã đăng nhập vào hệ thống. |
-| **Hậu điều kiện** | Bản ghi thông báo được tạo hoặc cập nhật cờ `is_read = true`; số đếm `unread_count` giảm tương ứng. |
-| **Luồng sự kiện chính (Basic Flow)** | 1. Khi phát sinh các sự kiện nghiệp vụ quan trọng (Học sinh nộp khiếu nại; Giảng viên phản hồi/duyệt khiếu nại; Giảng viên sửa điểm hoặc cho thi lại), hệ thống triệu gọi hàm helper `CreateNotification(userID, title, message)`.<br/>2. Hàm helper thực thi trong khối an toàn (`defer recover()`), chèn bản ghi vào bảng `notifications` với `is_read = false`.<br/>3. Phía Frontend, component `NotificationDropdown` trên thanh Header tự động gửi request `GET /api/notifications` định kỳ mỗi 30 giây.<br/>4. Backend trả về 20 thông báo mới nhất kèm số lượng thông báo chưa đọc `unread_count`.<br/>5. Nếu `unread_count > 0`, hiển thị huy hiệu (Badge) số màu đỏ trên thanh điều hướng.<br/>6. Người dùng bấm vào biểu tượng thông báo để mở danh sách.<br/>7. Người dùng bấm vào một thông báo cụ thể: Frontend gọi `PATCH /api/notifications/:id/read`, thông báo chuyển sang trạng thái đã đọc.<br/>8. Người dùng bấm "Đánh dấu đã đọc tất cả": Frontend gọi `PATCH /api/notifications/read-all`, toàn bộ thông báo của người dùng chuyển thành đã đọc. |
-| **Luồng rẽ nhánh / Ngoại lệ (Alternative & Exception Flows)** | - **A1. Sự cố khi tạo thông báo**: Nếu việc ghi cơ sở dữ liệu cho thông báo thất bại, hàm `CreateNotification` ghi log lỗi và nuốt ngoại lệ, tuyệt đối không làm rollback hoặc làm gián đoạn transaction của nghiệp vụ chính. |
+| **Hậu điều kiện** | Bản ghi thông báo được tạo hoặc chuyển `is_read = true`; số thông báo chưa đọc cập nhật tương ứng. |
+| **Luồng sự kiện chính** | 1. Khi có sự kiện (sinh viên gửi phúc khảo, giảng viên phản hồi phúc khảo, sửa điểm hoặc cho thi lại), hệ thống gọi hàm `CreateNotification(userID, title, message)`.<br/>2. Hàm helper dùng `defer recover()` để bắt lỗi nếu có sự cố ghi DB, không làm ảnh hưởng đến transaction của luồng nghiệp vụ chính.<br/>3. Phía Frontend, component `NotificationDropdown` tự động gửi request `GET /api/notifications` định kỳ mỗi 30 giây.<br/>4. Backend trả về 20 thông báo mới nhất kèm số lượng chưa đọc `unread_count`.<br/>5. Nếu `unread_count > 0`, hiển thị số đếm màu đỏ trên header.<br/>6. Bấm vào một thông báo: Gửi request `PATCH /api/notifications/:id/read` để đánh dấu đã đọc.<br/>7. Bấm "Đánh dấu đã đọc tất cả": Gửi request `PATCH /api/notifications/read-all`. |
+| **Luồng ngoại lệ** | - **A1. Lỗi khi ghi thông báo**: Hàm `CreateNotification` in log lỗi ra console và tiếp tục luồng chạy, không rollback transaction chính. |
 
 ---
 
-### UC08: Nhật ký Kiểm toán & Bảo mật Hệ thống
+### UC08: Nhật ký kiểm toán và bảo mật hệ thống
 
 | Thuộc tính | Đặc tả chi tiết |
 | :--- | :--- |
 | **Mã Use Case** | **UC08** |
-| **Tên Use Case** | Nhật ký Kiểm toán & Bảo mật Hệ thống (System Audit Trail & Security) |
-| **Tác nhân** | Giảng viên / Quản trị viên, Hệ thống Backend |
-| **Mô tả ngắn** | Lưu trữ bất biến các hành vi can thiệp kết quả khảo thí nhạy cảm của Giảng viên, cung cấp giao diện tra cứu lịch sử minh bạch và áp dụng các tiêu chuẩn bảo mật HTTP toàn diện. |
-| **Tiền điều kiện** | Giảng viên có vai trò `teacher` hoặc quản trị viên khảo thí. |
-| **Hậu điều kiện** | Lịch sử thao tác được lưu vết vĩnh viễn; các yêu cầu HTTP đều được kiểm soát bởi bộ tiêu đề an ninh mạng. |
-| **Luồng sự kiện chính (Basic Flow)** | 1. Khi Giảng viên thực hiện thao tác sửa điểm (`UPDATE_SCORE`) hoặc xóa lượt thi cho thi lại (`RESET_ATTEMPT`), Backend tự động tạo một bản ghi trong bảng `audit_logs` ngay trong Database Transaction.<br/>2. Bản ghi lưu trữ đầy đủ: ID người thực hiện (`actor_id`), mã hành động (`action`), ID lượt thi đích (`target_id`), nội dung giải trình chi tiết (`details`) và mốc thời gian tạo (`created_at`).<br/>3. Giảng viên truy cập mục "Nhật ký can thiệp" (`GET /api/teacher/audit-logs`).<br/>4. Backend truy vấn 100 bản ghi audit log gần nhất, thực hiện Preload thông tin Giảng viên (`Actor`) và sắp xếp giảm dần theo thời gian.<br/>5. Giao diện hiển thị bảng nhật ký minh bạch, giúp hội đồng khảo thí dễ dàng thanh tra, hậu kiểm.<br/>6. Đồng thời, toàn bộ các request ra vào hệ thống đều được middleware `SecurityMiddleware` giám sát, áp dụng tiêu đề `nosniff`, cấm nhúng iframe `DENY`, bảo vệ rò rỉ referrer và giới hạn dung lượng request body tối đa 2MB. |
-| **Luồng rẽ nhánh / Ngoại lệ (Alternative & Exception Flows)** | - **A1. Thao tác can thiệp thất bại**: Nếu transaction sửa điểm hoặc reset bài thi bị lỗi rollback, bản ghi audit log tương ứng cũng bị hủy bỏ, bảo đảm không có nhật ký giả mạo. |
+| **Tên Use Case** | Nhật ký kiểm toán (Audit Log) và bảo mật hệ thống |
+| **Tác nhân** | Giảng viên, Hệ thống Backend |
+| **Mô tả ngắn** | Lưu vết các thao tác can thiệp kết quả thi của Giảng viên, cung cấp danh sách tra cứu lịch sử và áp dụng các tiêu chuẩn an ninh HTTP. |
+| **Tiền điều kiện** | Giảng viên đã đăng nhập với vai trò `teacher`. |
+| **Hậu điều kiện** | Lịch sử can thiệp được lưu vào `audit_logs`; các request HTTP được kiểm tra bởi middleware bảo mật. |
+| **Luồng sự kiện chính** | 1. Khi Giảng viên sửa điểm (`UPDATE_SCORE`) hoặc cho thi lại (`RESET_ATTEMPT`), Backend tự động chèn một bản ghi vào bảng `audit_logs` trong cùng transaction.<br/>2. Bản ghi lưu: ID người thực hiện (`actor_id`), hành động (`action`), ID lượt thi (`target_id`), ghi chú chi tiết (`details`) và thời điểm tạo (`created_at`).<br/>3. Giảng viên vào mục xem nhật ký (`GET /api/teacher/audit-logs`).<br/>4. Backend lấy 100 bản ghi gần nhất, preload thông tin giảng viên (`Actor`) và sắp xếp giảm dần theo thời gian.<br/>5. Hiển thị danh sách nhật ký trên giao diện.<br/>6. Đồng thời, mọi request đều đi qua `SecurityMiddleware`, gắn tiêu đề `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin` và giới hạn body tối đa 2MB. |
+| **Luồng ngoại lệ** | - **A1. Transaction can thiệp bị lỗi rollback**: Bản ghi audit log cũng bị rollback theo, bảo đảm dữ liệu nhật ký luôn khớp với dữ liệu thực tế. |
 
 ---
 
-## 4. SƠ ĐỒ LUỒNG HOẠT ĐỘNG (ACTIVITY / FLOWCHART DIAGRAMS)
+## 4. SƠ ĐỒ LUỒNG HOẠT ĐỘNG (FLOWCHARTS)
 
-### 4.1. Sơ đồ 1: Luồng Kiểm soát Bài thi, Xử lý Vi phạm Chuyển Tab (Anti-Cheat) & Tự động Thu bài
+### 4.1. Sơ đồ luồng làm bài thi, phát hiện chuyển tab và thu bài tự động
 
-Sơ đồ thể hiện toàn diện chu trình từ lúc thí sinh làm bài, cơ chế giám sát vi phạm rời màn hình (Tab-switch Detection) kết hợp hai điều kiện dừng cưỡng chế (Hết giờ làm bài hoặc Vi phạm >= 3 lần):
+Sơ đồ mô tả quy trình từ lúc thí sinh làm bài, cơ chế phát hiện chuyển tab và hai điều kiện dừng cưỡng chế (hết giờ hoặc vi phạm từ 3 lần trở lên):
 
 ```mermaid
 flowchart TD
-    Start([Bắt đầu làm bài thi]) --> InitExam[Đồng bộ thời gian Server & Tải bộ câu hỏi xáo trộn tất định]
+    Start([Bắt đầu làm bài thi]) --> InitExam[Đồng bộ thời gian Server & Tải câu hỏi xáo trộn theo seed]
     InitExam --> DisplayExam[Hiển thị Phòng thi 2 cột & Question Palette]
 
     DisplayExam --> EventWait{Sự kiện xảy ra?}
 
-    EventWait -- "Thí sinh chọn đáp án" --> SaveAnswer[Cập nhật màu Xanh lá trên Palette]
-    SaveAnswer --> AutoSave[Gửi request Auto-save: Atomic UPSERT vào DB]
+    EventWait -- "Chọn đáp án" --> SaveAnswer[Đổi màu Xanh lá trên Palette]
+    SaveAnswer --> AutoSave[Gửi request Auto-save: UPSERT vào DB]
     AutoSave --> CheckTimer
 
-    EventWait -- "Thí sinh đặt cờ xem lại" --> FlagQuestion[Cập nhật màu Vàng trên Palette]
+    EventWait -- "Đặt cờ xem lại" --> FlagQuestion[Đổi màu Vàng trên Palette]
     FlagQuestion --> CheckTimer
 
-    EventWait -- "Rời tab / Thu nhỏ màn hình" --> DetectTab[Frontend bắt sự kiện visibilitychange / window.onblur]
-    DetectTab --> Throttle[Áp dụng Throttle 2s khử trùng lặp sự kiện]
+    EventWait -- "Rời tab / Đổi cửa sổ" --> DetectTab[Frontend bắt sự kiện visibilitychange / blur]
+    DetectTab --> Throttle[Áp dụng Throttle 2 giây]
     Throttle --> CallViolationAPI["Gửi POST /api/student/attempts/:id/violation"]
-    CallViolationAPI --> DBUpdateViolation["Backend Transaction: Khóa FOR UPDATE & Tăng violation_count"]
+    CallViolationAPI --> DBUpdateViolation["Backend: Khóa FOR UPDATE & Tăng violation_count"]
     
     DBUpdateViolation --> CheckViolation{"violation_count >= 3?"}
-    CheckViolation -- "ĐÚNG: Đạt ngưỡng vi phạm" --> AutoSubmitViolation["Cưỡng chế nộp bài & Đổi status='completed'"]
-    CheckViolation -- "SAI: vi phạm lần 1 hoặc 2" --> ShowWarningModal["Hiển thị Modal cảnh báo nghiêm khắc & Cập nhật Badge đỏ"]
+    CheckViolation -- "ĐÚNG: Vi phạm lần 3" --> AutoSubmitViolation["Tự động thu bài & Chuyển status='completed'"]
+    CheckViolation -- "SAI: Lần 1 hoặc 2" --> ShowWarningModal["Hiển thị Modal cảnh báo & Cập nhật số lần vi phạm"]
     ShowWarningModal --> CheckTimer
 
-    CheckTimer{"Kiểm tra Thời gian làm bài"} -- "Còn thời gian" --> EventWait
-    CheckTimer -- "Hết giờ (remaining_seconds <= 0)" --> AutoSubmitTimeout["Cưỡng chế nộp bài do hết giờ: status='completed'"]
+    CheckTimer{"Kiểm tra thời gian"} -- "Còn thời gian" --> EventWait
+    CheckTimer -- "Hết giờ (remaining_seconds <= 0)" --> AutoSubmitTimeout["Tự động thu bài do hết giờ: status='completed'"]
 
-    EventWait -- "Thí sinh chủ động bấm Nộp bài" --> ConfirmSubmit{Xác nhận nộp bài?}
+    EventWait -- "Bấm Nộp bài" --> ConfirmSubmit{Xác nhận nộp bài?}
     ConfirmSubmit -- "Hủy" --> EventWait
     ConfirmSubmit -- "Đồng ý" --> ManualSubmit["Gửi POST /api/student/attempts/:id/submit"]
 
-    ManualSubmit --> GradeTx["Mở DB Transaction: Khóa FOR UPDATE & Chấm điểm tự động"]
+    ManualSubmit --> GradeTx["Mở DB Transaction: Khóa FOR UPDATE & Chấm điểm"]
     AutoSubmitViolation --> GradeTx
     AutoSubmitTimeout --> GradeTx
 
-    GradeTx --> CalcScore["Đối soát đáp án, tính tổng điểm & Lưu score, correct_count, wrong_count"]
-    CalcScore --> CommitTx["Commit Transaction & Đổi status='completed'"]
-    CommitTx --> RedirectResult[Chuyển hướng sang Trang Kết quả thi]
-    RedirectResult --> End([Kết thúc lượt thi])
+    GradeTx --> CalcScore["So sánh đáp án, tính tổng điểm & Ghi nhận kết quả"]
+    CalcScore --> CommitTx["Commit Transaction & Chuyển status='completed'"]
+    CommitTx --> RedirectResult[Chuyển sang trang kết quả thi]
+    RedirectResult --> End([Kết thúc ca thi])
 ```
 
 ---
 
-### 4.2. Sơ đồ 2: Luồng Trạng thái và Quy trình Xử lý Khiếu nại / Phúc khảo (Appeals State Machine)
+### 4.2. Sơ đồ vòng đời và quy trình xử lý đơn phúc khảo
 
-Sơ đồ mô tả vòng đời của một yêu cầu khiếu nại điểm thi từ khi Sinh viên khởi tạo qua các trạng thái của Máy trạng thái (State Machine):
+Sơ đồ mô tả các trạng thái của một đơn phúc khảo:
 
 ```mermaid
 flowchart TD
-    SubmitExam([Sinh viên đã hoàn thành bài thi]) --> CheckScore[Xem kết quả thi tại Trang Lịch sử]
-    CheckScore --> DisagreeScore{Có thắc mắc về điểm số?}
+    SubmitExam([Sinh viên đã nộp bài]) --> CheckScore[Xem kết quả thi tại trang Lịch sử]
+    CheckScore --> DisagreeScore{Có thắc mắc về điểm?}
 
-    DisagreeScore -- "Không" --> AcceptResult([Chấp nhận điểm số])
-    DisagreeScore -- "Có" --> CreateAppeal["Sinh viên điền tiêu đề & nội dung khiếu nại"]
+    DisagreeScore -- "Không" --> AcceptResult([Chấp nhận kết quả])
+    DisagreeScore -- "Có" --> CreateAppeal["Sinh viên điền tiêu đề & nội dung phúc khảo"]
     CreateAppeal --> SendAppealAPI["Gửi POST /api/student/appeals"]
 
-    SendAppealAPI --> ValidateAppeal{"Kiểm tra hợp lệ:<br/>- Bài thi của chính mình?<br/>- Đã có đơn khiếu nại chưa?"}
-    ValidateAppeal -- "Sai (Đã tồn tại đơn / IDOR)" --> RejectCreate[Báo lỗi HTTP 409 hoặc HTTP 403]
+    SendAppealAPI --> ValidateAppeal{"Kiểm tra hợp lệ:<br/>- Bài thi của chính mình?<br/>- Đã gửi đơn trước đó chưa?"}
+    ValidateAppeal -- "Không hợp lệ (Đã có đơn / IDOR)" --> RejectCreate[Báo lỗi HTTP 409 hoặc 403]
     
     ValidateAppeal -- "Hợp lệ" --> SavePending["Lưu bản ghi appeals: status = 'PENDING'"]
-    SavePending --> NotifyTeacher["Hệ thống gửi Thông báo ngầm tới Giảng viên"]
+    SavePending --> NotifyTeacher["Hệ thống gửi thông báo ngầm đến Giảng viên"]
 
-    NotifyTeacher --> TeacherReview[Giảng viên mở danh sách khiếu nại của đề thi]
-    TeacherReview --> TeacherAction{"Quyết định xử lý của Giảng viên"}
+    NotifyTeacher --> TeacherReview[Giảng viên mở danh sách đơn phúc khảo của đề thi]
+    TeacherReview --> TeacherAction{"Quyết định của Giảng viên"}
 
-    TeacherAction -- "Phản hồi giải trình" --> ReplyAppeal["Gửi phản hồi ý kiến: status = 'REPLIED'"]
+    TeacherAction -- "Phản hồi ý kiến" --> ReplyAppeal["Gửi phản hồi: status = 'REPLIED'"]
     ReplyAppeal --> NotifyStudent1["Thông báo Sinh viên: Đã có phản hồi"]
     NotifyStudent1 --> TeacherReview
 
-    TeacherAction -- "Bác bỏ khiếu nại" --> RejectAppeal["Từ chối khiếu nại: status = 'REJECTED'"]
-    RejectAppeal --> NotifyStudent2["Thông báo Sinh viên: Khiếu nại bị từ chối"]
-    NotifyStudent2 --> AppealClosed([Đóng khiếu nại])
+    TeacherAction -- "Từ chối phúc khảo" --> RejectAppeal["Từ chối: status = 'REJECTED'"]
+    RejectAppeal --> NotifyStudent2["Thông báo Sinh viên: Đơn bị từ chối"]
+    NotifyStudent2 --> AppealClosed([Đóng đơn phúc khảo])
 
-    TeacherAction -- "Chấp thuận khiếu nại" --> ResolveAction["Giảng viên hiệu chỉnh điểm bài thi: UPDATE_SCORE"]
-    ResolveAction --> WriteAuditLog["Ghi nhận lý do vào audit_logs"]
+    TeacherAction -- "Chấp thuận phúc khảo" --> ResolveAction["Giảng viên sửa điểm bài thi: UPDATE_SCORE"]
+    ResolveAction --> WriteAuditLog["Lưu lý do vào bảng audit_logs"]
     WriteAuditLog --> ResolveAppeal["Chuyển trạng thái: status = 'RESOLVED'"]
-    ResolveAppeal --> NotifyStudent3["Thông báo Sinh viên: Khiếu nại được chấp thuận & Điểm mới"]
+    ResolveAppeal --> NotifyStudent3["Thông báo Sinh viên: Phúc khảo thành công & Điểm mới"]
     NotifyStudent3 --> AppealClosed
 ```
 
@@ -512,69 +510,67 @@ flowchart TD
 
 ## 5. SƠ ĐỒ TUẦN TỰ HỆ THỐNG (SEQUENCE DIAGRAMS)
 
-Dưới đây là 4 sơ đồ tuần tự chi tiết biểu diễn tương tác giữa Client, các lớp Middleware, Handler xử lý và Cơ sở dữ liệu:
-
-### 5.1. Sequence 1: Sinh viên Bắt đầu thi, Lưu bài, Bị ghi nhận Vi phạm chuyển Tab & Nộp bài Chấm điểm
+### 5.1. Sequence 1: Bắt đầu thi, lưu bài, ghi nhận vi phạm chuyển tab và nộp bài
 
 ```mermaid
 sequenceDiagram
     autonumber
-    actor Student as Thí sinh (Browser)
+    actor Student as Sinh viên (Browser)
     participant Sec as Security & RateLimit Middleware
     participant Auth as Auth Middleware (JWT)
     participant Handler as Student Handler (Go)
-    participant DB as SQLite / PostgreSQL
+    participant DB as Database (SQLite / PostgreSQL)
 
     Note over Student, DB: GIAI ĐOẠN 1: BẮT ĐẦU VÀO THI & TRỘN ĐỀ
     Student->>Sec: POST /api/student/exams/1/start ({confirmed: true})
-    Sec->>Auth: Pass Security Headers (nosniff, DENY)
-    Auth->>Handler: Validate JWT Student
-    Handler->>DB: Query exam (status='published', check StartTime/EndTime)
-    Handler->>DB: Query / Insert exam_attempts (status='in_progress', started_at=NOW())
-    Handler->>DB: Query questions where exam_id = 1
-    Handler->>Handler: Chuyển đổi sang QuestionSafe DTO (Loại bỏ correct_option)
+    Sec->>Auth: Kiểm tra Security Headers
+    Auth->>Handler: Xác thực Token JWT của sinh viên
+    Handler->>DB: Truy vấn exam (status='published', kiểm tra StartTime/EndTime)
+    Handler->>DB: Truy vấn / Tạo exam_attempts (status='in_progress', started_at=NOW())
+    Handler->>DB: Lấy danh sách questions có exam_id = 1
+    Handler->>Handler: Chuyển đổi sang QuestionSafe DTO (ẩn correct_option)
     Handler->>Handler: Xáo trộn mảng câu hỏi với seed = attempt.ID
-    Handler->>Handler: Tính toán remaining_seconds = Deadline - time.Now()
+    Handler->>Handler: Tính remaining_seconds = Deadline - time.Now()
     Handler-->>Student: HTTP 200 (attempt, questions: [QuestionSafe], remaining_seconds)
-    Student->>Student: Render Phòng thi 2 cột & Question Palette 1..N
+    Student->>Student: Hiển thị giao diện phòng thi & Question Palette
 
-    Note over Student, DB: GIAI ĐOẠN 2: TƯƠNG TÁC LÀM BÀI & AUTO-SAVE
-    Student->>Student: Thí sinh chọn đáp án Câu 1 -> Palette đổi màu Xanh
+    Note over Student, DB: GIAI ĐOẠN 2: CHỌN ĐÁP ÁN & TỰ ĐỘNG LƯU BÀI
+    Student->>Student: Sinh viên chọn đáp án -> Palette đổi màu xanh
     Student->>Sec: POST /api/student/attempts/10/save ({answers: [{question_id: 5, chosen_option: 'B'}]})
-    Sec->>Auth: Pass Headers & Body limit
-    Auth->>Handler: Validate Token & Attempt Ownership
-    Handler->>DB: Transaction: Atomic UPSERT vào attempt_answers
-    DB-->>Handler: Success
-    Handler-->>Student: HTTP 200 (message: "Answers saved")
+    Sec->>Auth: Kiểm tra Headers và kích thước Body
+    Auth->>Handler: Xác thực quyền sở hữu lượt thi
+    Handler->>DB: Thực hiện UPSERT vào attempt_answers
+    DB-->>Handler: Thành công
+    Handler-->>Student: HTTP 200 (Answers saved)
 
-    Note over Student, DB: GIAI ĐOẠN 3: PHÁT HIỆN VI PHẠM CHUYỂN TAB (ANTI-CHEAT)
-    Student->>Student: Thí sinh chuyển tab hoặc thu nhỏ trình duyệt
+    Note over Student, DB: GIAI ĐOẠN 3: PHÁT HIỆN VI PHẠM CHUYỂN TAB
+    Student->>Student: Sinh viên chuyển tab hoặc đổi ứng dụng
     Student->>Sec: POST /api/student/attempts/10/violation ({reason: "tab_switch"})
-    Sec->>Auth: Pass Headers
-    Auth->>Handler: Validate
+    Sec->>Auth: Kiểm tra Headers
+    Auth->>Handler: Xác thực
     Handler->>DB: Transaction: SELECT ... FOR UPDATE trên exam_attempts
-    Handler->>DB: Tăng violation_count (VD: 1 -> 2)
-    DB-->>Handler: Updated violation_count = 2
+    Handler->>DB: Tăng violation_count (từ 1 lên 2)
+    DB-->>Handler: violation_count = 2
     Handler-->>Student: HTTP 200 (violation_count: 2, auto_submitted: false)
-    Student->>Student: Hiển thị Modal Cảnh báo & Huy hiệu "Vi phạm: 2/3"
+    Student->>Student: Hiển thị Modal cảnh báo vi phạm
 
-    Note over Student, DB: GIAI ĐOẠN 4: NỘP BÀI THI & CHẤM ĐIỂM TỰ ĐỘNG
-    Student->>Student: Thí sinh bấm Nộp bài thi
+    Note over Student, DB: GIAI ĐOẠN 4: NỘP BÀI THI & CHẤM ĐIỂM
+    Student->>Student: Sinh viên bấm nộp bài
     Student->>Sec: POST /api/student/attempts/10/submit
-    Sec->>Auth: Pass Headers
-    Auth->>Handler: Validate
-    Handler->>DB: Transaction: SELECT ... FOR UPDATE (Khóa attempt chống double submit)
-    Handler->>DB: Query attempt_answers đối soát với correct_option trong questions
-    Handler->>Handler: Tính toán: score = 8.50, correct_count = 17, wrong_count = 3
-    Handler->>DB: UPDATE exam_attempts (score=8.50, status='completed', submitted_at=NOW())
+    Sec->>Auth: Kiểm tra Headers
+    Auth->>Handler: Xác thực
+    Handler->>DB: Transaction: SELECT ... FOR UPDATE (Khóa attempt chống nộp 2 lần)
+    Handler->>DB: Lấy attempt_answers đối soát với correct_option trong questions
+    Handler->>Handler: Tính điểm: score, correct_count, wrong_count
+    Handler->>DB: UPDATE exam_attempts (score, status='completed', submitted_at=NOW())
     DB-->>Handler: Commit Transaction
-    Handler-->>Student: HTTP 200 (attempt đã hoàn thành)
-    Student->>Student: Hiển thị Trang kết quả & Bảng điểm chi tiết
+    Handler-->>Student: HTTP 200 (attempt hoàn thành)
+    Student->>Student: Chuyển sang trang kết quả thi
 ```
 
 ---
 
-### 5.2. Sequence 2: Giảng viên Nhập câu hỏi Hàng loạt (Bulk Import) & Quản lý CRUD Đề thi
+### 5.2. Sequence 2: Giảng viên nhập câu hỏi hàng loạt và quản lý đề thi
 
 ```mermaid
 sequenceDiagram
@@ -583,44 +579,44 @@ sequenceDiagram
     participant Sec as Security Middleware
     participant Auth as Auth Middleware (JWT Teacher)
     participant Handler as Teacher CRUD Handler (Go)
-    participant DB as SQLite / PostgreSQL
+    participant DB as Database (SQLite / PostgreSQL)
 
     Note over Teacher, DB: TẠO ĐỀ THI MỚI
     Teacher->>Sec: POST /api/teacher/exams ({title, duration, start_time, end_time})
-    Sec->>Auth: Validate Token & Role='teacher'
-    Auth->>Handler: Forward request
-    Handler->>Handler: Sinh mã kỳ thi exam_code ngẫu nhiên duy nhất (VD: IT2026)
+    Sec->>Auth: Xác thực Token và Role='teacher'
+    Auth->>Handler: Chuyển tiếp request
+    Handler->>Handler: Sinh mã exam_code ngẫu nhiên duy nhất (VD: IT2026)
     Handler->>DB: INSERT INTO exams (status='draft', teacher_id, ...)
     DB-->>Handler: Tạo thành công exam.id = 2
     Handler-->>Teacher: HTTP 201 Created (exam)
 
-    Note over Teacher, DB: NHẬP NHANH CÂU HỎI HÀNG LOẠT (BULK IMPORT)
-    Teacher->>Teacher: Dán văn bản phân cách khối --- vào Modal Bulk Import
+    Note over Teacher, DB: NHẬP CÂU HỎI HÀNG LOẠT (BULK IMPORT)
+    Teacher->>Teacher: Dán nội dung câu hỏi vào Modal Bulk Import
     Teacher->>Sec: POST /api/teacher/exams/2/questions/bulk ({questions: [...]})
-    Sec->>Auth: Pass Headers (Body < 2MB)
-    Auth->>Handler: Validate
-    Handler->>DB: Transaction: Kiểm tra exam thuộc về teacher_id & status='draft'
-    loop Lặp qua từng câu hỏi trong mảng
-        Handler->>Handler: Kiểm tra tính hợp lệ: prompt != '', 4 options != '', correct_option in (A,B,C,D)
+    Sec->>Auth: Kiểm tra kích thước Body (< 2MB)
+    Auth->>Handler: Xác thực
+    Handler->>DB: Transaction: Kiểm tra exam thuộc teacher_id & status='draft'
+    loop Duyệt qua từng câu hỏi trong mảng
+        Handler->>Handler: Kiểm tra tính hợp lệ: prompt, 4 đáp án, correct_option
         Handler->>DB: INSERT INTO questions (exam_id=2, prompt, options, correct_option, points)
     end
     DB-->>Handler: Commit Transaction
-    Handler-->>Teacher: HTTP 201 Created (message: "Successfully added 20 questions")
+    Handler-->>Teacher: HTTP 201 Created (Đã thêm câu hỏi thành công)
 
     Note over Teacher, DB: XUẤT BẢN ĐỀ THI
     Teacher->>Sec: PATCH /api/teacher/exams/2/publish
-    Sec->>Auth: Validate
-    Auth->>Handler: Forward request
+    Sec->>Auth: Xác thực
+    Auth->>Handler: Chuyển tiếp request
     Handler->>DB: SELECT COUNT(*) FROM questions WHERE exam_id = 2
-    DB-->>Handler: count = 20 (> 0)
+    DB-->>Handler: count > 0
     Handler->>DB: UPDATE exams SET status='published', published_at=NOW() WHERE id=2
-    DB-->>Handler: Updated
-    Handler-->>Teacher: HTTP 200 OK (message: "Exam published successfully")
+    DB-->>Handler: Cập nhật thành công
+    Handler-->>Teacher: HTTP 200 OK (Xuất bản đề thi thành công)
 ```
 
 ---
 
-### 5.3. Sequence 3: Luồng Khiếu nại Kết quả thi & Kích hoạt Thông báo Tự động Hai chiều
+### 5.3. Sequence 3: Quy trình phúc khảo bài thi và gửi thông báo
 
 ```mermaid
 sequenceDiagram
@@ -628,34 +624,34 @@ sequenceDiagram
     actor Student as Sinh viên
     actor Teacher as Giảng viên
     participant Handler as Appeals & Notification Handler
-    participant DB as Database (SQLite/PostgreSQL)
+    participant DB as Database (SQLite / PostgreSQL)
 
-    Note over Student, Teacher: BƯỚC 1: SINH VIÊN GỬI ĐƠN KHIẾU NẠI
+    Note over Student, Teacher: BƯỚC 1: SINH VIÊN GỬI ĐƠN PHÚC KHẢO
     Student->>Handler: POST /api/student/appeals ({submissionId: 10, title: "Phúc khảo câu 4", content: "..."})
-    Handler->>DB: Kiểm tra: attempt thuộc về Student & status='completed'
-    Handler->>DB: Kiểm tra: Chưa có đơn khiếu nại nào cho submission này
+    Handler->>DB: Kiểm tra: bài thi của sinh viên & status='completed'
+    Handler->>DB: Kiểm tra: chưa có đơn phúc khảo cho bài thi này
     Handler->>DB: INSERT INTO appeals (status='PENDING', student_id, teacher_id, ...)
-    Handler->>Handler: Triệu gọi helper CreateNotification(exam.TeacherID, title, msg)
-    Handler->>DB: INSERT INTO notifications (user_id=teacher_id, title="Khiếu nại mới", is_read=false)
+    Handler->>Handler: Gọi hàm CreateNotification(exam.TeacherID, title, msg)
+    Handler->>DB: INSERT INTO notifications (user_id=teacher_id, title="Đơn phúc khảo mới", is_read=false)
     Handler-->>Student: HTTP 201 Created (appeal)
 
-    Note over Student, Teacher: BƯỚC 2: GIẢNG VIÊN NHẬN THÔNG BÁO & PHẢN HỒI
+    Note over Student, Teacher: BƯỚC 2: GIẢNG VIÊN NHẬN THÔNG BÁO & XỬ LÝ
     Teacher->>Handler: GET /api/notifications (Polling 30s)
     Handler->>DB: SELECT * FROM notifications WHERE user_id = teacher_id
-    DB-->>Handler: Trả về danh sách kèm unread_count
+    DB-->>Handler: Trả về danh sách và unread_count
     Handler-->>Teacher: HTTP 200 (unread_count: 1, notifications: [...])
-    Teacher->>Teacher: Thấy Badge đỏ -> Mở đơn khiếu nại xem bài làm thí sinh
-    Teacher->>Handler: PATCH /api/teacher/appeals/1/resolve ({response: "Đã cộng 0.5 điểm câu 4"})
+    Teacher->>Teacher: Thấy số thông báo -> Mở đơn phúc khảo xem bài làm
+    Teacher->>Handler: PATCH /api/teacher/appeals/1/resolve ({response: "Đã cộng điểm câu 4"})
     Handler->>DB: Transaction: UPDATE appeals SET status='RESOLVED', teacher_response=...
-    Handler->>Handler: Triệu gọi helper CreateNotification(appeal.StudentID, title, msg)
-    Handler->>DB: INSERT INTO notifications (user_id=student_id, title="Khiếu nại được chấp thuận", is_read=false)
+    Handler->>Handler: Gọi hàm CreateNotification(appeal.StudentID, title, msg)
+    Handler->>DB: INSERT INTO notifications (user_id=student_id, title="Đơn phúc khảo đã được chấp thuận", is_read=false)
     DB-->>Handler: Commit Transaction
     Handler-->>Teacher: HTTP 200 OK (status: 'RESOLVED')
 
     Note over Student, Teacher: BƯỚC 3: SINH VIÊN NHẬN THÔNG BÁO KẾT QUẢ
     Student->>Handler: GET /api/notifications (Polling 30s)
     Handler->>DB: SELECT * FROM notifications WHERE user_id = student_id
-    DB-->>Handler: Trả về thông báo "Khiếu nại được chấp thuận"
+    DB-->>Handler: Trả về thông báo phúc khảo
     Handler-->>Student: HTTP 200 (unread_count: 1)
     Student->>Handler: PATCH /api/notifications/5/read
     Handler->>DB: UPDATE notifications SET is_read=true WHERE id=5
@@ -664,7 +660,7 @@ sequenceDiagram
 
 ---
 
-### 5.4. Sequence 4: Giảng viên Điều chỉnh Điểm / Cho thi lại & Ghi nhận Audit Log
+### 5.4. Sequence 4: Giảng viên sửa điểm / cho thi lại và ghi nhật ký kiểm toán
 
 ```mermaid
 sequenceDiagram
@@ -673,145 +669,142 @@ sequenceDiagram
     participant Sec as Security Middleware
     participant Auth as Auth Middleware (JWT)
     participant Handler as Teacher CRUD Handler
-    participant DB as Database (SQLite/PostgreSQL)
+    participant DB as Database (SQLite / PostgreSQL)
 
-    Note over Teacher, DB: TRƯỜNG HỢP A: HIỆU CHỈNH ĐIỂM THI THỦ CÔNG
+    Note over Teacher, DB: TRƯỜNG HỢP A: SỬA ĐIỂM BÀI THI
     Teacher->>Sec: PATCH /api/teacher/attempts/10/score ({score: 9.00, teacher_note: "Cộng điểm câu 4"})
-    Sec->>Auth: Validate Role='teacher'
-    Auth->>Handler: Forward request
+    Sec->>Auth: Xác thực Role='teacher'
+    Auth->>Handler: Chuyển tiếp request
     Handler->>DB: Transaction: Khóa SELECT ... FOR UPDATE trên exam_attempts id=10
     Handler->>Handler: Ghi nhận điểm cũ (8.50) và điểm mới (9.00)
     Handler->>DB: UPDATE exam_attempts SET score = 9.00, teacher_note = 'Cộng điểm câu 4'
-    Handler->>DB: INSERT INTO audit_logs (actor_id=teacher_id, action='UPDATE_SCORE', target_id=10, details="Cập nhật điểm từ 8.50 thành 9.00: Cộng điểm câu 4")
+    Handler->>DB: INSERT INTO audit_logs (actor_id=teacher_id, action='UPDATE_SCORE', target_id=10, details="Cập nhật điểm từ 8.50 thành 9.00")
     Handler->>Handler: Gọi CreateNotification(attempt.UserID, "Điểm bài thi đã được điều chỉnh", ...)
     Handler->>DB: INSERT INTO notifications (user_id=student_id, ...)
     DB-->>Handler: Commit Transaction
-    Handler-->>Teacher: HTTP 200 OK (attempt cập nhật thành công)
+    Handler-->>Teacher: HTTP 200 OK (Cập nhật điểm thành công)
 
-    Note over Teacher, DB: TRƯỜNG HỢP B: CHO PHÉP THI LẠI (RESET ATTEMPT)
+    Note over Teacher, DB: TRƯỜNG HỢP B: CHO SINH VIÊN THI LẠI (RESET ATTEMPT)
     Teacher->>Sec: DELETE /api/teacher/attempts/10
-    Sec->>Auth: Validate Role='teacher'
-    Auth->>Handler: Forward request
-    Handler->>DB: Transaction: Kiểm tra exam thuộc quyền sở hữu của teacher_id
+    Sec->>Auth: Xác thực Role='teacher'
+    Auth->>Handler: Chuyển tiếp request
+    Handler->>DB: Transaction: Kiểm tra đề thuộc quyền quản lý của teacher_id
     Handler->>DB: DELETE FROM attempt_answers WHERE attempt_id = 10
-    Handler->>DB: DELETE FROM exam_attempts WHERE id = 10 (Giải phóng Unique Index idx_exam_attempts_exam_user)
+    Handler->>DB: DELETE FROM exam_attempts WHERE id = 10 (Giải phóng Unique Index)
     Handler->>DB: INSERT INTO audit_logs (actor_id=teacher_id, action='RESET_ATTEMPT', target_id=10, details="Cho phép sinh viên thi lại")
     Handler->>Handler: Gọi CreateNotification(student_id, "Lượt thi đã được đặt lại", ...)
     Handler->>DB: INSERT INTO notifications (user_id=student_id, ...)
     DB-->>Handler: Commit Transaction
-    Handler-->>Teacher: HTTP 200 OK (message: "Attempt reset successfully. Student can retake.")
+    Handler-->>Teacher: HTTP 200 OK (Đã reset lượt thi thành công)
 ```
 
 ---
 
-## 6. ĐẶC TẢ API ENDPOINTS & KIẾN TRÚC BẢO MẬT (API & SECURITY ARCHITECTURE)
+## 6. ĐẶC TẢ API VÀ CÁC BIỆN PHÁP BẢO MẬT
 
-### 6.1. Danh mục Toàn bộ RESTful API Endpoints
+### 6.1. Danh mục API Endpoints
 
-Mọi request tới các endpoint yêu cầu xác thực bắt buộc phải đính kèm Header:  
+Các request yêu cầu xác thực cần gửi kèm Header:  
 `Authorization: Bearer <jwt_token>`
 
-#### A. Nhóm Xác thực & Hệ thống (Public APIs)
-| Method | Endpoint | Quyền hạn | Request Body / Query Params | Mã phản hồi | Mô tả chức năng |
+#### A. Nhóm xác thực và hệ thống
+| Method | Endpoint | Quyền hạn | Tham số / Body | Mã HTTP | Mô tả chức năng |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| `GET` | `/health` | Public | Không | `200` | Kiểm tra trạng thái sống của dịch vụ Backend |
+| `GET` | `/health` | Public | Không | `200` | Kiểm tra trạng thái hoạt động của server |
 | `POST` | `/api/auth/register` | Public | `{full_name, email, password}` | `201`, `400`, `409` | Đăng ký tài khoản sinh viên mới |
-| `POST` | `/api/auth/login` | Public | `{email, password}` | `200`, `400`, `401`, `429` | Đăng nhập hệ thống (Áp dụng Rate limit 15 req/phút/IP) |
+| `POST` | `/api/auth/login` | Public | `{email, password}` | `200`, `400`, `401`, `429` | Đăng nhập hệ thống (Rate limit 15 req/phút/IP) |
 
-#### B. Nhóm Giảng viên (Teacher APIs - Role = `teacher`)
-| Method | Endpoint | Quyền hạn | Request Body / Query Params | Mã phản hồi | Mô tả chức năng |
+#### B. Nhóm Giảng viên (Role = `teacher`)
+| Method | Endpoint | Quyền hạn | Tham số / Body | Mã HTTP | Mô tả chức năng |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| `GET` | `/api/teacher/exams` | Teacher | Không | `200` | Lấy danh sách đề thi do giảng viên sở hữu |
+| `GET` | `/api/teacher/exams` | Teacher | Không | `200` | Danh sách đề thi của giảng viên |
 | `POST` | `/api/teacher/exams` | Teacher | `{title, description, duration, start_time, end_time}` | `201`, `400` | Tạo đề thi mới (trạng thái `draft`, sinh mã `exam_code`) |
-| `GET` | `/api/teacher/exams/:id` | Teacher | Không | `200`, `404` | Xem thông tin chi tiết đề thi kèm danh sách câu hỏi |
-| `PUT` | `/api/teacher/exams/:id` | Teacher | `{title, description, duration, start_time, end_time, is_published}` | `200`, `400`, `404` | Chỉnh sửa thông tin đề thi và đóng/mở đề |
-| `DELETE`| `/api/teacher/exams/:id` | Teacher | Không | `200`, `404` | Xóa đề thi và dọn sạch dữ liệu liên quan (Cascade) |
-| `POST` | `/api/teacher/exams/:id/questions` | Teacher | `{questions: [{prompt, option_a, ...}]}` | `201`, `400` | Thêm danh sách câu hỏi vào đề thi (`draft`) |
-| `POST` | `/api/teacher/exams/:id/questions/bulk` | Teacher | `{questions: [{prompt, option_a, ...}]}` | `201`, `400` | **Nhập hàng loạt câu hỏi từ file/text trong một Transaction** |
-| `PUT` | `/api/teacher/questions/:id` | Teacher | `{prompt, option_a, option_b, option_c, option_d, correct_option, points}` | `200`, `400`, `404` | Chỉnh sửa nội dung câu hỏi và đáp án đúng (khi đề `draft`) |
-| `DELETE`| `/api/teacher/questions/:question_id`| Teacher | Không | `200`, `400`, `403`, `404`| Xóa câu hỏi khỏi đề thi (`draft`) |
-| `PATCH`| `/api/teacher/exams/:id/publish` | Teacher | Không | `200`, `400`, `404` | Xuất bản đề thi (yêu cầu tối thiểu 1 câu hỏi) |
-| `GET` | `/api/teacher/exams/:id/results` | Teacher | Không | `200`, `404` | Thống kê kết quả thi: Danh sách điểm, ĐTB, Min, Max |
-| `GET` | `/api/teacher/exams/:id/results/export` | Teacher | Không | `200`, `404` | **Xuất bảng điểm CSV có tiền tố UTF-8 BOM chuẩn cho Excel** |
-| `PATCH`| `/api/teacher/attempts/:id/score`| Teacher | `{score, teacher_note}` | `200`, `400`, `404` | **Hiệu chỉnh trực tiếp điểm thi, ghi chú & ghi Audit Log** |
-| `DELETE`| `/api/teacher/attempts/:id` | Teacher | Không | `200`, `404` | **Xóa lượt thi (Cho phép sinh viên thi lại từ đầu & ghi Audit Log)** |
-| `GET` | `/api/teacher/audit-logs` | Teacher | Không | `200` | **Lấy danh sách nhật ký can thiệp điểm số và lượt thi** |
-| `GET` | `/api/teacher/students` | Teacher | Query: `?q=search_term` | `200` | **Danh sách sinh viên, thống kê số bài thi đã tham gia** |
-| `POST` | `/api/teacher/students` | Teacher | `{full_name, email, password}` | `201`, `400`, `409` | **Tạo tài khoản sinh viên mới** |
-| `PUT` | `/api/teacher/students/:id` | Teacher | `{full_name, email, password?}` | `200`, `400`, `404`, `409` | **Cập nhật thông tin sinh viên hoặc đặt lại mật khẩu** |
-| `DELETE`| `/api/teacher/students/:id` | Teacher | Không | `200`, `404` | **Xóa tài khoản sinh viên kèm dữ liệu làm bài** |
-| `GET` | `/api/teacher/exams/:id/appeals`| Teacher | Query: `page`, `page_size`, `status`, `q` | `200`, `404` | Lấy danh sách đơn khiếu nại của đề thi (phân trang) |
-| `GET` | `/api/teacher/appeals/:appealId` | Teacher | Không | `200`, `404` | Xem chi tiết đơn khiếu nại và bài làm của thí sinh |
-| `PATCH`| `/api/teacher/appeals/:appealId/reply` | Teacher | `{response}` | `200`, `400`, `404`, `409`| Phản hồi ý kiến giải trình cho khiếu nại |
-| `PATCH`| `/api/teacher/appeals/:appealId/reject`| Teacher | `{response}` (tùy chọn) | `200`, `404`, `409` | Bác bỏ / từ chối đơn khiếu nại |
-| `PATCH`| `/api/teacher/appeals/:appealId/resolve`| Teacher | `{response}` (tùy chọn) | `200`, `404`, `409` | Chấp thuận / giải quyết xong đơn khiếu nại |
+| `GET` | `/api/teacher/exams/:id` | Teacher | Không | `200`, `404` | Chi tiết đề thi và danh sách câu hỏi |
+| `PUT` | `/api/teacher/exams/:id` | Teacher | `{title, description, duration, start_time, end_time, is_published}` | `200`, `400`, `404` | Sửa thông tin đề thi và đóng/mở đề |
+| `DELETE`| `/api/teacher/exams/:id` | Teacher | Không | `200`, `404` | Xóa đề thi kèm dữ liệu liên quan (Cascade) |
+| `POST` | `/api/teacher/exams/:id/questions` | Teacher | `{questions: [...]}` | `201`, `400` | Thêm câu hỏi vào đề nháp |
+| `POST` | `/api/teacher/exams/:id/questions/bulk` | Teacher | `{questions: [...]}` | `201`, `400` | Nhập nhanh câu hỏi hàng loạt trong một transaction |
+| `PUT` | `/api/teacher/questions/:id` | Teacher | `{prompt, option_a, ..., correct_option, points}` | `200`, `400`, `404` | Sửa câu hỏi khi đề còn ở trạng thái `draft` |
+| `DELETE`| `/api/teacher/questions/:question_id`| Teacher | Không | `200`, `400`, `403`, `404`| Xóa câu hỏi khỏi đề nháp |
+| `PATCH`| `/api/teacher/exams/:id/publish` | Teacher | Không | `200`, `400`, `404` | Xuất bản đề thi (yêu cầu ít nhất 1 câu hỏi) |
+| `GET` | `/api/teacher/exams/:id/results` | Teacher | Không | `200`, `404` | Xem kết quả thi: danh sách điểm, ĐTB, điểm cao nhất, thấp nhất |
+| `GET` | `/api/teacher/exams/:id/results/export` | Teacher | Không | `200`, `404` | Xuất bảng điểm CSV có tiền tố UTF-8 BOM cho Excel |
+| `PATCH`| `/api/teacher/attempts/:id/score`| Teacher | `{score, teacher_note}` | `200`, `400`, `404` | Sửa điểm thi, ghi chú lý do và lưu audit log |
+| `DELETE`| `/api/teacher/attempts/:id` | Teacher | Không | `200`, `404` | Xóa lượt thi cho sinh viên thi lại và lưu audit log |
+| `GET` | `/api/teacher/audit-logs` | Teacher | Không | `200` | Xem danh sách nhật ký kiểm toán (sửa điểm, reset lượt thi) |
+| `GET` | `/api/teacher/students` | Teacher | Query: `?q=search_term` | `200` | Danh sách sinh viên, thống kê số bài đã thi |
+| `POST` | `/api/teacher/students` | Teacher | `{full_name, email, password}` | `201`, `400`, `409` | Thêm tài khoản sinh viên mới |
+| `PUT` | `/api/teacher/students/:id` | Teacher | `{full_name, email, password?}` | `200`, `400`, `404`, `409` | Sửa thông tin sinh viên hoặc đặt lại mật khẩu |
+| `DELETE`| `/api/teacher/students/:id` | Teacher | Không | `200`, `404` | Xóa tài khoản sinh viên kèm dữ liệu làm bài |
+| `GET` | `/api/teacher/exams/:id/appeals`| Teacher | Query: `page`, `page_size`, `status`, `q` | `200`, `404` | Danh sách đơn phúc khảo của đề thi (phân trang) |
+| `GET` | `/api/teacher/appeals/:appealId` | Teacher | Không | `200`, `404` | Chi tiết đơn phúc khảo và bài làm của sinh viên |
+| `PATCH`| `/api/teacher/appeals/:appealId/reply` | Teacher | `{response}` | `200`, `400`, `404`, `409`| Gửi phản hồi cho đơn phúc khảo |
+| `PATCH`| `/api/teacher/appeals/:appealId/reject`| Teacher | `{response}` (tùy chọn) | `200`, `404`, `409` | Từ chối đơn phúc khảo |
+| `PATCH`| `/api/teacher/appeals/:appealId/resolve`| Teacher | `{response}` (tùy chọn) | `200`, `404`, `409` | Chấp thuận đơn phúc khảo |
 
-#### C. Nhóm Sinh viên (Student APIs - Role = `student`)
-| Method | Endpoint | Quyền hạn | Request Body / Query Params | Mã phản hồi | Mô tả chức năng |
+#### C. Nhóm Sinh viên (Role = `student`)
+| Method | Endpoint | Quyền hạn | Tham số / Body | Mã HTTP | Mô tả chức năng |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| `GET` | `/api/student/exams/available` | Student | Không | `200` | Danh mục các bài thi đang mở và trạng thái tương ứng |
-| `GET` | `/api/student/exams/lookup` | Student | Query: `?code=XYZ` | `200`, `400`, `404`, `429` | Tra cứu đề thi theo mã kỳ thi (Áp dụng Rate limit 15 req/phút/IP) |
-| `GET` | `/api/student/attempts` | Student | Không | `200` | Lấy danh sách các lượt thi gần đây của thí sinh |
-| `GET` | `/api/student/history` | Student | Query: `page`, `page_size`, `q`, `appeal_status` | `200` | Lấy lịch sử các bài thi đã hoàn thành (phân trang) |
+| `GET` | `/api/student/exams/available` | Student | Không | `200` | Danh sách bài thi đang mở và trạng thái làm bài |
+| `GET` | `/api/student/exams/lookup` | Student | Query: `?code=XYZ` | `200`, `400`, `404`, `429` | Tìm kiếm đề thi theo mã đề (Rate limit 15 req/phút/IP) |
+| `GET` | `/api/student/attempts` | Student | Không | `200` | Danh sách các lượt thi gần đây |
+| `GET` | `/api/student/history` | Student | Query: `page`, `page_size`, `q`, `appeal_status` | `200` | Danh sách lịch sử các bài thi đã làm |
 | `GET` | `/api/student/history/:submissionId` | Student | Không | `200`, `404` | Chi tiết bài thi đã nộp (Đáp án đúng chỉ hiện khi đề thi đã kết thúc) |
-| `POST` | `/api/student/appeals` | Student | `{submissionId, title, content}` | `201`, `400`, `404`, `409` | Gửi đơn khiếu nại kết quả thi |
-| `POST` | `/api/student/exams/:id/start` | Student | `{confirmed: true}` | `200`, `400`, `403`, `404` | Bắt đầu hoặc Resume bài thi (Trả về câu hỏi xáo trộn tất định) |
-| `POST` | `/api/student/attempts/:id/violation`| Student | `{reason}` (tùy chọn) | `200`, `400`, `404` | **Ghi nhận vi phạm chuyển tab; tự động nộp bài khi đạt 3 lần** |
+| `POST` | `/api/student/appeals` | Student | `{submissionId, title, content}` | `201`, `400`, `404`, `409` | Gửi đơn phúc khảo kết quả thi |
+| `POST` | `/api/student/exams/:id/start` | Student | `{confirmed: true}` | `200`, `400`, `403`, `404` | Vào phòng thi hoặc làm tiếp (Trả về câu hỏi xáo trộn theo seed) |
+| `POST` | `/api/student/attempts/:id/violation`| Student | `{reason}` (tùy chọn) | `200`, `400`, `404` | Ghi nhận vi phạm chuyển tab; tự nộp bài khi đạt 3 lần |
 | `POST` | `/api/student/attempts/:id/save` | Student | `{answers: [{question_id, chosen_option}]}` | `200`, `400`, `409` | Tự động lưu bài làm (Atomic UPSERT) |
-| `POST` | `/api/student/attempts/:id/submit` | Student | `{answers: [...]}` (tùy chọn) | `200`, `400`, `404` | Nộp bài thi và chấm điểm tự động trong DB Transaction |
-| `GET` | `/api/student/attempts/:id/result` | Student | Không | `200`, `400`, `404` | Xem điểm số và đối soát bài làm sau khi nộp |
+| `POST` | `/api/student/attempts/:id/submit` | Student | `{answers: [...]}` (tùy chọn) | `200`, `400`, `404` | Nộp bài thi và chấm điểm tự động |
+| `GET` | `/api/student/attempts/:id/result` | Student | Không | `200`, `400`, `404` | Xem điểm số và kết quả bài làm sau khi nộp |
 
-#### D. Nhóm Thông báo Nội bộ (Notification APIs - Authenticated)
-| Method | Endpoint | Quyền hạn | Request Body / Query Params | Mã phản hồi | Mô tả chức năng |
+#### D. Nhóm Thông báo (Authenticated)
+| Method | Endpoint | Quyền hạn | Tham số / Body | Mã HTTP | Mô tả chức năng |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| `GET` | `/api/notifications` | Auth | Không | `200` | Lấy 20 thông báo mới nhất kèm số lượng chưa đọc (`unread_count`) |
-| `PATCH`| `/api/notifications/:id/read` | Auth | Không | `200`, `404` | Đánh dấu một thông báo cụ thể là đã đọc |
-| `PATCH`| `/api/notifications/read-all` | Auth | Không | `200` | Đánh dấu tất cả thông báo của người dùng là đã đọc |
+| `GET` | `/api/notifications` | Auth | Không | `200` | Lấy 20 thông báo mới nhất kèm số lượng chưa đọc |
+| `PATCH`| `/api/notifications/:id/read` | Auth | Không | `200`, `404` | Đánh dấu một thông báo là đã đọc |
+| `PATCH`| `/api/notifications/read-all` | Auth | Không | `200` | Đánh dấu toàn bộ thông báo là đã đọc |
 
 ---
 
-### 6.2. Phân tích Chi tiết các Lớp Phòng thủ Bảo mật (Security Architecture)
+### 6.2. Các biện pháp bảo mật trong hệ thống
 
-Hệ thống triển khai mô hình phòng thủ theo chiều sâu (Defense-in-Depth) với 7 lớp rào chắn an ninh mạng:
+1. **Chống SQL Injection**:
+   - Mọi truy vấn đều sử dụng tham số hóa qua GORM ORM, không nối chuỗi trực tiếp vào câu lệnh SQL.
+   - Hàm tiện ích `parseUintParam` kiểm tra chặt chẽ tham số trên URL (`:id`), trả về lỗi ngay nếu tham số không phải số nguyên dương hợp lệ.
 
-1. **Phòng chống Tấn công SQL Injection (Parameterization & Strict Parsing)**:
-   - 100% câu truy vấn cơ sở dữ liệu được tham số hóa thông qua GORM ORM. Tuyệt đối không nối chuỗi văn bản thô vào mệnh đề SQL.
-   - Hàm helper `parseUintParam(c, paramName)` thực hiện trích xuất và kiểm tra chặt chẽ kiểu số nguyên dương (`uint`) đối với mọi tham số trên URL (`:id`, `:attempt_id`, `:question_id`), từ chối ngay lập tức các ký tự đặc biệt hoặc payload injection.
+2. **Chống lỗi phân quyền đối tượng trực tiếp (IDOR)**:
+   - Khi Giảng viên thao tác trên đề thi, câu hỏi, điểm số hoặc lượt thi: Backend kiểm tra điều kiện sở hữu `Where("id = ? AND teacher_id = ?", id, currentTeacherID)`. Giảng viên không thể xem hoặc sửa dữ liệu của đề thi thuộc giảng viên khác.
+   - Khi Sinh viên lưu bài, nộp bài, ghi nhận vi phạm hoặc phúc khảo: Backend xác minh `Where("id = ? AND user_id = ?", attemptID, currentStudentID)`. Sinh viên không thể can thiệp bài làm của người khác bằng cách đổi ID trong request.
 
-2. **Phòng chống Lỗ hổng Phân quyền Đối tượng Trực tiếp (Insecure Direct Object References - IDOR)**:
-   - Khi Giảng viên thao tác chỉnh sửa/xóa đề thi, câu hỏi, sửa điểm hoặc reset lượt thi: Backend luôn kèm điều kiện kép `Where("id = ? AND teacher_id = ?", id, currentTeacherID)`. Giảng viên này tuyệt đối không thể can thiệp dữ liệu của giảng viên khác.
-   - Khi Sinh viên lưu bài, nộp bài, ghi nhận vi phạm hoặc nộp khiếu nại: Backend luôn xác minh `Where("id = ? AND user_id = ?", attemptID, currentStudentID)`. Sinh viên không thể xem hoặc sửa bài làm của thí sinh khác bằng cách thay đổi ID trên request.
+3. **Tính toán thời gian từ máy chủ (Server-Authoritative Clock)**:
+   - Các mốc thời gian bắt đầu, hạn chót và thời gian còn lại (`remaining_seconds`) đều được tính bằng `time.Now()` trên server backend. Việc chỉnh giờ trên máy tính của sinh viên không làm thay đổi thời gian làm bài.
+   - Hệ thống áp dụng thời gian ân hạn 5 giây cho trễ mạng khi nộp bài. Quá thời gian này, server từ chối lưu bài mới và tự thu bài.
 
-3. **Kiểm soát Thời gian Độc quyền phía Máy chủ (Server-Authoritative Clock)**:
-   - Mọi mốc thời gian bắt đầu, hạn chót và thời gian làm bài còn lại (`remaining_seconds`) đều được tính toán bằng `time.Now()` trên máy chủ backend.
-   - Thí sinh cố tình chỉnh lùi giờ trên máy tính cá nhân hoàn toàn không có tác dụng can thiệp thời gian thi.
-   - Áp dụng **Vùng đệm mạng 5 giây (Network Grace Period)** để bù trừ độ trễ đường truyền khi lưu/nộp bài. Sau mốc `deadline + 5s`, hệ thống từ chối lưu bài mới và tự động kích hoạt chấm điểm cưỡng chế.
+4. **Ẩn đáp án đúng trong quá trình thi (DTO Masking)**:
+   - Khi sinh viên lấy đề thi qua API `/start`, backend chuyển đổi danh sách câu hỏi sang DTO `QuestionSafe` đã loại bỏ trường `correct_option`.
+   - Khi xem lại bài làm tại `/history/:submissionId`, trường `correct_option` chỉ được trả về nếu ca thi đã kết thúc (`Now >= exam.EndTime`). Nếu ca thi vẫn đang mở, đáp án đúng vẫn được ẩn để tránh việc thí sinh nộp bài sớm rồi chia sẻ đáp án cho người khác.
 
-4. **Bảo mật Đáp án Tuyệt đối (Zero-Leak Guarantee - DTO Masking)**:
-   - Khi sinh viên lấy đề thi để làm bài (`/start`), Backend chuyển đổi 100% câu hỏi sang DTO `QuestionSafe` loại bỏ hoàn toàn trường `correct_option`. Kẻ gian mở DevTools / Network Tab cũng không thể trích xuất đáp án.
-   - Tại trang xem lại bài thi sau khi nộp (`/history/:submissionId`), trường `correct_option` chỉ được mở ra khi kỳ thi đã đóng hoàn toàn (`Now >= exam.EndTime`). Nếu kỳ thi vẫn đang diễn ra, đáp án đúng vẫn được ẩn (`nil`) để ngăn chặn việc thí sinh nộp bài sớm rồi tuồn đáp án cho bạn thi.
+5. **Giới hạn tần suất truy cập (Rate Limiting)**:
+   - Giới hạn 15 request/phút/IP đối với các endpoint nhạy cảm (`/api/auth/login` và `/api/student/exams/lookup`).
+   - Sử dụng sliding window in-memory với `sync.Mutex` để an toàn luồng, tự động giải phóng bộ nhớ của các IP không hoạt động.
+   - Tự động bỏ qua rate limit trong môi trường kiểm thử (`gin.Mode() == gin.TestMode`).
 
-5. **Giới hạn Tần suất Truy cập (In-Memory Sliding Window Rate Limiting)**:
-   - Áp dụng ngưỡng 15 request/phút/IP trên các route nhạy cảm (`/api/auth/login` và `/api/student/exams/lookup`).
-   - Cấu trúc dữ liệu sliding window được đồng bộ an toàn luồng bằng `sync.Mutex`, có cơ chế dọn dẹp bộ nhớ RAM tự động đối với các IP không hoạt động.
-   - Cung cấp cơ chế tự động Bypass trong môi trường kiểm thử (`gin.Mode() == gin.TestMode` hoặc `RATE_LIMIT_DISABLED=true`) để không làm gián đoạn CI/CD.
+6. **HTTP Security Headers và giới hạn kích thước Request Body**:
+   - Middleware `SecurityMiddleware` tự động gắn các tiêu đề HTTP:
+     - `X-Content-Type-Options: nosniff`: Chống MIME-sniffing.
+     - `X-Frame-Options: DENY`: Chống Clickjacking, không cho phép nhúng ứng dụng vào thẻ iframe.
+     - `Referrer-Policy: strict-origin-when-cross-origin`: Giới hạn thông tin referrer gửi ra ngoài.
+   - Sử dụng `http.MaxBytesReader` giới hạn dung lượng request body tối đa 2MB để tránh tấn công làm cạn kiệt bộ nhớ máy chủ.
 
-6. **Gia cố Tiêu đề HTTP (Security Headers) & Giới hạn Kích thước Body 2MB**:
-   - Middleware `SecurityMiddleware` áp dụng toàn cục các tiêu chuẩn an ninh HTTP:
-     - `X-Content-Type-Options: nosniff`: Ngăn chặn MIME-sniffing attack.
-     - `X-Frame-Options: DENY`: Triệt tiêu nguy cơ Clickjacking, cấm nhúng hệ thống vào thẻ iframe.
-     - `Referrer-Policy: strict-origin-when-cross-origin`: Bảo vệ token và URL nhạy cảm.
-   - Sử dụng `http.MaxBytesReader` giới hạn payload gửi lên tối đa 2MB, ngăn chặn triệt để tấn công DoS tràn bộ nhớ RAM (Memory Exhaustion).
-
-7. **Nhật ký Kiểm toán Bất biến (Immutable Audit Trail)**:
-   - Mọi thao tác sửa điểm (`UPDATE_SCORE`) hoặc reset lượt thi (`RESET_ATTEMPT`) của Giảng viên đều được lưu vết vĩnh viễn trong bảng `audit_logs` ngay trong Database Transaction.
-   - Không cung cấp API sửa/xóa nhật ký kiểm toán, bảo đảm tính minh bạch và phục vụ thanh tra khảo thí đại học.
+7. **Nhật ký kiểm toán (Audit Trail)**:
+   - Mọi thao tác sửa điểm (`UPDATE_SCORE`) hoặc cho thi lại (`RESET_ATTEMPT`) của Giảng viên đều được lưu vào bảng `audit_logs` ngay trong database transaction.
+   - Không có API xóa hoặc sửa các bản ghi nhật ký kiểm toán, bảo đảm dữ liệu lưu vết được giữ nguyên vẹn phục vụ hậu kiểm.
 
 ---
 
-### 6.3. Báo cáo Kết quả Kiểm thử Tự động (Integration Test Suite)
+### 6.3. Kết quả kiểm thử tự động (Integration Test Suite)
 
-Toàn bộ hệ thống Backend được kiểm thử tự động nghiêm ngặt thông qua file [main_test.go](file:///D:/Dung/USTH/CMC/CCYBER/RnD/exam-system-mvp/backend/main_test.go) bao gồm **22 kịch bản tích hợp chuyên sâu**.
+Toàn bộ logic backend được kiểm thử qua file [main_test.go](file:///D:/Dung/USTH/CMC/CCYBER/RnD/exam-system-mvp/backend/main_test.go) với **22 kịch bản tích hợp**.
 
 Kết quả thực thi lệnh `go test -v ./...`:
 ```
@@ -819,7 +812,7 @@ PASS
 ok      exam-system-mvp 8.877s
 ```
 
-#### Danh mục 22 Kịch bản Kiểm thử Đạt 100% PASS:
+#### Danh sách 22 kịch bản kiểm thử:
 1. `TestMVP_FullFlow/UC01_Register_Student`: Đăng ký tài khoản sinh viên mới thành công.
 2. `TestMVP_FullFlow/UC01_Register_Duplicate_Email_Should_Fail`: Chặn đăng ký khi trùng email (409 Conflict).
 3. `TestMVP_FullFlow/UC01_Verify_Seeded_Accounts`: Xác thực các tài khoản mẫu ban đầu.
@@ -827,24 +820,33 @@ ok      exam-system-mvp 8.877s
 5. `TestMVP_FullFlow/UC01_Login_Student`: Đăng nhập vai trò Sinh viên thành công.
 6. `TestMVP_FullFlow/UC01_Login_Wrong_Password_Should_Fail`: Chặn đăng nhập khi sai mật khẩu (401 Unauthorized).
 7. `TestMVP_FullFlow/UC02_Create_Exam`: Giảng viên tạo đề thi mới thành công.
-8. `TestMVP_FullFlow/UC02_Add_Questions`: Giảng viên thêm câu hỏi vào đề thi bản nháp.
+8. `TestMVP_FullFlow/UC02_Add_Questions`: Giảng viên thêm câu hỏi vào đề thi nháp.
 9. `TestMVP_FullFlow/UC02_Publish_Exam`: Xuất bản đề thi chính thức.
-10. `TestMVP_FullFlow/UC02_Cannot_Add_Questions_After_Publish`: Chặn thêm câu hỏi sau khi đề thi đã xuất bản.
+10. `TestMVP_FullFlow/UC02_Cannot_Add_Questions_After_Publish`: Chặn thêm câu hỏi sau khi đề đã xuất bản.
 11. `TestMVP_FullFlow/UC02_Student_Cannot_Access_Teacher_API`: Chặn Sinh viên truy cập API Giảng viên (403 Forbidden).
 12. `TestMVP_FullFlow/UC02_Teacher_Cannot_Access_Student_API`: Chặn Giảng viên truy cập API Sinh viên (403 Forbidden).
 13. `TestMVP_FullFlow/UC02_Unauthenticated_Cannot_Access`: Chặn truy cập khi chưa có JWT Token (401 Unauthorized).
-14. `TestMVP_FullFlow/UC03_Lookup_Exam_By_Code`: Tra cứu đề thi bằng mã phòng thi thành công.
-15. `TestMVP_FullFlow/UC03_Lookup_Invalid_Code`: Báo lỗi 404 khi tra cứu mã đề không tồn tại.
+14. `TestMVP_FullFlow/UC03_Lookup_Exam_By_Code`: Tìm đề thi bằng mã đề thành công.
+15. `TestMVP_FullFlow/UC03_Lookup_Invalid_Code`: Trả về 404 khi mã đề không tồn tại.
 16. `TestMVP_FullFlow/UC04_Start_Exam`: Bắt đầu thi, nhận câu hỏi an toàn (QuestionSafe DTO).
-17. `TestMVP_FullFlow/UC04_Save_Answer_Q1`: Tự động lưu câu trả lời (Atomic UPSERT).
+17. `TestMVP_FullFlow/UC04_Save_Answer_Q1`: Tự động lưu đáp án (UPSERT).
 18. `TestMVP_FullFlow/UC04_Resume_Exam_Restores_Answers`: Khôi phục câu trả lời khi vào lại bài thi dở dang.
-19. `TestMVP_FullFlow/UC05_Submit_With_Answers`: Nộp bài thi và chấm điểm tự động trong DB Transaction.
+19. `TestMVP_FullFlow/UC05_Submit_With_Answers`: Nộp bài và chấm điểm tự động trong database transaction.
 20. `TestMVP_FullFlow/UC05_Cannot_Submit_Twice`: Chặn nộp bài 2 lần cho cùng một lượt thi.
-21. `TestNotifications_FullWorkflow`: Kiểm tra toàn bộ vòng đời Thông báo tự động (Sinh viên khiếu nại -> Báo Giảng viên; Giảng viên phản hồi/sửa điểm -> Báo Sinh viên; Đánh dấu đã đọc đơn lẻ và toàn bộ).
-22. `TestSecurityMiddleware_HeadersAndBodyLimit`: Kiểm tra các HTTP Security Headers (`nosniff`, `DENY`, `strict-origin`) và cơ chế từ chối request body vượt quá hạn mức 2MB.
+21. `TestNotifications_FullWorkflow`: Kiểm tra toàn bộ vòng đời thông báo (sinh viên gửi phúc khảo, giảng viên phản hồi/sửa điểm, đánh dấu đã đọc).
+22. `TestSecurityMiddleware_HeadersAndBodyLimit`: Kiểm tra các HTTP Security Headers (`nosniff`, `DENY`, `strict-origin`) và cơ chế chặn request body vượt quá 2MB.
 
 ---
 
-## 7. KẾT LUẬN
+## 7. KẾT LUẬN VÀ HƯỚNG PHÁT TRIỂN
 
-Hệ thống **Online Examination System MVP v2.0** đã được thiết kế và lập trình hoàn thiện với độ chín muồi cao về mặt kiến trúc phần mềm, năng lực mở rộng và bảo mật thông tin. Việc kết hợp chặt chẽ giữa các quy tắc thiết kế cơ sở dữ liệu chuẩn hóa 3NF, giao dịch nguyên tử ACID, kiểm soát thời gian từ máy chủ, xáo trộn đề tất định và hệ thống thông báo nội bộ hai chiều đã biến hệ thống thành một nền tảng khảo thí đại học trực tuyến tin cậy, vững chắc và chuyên nghiệp.
+Dự án đã hoàn thành các mục tiêu đề ra cho một hệ thống thi trắc nghiệm trực tuyến ở quy mô đồ án môn học / đồ án tốt nghiệp:
+- Xây dựng đầy đủ các chức năng quản lý đề thi, câu hỏi, điểm số và tài khoản sinh viên.
+- Tổ chức phòng thi trực tuyến với đồng hồ server, xáo trộn câu hỏi ngẫu nhiên theo seed, lưu bài tự động và giám sát việc chuyển tab.
+- Xây dựng quy trình xử lý đơn phúc khảo và hệ thống thông báo nội bộ hỗ trợ tương tác giữa sinh viên và giảng viên.
+- Đạt kết quả pass 22/22 kịch bản kiểm thử tích hợp trên môi trường SQLite in-memory có cấu hình WAL mode.
+
+**Hướng phát triển tiếp theo**:
+- Bổ sung giám sát camera (webcam proctoring) và nhận diện khuôn mặt thí sinh.
+- Hỗ trợ thêm các dạng câu hỏi phong phú hơn: câu hỏi điền từ, nhiều đáp án đúng, câu hỏi ghép đôi.
+- Xây dựng module phân tích đề thi nâng cao: tính độ phân biệt (discrimination index), độ khó của từng câu hỏi và biểu đồ phân phối điểm chi tiết hơn.

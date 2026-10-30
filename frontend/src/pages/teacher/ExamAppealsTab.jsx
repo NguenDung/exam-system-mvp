@@ -26,7 +26,7 @@ function AppealDetailModal({ appealId, onClose, onUpdated }) {
       setDetail(data);
       setResponse(data.appeal.teacher_response || '');
     } catch (requestError) {
-      setError(requestError.response?.data?.error || 'Không thể tải chi tiết khiếu nại.');
+      setError(requestError.response?.data?.error || 'Không thể tải chi tiết phúc khảo.');
     } finally {
       setLoading(false);
     }
@@ -47,7 +47,7 @@ function AppealDetailModal({ appealId, onClose, onUpdated }) {
       onUpdated();
       await loadAppeal();
     } catch (requestError) {
-      setError(requestError.response?.data?.error || 'Cập nhật trạng thái khiếu nại không thành công.');
+      setError(requestError.response?.data?.error || 'Cập nhật phúc khảo thất bại.');
     } finally {
       setWorking(false);
     }
@@ -65,7 +65,7 @@ function AppealDetailModal({ appealId, onClose, onUpdated }) {
       >
         <div className="mb-5 flex items-start justify-between gap-4 border-b border-slate-200 pb-4">
           <div>
-            <h2 id="teacher-appeal-title" className="text-lg font-bold text-slate-900">Chi tiết khiếu nại kết quả thi</h2>
+            <h2 id="teacher-appeal-title" className="text-lg font-bold text-slate-900">Chi tiết đơn phúc khảo</h2>
             {detail && <p className="mt-0.5 text-xs text-slate-500">Môn thi: {detail.exam.title}</p>}
           </div>
           <button onClick={onClose} className="btn-secondary btn-sm">Đóng</button>
@@ -92,8 +92,8 @@ function AppealDetailModal({ appealId, onClose, onUpdated }) {
               <div>
                 <p className="text-xs text-slate-500">Thời gian làm bài</p>
                 <p className="text-xs text-slate-700">
-                  {new Date(detail.submission.started_at).toLocaleString('vi-VN')} –{' '}
-                  {detail.submission.submitted_at ? new Date(detail.submission.submitted_at).toLocaleString('vi-VN') : '—'}
+                  {new Date(detail.submission.started_at).toLocaleString('vi-VN')} -{' '}
+                  {detail.submission.submitted_at ? new Date(detail.submission.submitted_at).toLocaleString('vi-VN') : '-'}
                 </p>
               </div>
               <div>
@@ -103,7 +103,7 @@ function AppealDetailModal({ appealId, onClose, onUpdated }) {
             </div>
 
             <section className="border border-slate-200 rounded-md p-4">
-              <h3 className="font-semibold text-slate-900 text-sm">{detail.appeal.title || 'Khiếu nại điểm thi'}</h3>
+              <h3 className="font-semibold text-slate-900 text-sm">{detail.appeal.title || 'Đơn phúc khảo'}</h3>
               <p className="mt-2 whitespace-pre-wrap text-sm text-slate-700 leading-relaxed bg-slate-50 p-3 rounded border border-slate-100">
                 {detail.appeal.content}
               </p>
@@ -160,10 +160,10 @@ function AppealDetailModal({ appealId, onClose, onUpdated }) {
                 {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
                 <div className="flex flex-wrap justify-end gap-2 pt-1">
                   <button disabled={working} onClick={() => updateAppeal('reject')} className="btn-danger btn-sm">
-                    Từ chối khiếu nại
+                    Từ chối phúc khảo
                   </button>
                   <button disabled={working} onClick={() => updateAppeal('resolve')} className="btn-secondary btn-sm">
-                    Đã giải quyết xong
+                    Chấp thuận
                   </button>
                   <button
                     disabled={working || !response.trim()}
@@ -208,7 +208,7 @@ export default function ExamAppealsTab({ examId }) {
       setItems(data.items || []);
       setTotal(data.pagination?.total || 0);
     } catch (requestError) {
-      setError(requestError.response?.data?.error || 'Không thể tải danh sách khiếu nại.');
+      setError(requestError.response?.data?.error || 'Không thể tải danh sách phúc khảo.');
     } finally {
       setLoading(false);
     }
@@ -233,7 +233,7 @@ export default function ExamAppealsTab({ examId }) {
           onChange={(event) => setSearchValue(event.target.value)}
           className="input flex-1"
           placeholder="Tìm theo tên thí sinh, tiêu đề hoặc nội dung..."
-          aria-label="Tìm kiếm khiếu nại"
+          aria-label="Tìm kiếm phúc khảo"
         />
         <select
           value={status}
@@ -259,7 +259,7 @@ export default function ExamAppealsTab({ examId }) {
           <div className="flex justify-center py-16"><Spinner size="lg" /></div>
         ) : items.length === 0 ? (
           <div className="py-16 text-center text-slate-500">
-            <p>{search || status ? 'Không tìm thấy khiếu nại phù hợp.' : 'Chưa có khiếu nại nào cho đề thi này.'}</p>
+            <p>{search || status ? 'Không tìm thấy đơn phúc khảo phù hợp.' : 'Chưa có đơn phúc khảo nào cho đề thi này.'}</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -283,7 +283,7 @@ export default function ExamAppealsTab({ examId }) {
                       <p className="font-medium text-slate-900">{item.student_name}</p>
                       <p className="text-xs text-slate-500">{item.student_email}</p>
                     </td>
-                    <td className="px-4 py-3 font-medium text-slate-800">{item.title || 'Khiếu nại điểm thi'}</td>
+                    <td className="px-4 py-3 font-medium text-slate-800">{item.title || 'Đơn phúc khảo'}</td>
                     <td className="max-w-xs px-4 py-3">
                       <p className="truncate text-slate-600" title={item.content}>{item.content}</p>
                     </td>
@@ -310,7 +310,7 @@ export default function ExamAppealsTab({ examId }) {
 
       {!loading && total > 0 && (
         <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-slate-600">
-          <span>Tổng số: {total} khiếu nại · Trang {page}/{pageCount}</span>
+          <span>Tổng số: {total} đơn phúc khảo · Trang {page}/{pageCount}</span>
           <div className="flex gap-2">
             <button disabled={page <= 1} onClick={() => setPage((v) => v - 1)} className="btn-secondary btn-sm">Trước</button>
             <button disabled={page >= pageCount} onClick={() => setPage((v) => v + 1)} className="btn-secondary btn-sm">Sau</button>

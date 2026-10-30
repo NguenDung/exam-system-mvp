@@ -57,11 +57,9 @@ type StudentHistoryItem struct {
 	AppealCount  int        `json:"appeal_count"`
 }
 
-// StudentGetHistory returns a paginated list of completed exams taken by the student.
 func StudentGetHistory(c *gin.Context) {
 	userID, _ := c.Get("user_id")
 
-	// Proactively grade any expired in-progress attempts so they appear in history
 	var examIDs []uint
 	config.DB.Model(&models.ExamAttempt{}).
 		Where("user_id = ? AND status = ?", userID, "in_progress").
@@ -141,7 +139,6 @@ type HistoryAnswer struct {
 	PointsAwarded float64 `json:"points_awarded"`
 }
 
-// StudentGetHistoryDetail returns full details of a completed exam submission including review answers and appeals.
 func StudentGetHistoryDetail(c *gin.Context) {
 	userID, _ := c.Get("user_id")
 	submissionID, ok := parseUintParam(c, "submissionId")
@@ -210,7 +207,6 @@ type CreateAppealInput struct {
 	Content      string `json:"content" binding:"required"`
 }
 
-// StudentCreateAppeal creates a new appeal for a completed submission.
 func StudentCreateAppeal(c *gin.Context) {
 	userID, _ := c.Get("user_id")
 	var input CreateAppealInput
@@ -239,7 +235,6 @@ func StudentCreateAppeal(c *gin.Context) {
 		return
 	}
 
-	// Prevent duplicate pending appeals on the same submission
 	var pendingCount int64
 	config.DB.Model(&models.Appeal{}).
 		Where("submission_id = ? AND student_id = ? AND status = ?", attempt.ID, userID, models.AppealStatusPending).
@@ -295,7 +290,6 @@ type TeacherAppealItem struct {
 	Score        float64   `json:"score"`
 }
 
-// TeacherListExamAppeals lists all appeals for a specific exam owned by the teacher.
 func TeacherListExamAppeals(c *gin.Context) {
 	teacherID, _ := c.Get("user_id")
 	examID, ok := parseUintParam(c, "id")
@@ -361,7 +355,6 @@ type TeacherAppealAnswer struct {
 	Points        float64 `json:"points"`
 }
 
-// TeacherGetAppeal gets detail of a single appeal.
 func TeacherGetAppeal(c *gin.Context) {
 	teacherID, _ := c.Get("user_id")
 	appealID, ok := parseUintParam(c, "appealId")
@@ -431,7 +424,6 @@ type AppealReplyInput struct {
 	Response string `json:"response"`
 }
 
-// TeacherReplyAppeal allows a teacher to respond to an appeal.
 func TeacherReplyAppeal(c *gin.Context) {
 	var input AppealReplyInput
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -446,7 +438,6 @@ func TeacherReplyAppeal(c *gin.Context) {
 	updateAppealStatus(c, models.AppealStatusReplied, &response)
 }
 
-// TeacherRejectAppeal marks an appeal as rejected, with an optional teacher response note.
 func TeacherRejectAppeal(c *gin.Context) {
 	var input AppealReplyInput
 	_ = c.ShouldBindJSON(&input)
@@ -458,7 +449,6 @@ func TeacherRejectAppeal(c *gin.Context) {
 	updateAppealStatus(c, models.AppealStatusRejected, resp)
 }
 
-// TeacherResolveAppeal marks an appeal as resolved, with an optional teacher response note.
 func TeacherResolveAppeal(c *gin.Context) {
 	var input AppealReplyInput
 	_ = c.ShouldBindJSON(&input)

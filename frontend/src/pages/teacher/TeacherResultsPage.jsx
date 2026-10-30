@@ -170,7 +170,6 @@ export default function TeacherResultsPage() {
         </button>
         <div className="flex-1">
           <h1 className="text-xl font-bold text-slate-900">{exam.title}</h1>
-          <p className="text-slate-500 text-sm mt-0.5">Báo cáo bảng điểm và phân bố kết quả thi</p>
         </div>
         <div className="flex gap-2 flex-wrap">
           <button
@@ -178,9 +177,9 @@ export default function TeacherResultsPage() {
             disabled={exportingCSV}
             className="btn-secondary btn-sm"
           >
-            {exportingCSV ? 'Đang xuất CSV...' : 'Xuất bảng điểm (CSV)'}
+            {exportingCSV ? 'Đang xuất CSV...' : 'Xuất CSV'}
           </button>
-          <button onClick={fetchResults} className="btn-secondary btn-sm">Làm mới dữ liệu</button>
+          <button onClick={fetchResults} className="btn-secondary btn-sm">Làm mới</button>
         </div>
       </div>
 
@@ -198,7 +197,7 @@ export default function TeacherResultsPage() {
 
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
-        <StatCard label="Tổng số bài nộp" value={stats.total_students} />
+        <StatCard label="Lượt làm bài" value={stats.total_students} />
         <StatCard label="Điểm trung bình" value={stats.total_students > 0 ? stats.avg_score.toFixed(2) : '—'} />
         <StatCard label="Điểm cao nhất" value={stats.total_students > 0 ? stats.max_score.toFixed(2) : '—'} />
         <StatCard label="Điểm thấp nhất" value={stats.total_students > 0 ? stats.min_score.toFixed(2) : '—'} />
@@ -207,7 +206,7 @@ export default function TeacherResultsPage() {
       {/* Results table */}
       <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
         <div className="px-5 py-3.5 border-b border-slate-200 flex items-center justify-between">
-          <h3 className="font-semibold text-slate-900 text-sm">Danh sách điểm thí sinh</h3>
+          <h3 className="font-semibold text-slate-900 text-sm">Bảng điểm</h3>
           <span className="text-xs text-slate-500">{results.length} bài thi</span>
         </div>
         {results.length === 0 ? (

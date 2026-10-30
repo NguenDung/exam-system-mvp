@@ -313,10 +313,9 @@ export default function TeacherExamsPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-bold text-slate-900">Danh mục đề thi</h1>
-          <p className="text-slate-500 text-sm mt-0.5">Quản trị danh sách đề thi trắc nghiệm đã tạo</p>
         </div>
         <button onClick={() => setShowCreateModal(true)} className="btn-primary">
-          Tạo đề thi mới
+          Tạo đề thi
         </button>
       </div>
 
@@ -324,8 +323,7 @@ export default function TeacherExamsPage() {
         <div className="flex justify-center py-20"><Spinner size="lg" /></div>
       ) : exams.length === 0 ? (
         <div className="card text-center py-16 border border-slate-200">
-          <p className="text-slate-600 font-medium">Chưa có đề thi nào trong danh sách</p>
-          <p className="text-slate-400 text-sm mt-1 mb-5">Bấm nút bên dưới để khởi tạo đề thi đầu tiên</p>
+          <p className="text-slate-600 font-medium mb-4">Chưa có đề thi nào</p>
           <button onClick={() => setShowCreateModal(true)} className="btn-primary mx-auto">Tạo đề thi</button>
         </div>
       ) : (
@@ -351,7 +349,7 @@ export default function TeacherExamsPage() {
                   )}
                   <div className="flex items-center gap-5 mt-2 text-xs text-slate-500 flex-wrap">
                     <span>
-                      Mã kỳ thi: <code className="bg-slate-100 px-2 py-0.5 rounded font-mono font-bold text-slate-800">{exam.exam_code}</code>
+                      Mã đề: <code className="bg-slate-100 px-2 py-0.5 rounded font-mono font-bold text-slate-800">{exam.exam_code}</code>
                     </span>
                     <span>Thời lượng: <strong>{exam.duration} phút</strong></span>
                     <span>Bắt đầu: {new Date(exam.start_time).toLocaleString('vi-VN')}</span>

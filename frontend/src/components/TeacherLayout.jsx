@@ -37,8 +37,8 @@ export default function TeacherLayout() {
               <span className="bg-slate-700 text-slate-300 text-xs px-2 py-0.5 rounded font-medium">Giảng viên</span>
             </div>
             <nav className="flex gap-2">
-              <NavItem to="/teacher">Quản lý đề thi</NavItem>
-              <NavItem to="/teacher/students">Quản lý sinh viên</NavItem>
+              <NavItem to="/teacher">Đề thi</NavItem>
+              <NavItem to="/teacher/students">Sinh viên</NavItem>
             </nav>
           </div>
           <div className="flex items-center gap-4">

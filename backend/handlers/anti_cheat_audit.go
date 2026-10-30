@@ -16,13 +16,10 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-// ─── POST /api/student/attempts/:attempt_id/violation ────────────────────────
-
 type RecordViolationInput struct {
 	Reason string `json:"reason"`
 }
 
-// StudentRecordViolation increments violation count and auto-submits if >= 3.
 func StudentRecordViolation(c *gin.Context) {
 	userID, _ := c.Get("user_id")
 	attemptID, ok := parseUintParam(c, "attempt_id")
@@ -80,9 +77,6 @@ func StudentRecordViolation(c *gin.Context) {
 	})
 }
 
-// ─── GET /api/teacher/audit-logs ─────────────────────────────────────────────
-
-// TeacherGetAuditLogs returns audit logs for teacher operations.
 func TeacherGetAuditLogs(c *gin.Context) {
 	var logs []models.AuditLog
 	if err := config.DB.Preload("Actor").Order("created_at DESC").Limit(100).Find(&logs).Error; err != nil {
@@ -92,9 +86,6 @@ func TeacherGetAuditLogs(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"data": logs})
 }
 
-// ─── GET /api/teacher/exams/:id/results/export ────────────────────────────────
-
-// TeacherExportResultsCSV exports exam results as UTF-8 BOM CSV.
 func TeacherExportResultsCSV(c *gin.Context) {
 	teacherID, _ := c.Get("user_id")
 	examID, ok := parseUintParam(c, "id")
@@ -108,7 +99,6 @@ func TeacherExportResultsCSV(c *gin.Context) {
 		return
 	}
 
-	// Auto-grade any expired in-progress attempts before exporting
 	gradeExpiredAttempts(exam.ID)
 
 	var results []StudentResult
@@ -120,11 +110,10 @@ func TeacherExportResultsCSV(c *gin.Context) {
 		Scan(&results)
 
 	buf := &bytes.Buffer{}
-	// Write UTF-8 BOM (0xEF, 0xBB, 0xBF) for Excel Vietnamese character compatibility
+	// UTF-8 BOM for Excel
 	buf.Write([]byte{0xEF, 0xBB, 0xBF})
 
 	writer := csv.NewWriter(buf)
-	// Write Header
 	_ = writer.Write([]string{"Họ tên", "Email", "Điểm số", "Trạng thái", "Số lần vi phạm", "Thời gian nộp"})
 
 	for _, r := range results {

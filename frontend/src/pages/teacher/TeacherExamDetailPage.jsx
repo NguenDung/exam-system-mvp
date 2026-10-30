@@ -485,7 +485,7 @@ function EditScoreModal({ attempt, onClose, onUpdated }) {
               rows={3}
               value={teacherNote}
               onChange={(e) => setTeacherNote(e.target.value)}
-              placeholder="Ví dụ: Đính chính điểm câu 4 sau khi rà soát khiếu nại"
+              placeholder="Ví dụ: Đính chính điểm sau khi phúc khảo"
               className="input resize-none"
             />
           </div>
@@ -915,7 +915,7 @@ export default function TeacherExamDetailPage() {
     { id: 'info', label: 'Thông tin chung' },
     { id: 'questions', label: 'Câu hỏi & Đáp án' },
     { id: 'scores', label: 'Bảng điểm' },
-    { id: 'appeals', label: 'Quản lý khiếu nại' },
+    { id: 'appeals', label: 'Phúc khảo' },
   ];
 
   return (
@@ -934,7 +934,7 @@ export default function TeacherExamDetailPage() {
       {/* Header */}
       <div className="flex items-start gap-4 mb-6 flex-wrap">
         <button onClick={() => navigate('/teacher')} className="btn-secondary btn-sm mt-0.5">
-          Quay lại danh mục
+          Quay lại danh sách đề
         </button>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-3 flex-wrap">
@@ -962,7 +962,7 @@ export default function TeacherExamDetailPage() {
             onClick={() => setShowEditExamModal(true)}
             className="btn-secondary btn-sm"
           >
-            Chỉnh sửa đề thi
+            Sửa đề thi
           </button>
           <button
             onClick={() => setShowDeleteExamModal(true)}
@@ -971,11 +971,11 @@ export default function TeacherExamDetailPage() {
             Xóa đề thi
           </button>
           <Link to={`/teacher/exams/${id}/results`} className="btn-secondary btn-sm">
-            Thống kê phổ điểm
+            Xem bảng điểm
           </Link>
           {isDraft && (
             <button onClick={handlePublish} disabled={publishing || questions.length === 0} className="btn-primary btn-sm">
-              {publishing ? <Spinner size="sm" /> : null} Xuất bản đề thi
+              {publishing ? <Spinner size="sm" /> : null} Xuất bản đề
             </button>
           )}
         </div>
@@ -1132,7 +1132,7 @@ export default function TeacherExamDetailPage() {
                         <p className="text-xs text-slate-500">{result.email}</p>
                       </td>
                       <td className="py-3 px-3 font-semibold text-slate-900">
-                        {result.status === 'completed' ? Number(result.score).toFixed(2) : '—'}
+                        {result.status === 'completed' ? Number(result.score).toFixed(2) : '-'}
                       </td>
                       <td className="py-3 px-3">
                         <span className={`px-2 py-0.5 rounded text-xs font-semibold ${
@@ -1155,10 +1155,10 @@ export default function TeacherExamDetailPage() {
                         )}
                       </td>
                       <td className="py-3 px-3 text-slate-500 text-xs">
-                        {result.submitted_at ? new Date(result.submitted_at).toLocaleString('vi-VN') : '—'}
+                        {result.submitted_at ? new Date(result.submitted_at).toLocaleString('vi-VN') : '-'}
                       </td>
                       <td className="py-3 px-3 text-xs text-slate-500 max-w-xs truncate">
-                        {result.teacher_note || '—'}
+                        {result.teacher_note || '-'}
                       </td>
                       <td className="py-3 px-3 text-right space-x-2">
                         {result.status === 'completed' && (
@@ -1209,7 +1209,7 @@ export default function TeacherExamDetailPage() {
               <span className="font-semibold text-slate-900">{exam.title}</span> (Mã: {exam.exam_code})?
             </p>
             <p className="text-xs text-red-600 bg-red-50 p-2.5 rounded border border-red-200">
-              Cảnh báo: Hành động này sẽ xóa toàn bộ câu hỏi, lịch sử làm bài, điểm số và khiếu nại của sinh viên thuộc đề thi này.
+              Cảnh báo: Hành động này sẽ xóa toàn bộ câu hỏi, kết quả làm bài và đơn phúc khảo của đề thi này.
             </p>
             <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
               <button

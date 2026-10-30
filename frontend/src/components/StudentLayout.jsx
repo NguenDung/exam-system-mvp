@@ -36,8 +36,8 @@ export default function StudentLayout() {
               <span className="bg-slate-700 text-slate-300 text-xs px-2 py-0.5 rounded font-medium">Sinh viên</span>
             </div>
             <nav className="flex flex-wrap gap-2">
-              <NavItem to="/student" end>Làm bài thi</NavItem>
-              <NavItem to="/student/history">Lịch sử bài làm</NavItem>
+              <NavItem to="/student" end>Đề thi</NavItem>
+              <NavItem to="/student/history">Lịch sử thi</NavItem>
             </nav>
           </div>
           <div className="flex items-center gap-4">
