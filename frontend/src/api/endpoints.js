@@ -30,6 +30,8 @@ export const teacherAPI = {
   createStudent: (data) => api.post('/teacher/students', data),
   updateStudent: (studentId, data) => api.put(`/teacher/students/${studentId}`, data),
   deleteStudent: (studentId) => api.delete(`/teacher/students/${studentId}`),
+  getAuditLogs: () => api.get('/teacher/audit-logs'),
+  exportResultsCSV: (examId) => api.get(`/teacher/exams/${examId}/results/export`, { responseType: 'blob' }),
 };
 
 // ── Student ──────────────────────────────────────────────────────────────────
@@ -42,6 +44,14 @@ export const studentAPI = {
   createAppeal: (data) => api.post('/student/appeals', data),
   startExam: (examId, data = {}) => api.post(`/student/exams/${examId}/start`, data),
   saveAnswers: (attemptId, data) => api.post(`/student/attempts/${attemptId}/save`, data),
+  recordViolation: (attemptId, data = {}) => api.post(`/student/attempts/${attemptId}/violation`, data),
   submitExam: (attemptId, data) => api.post(`/student/attempts/${attemptId}/submit`, data),
   getResult: (attemptId) => api.get(`/student/attempts/${attemptId}/result`),
+};
+
+// ── Notifications ────────────────────────────────────────────────────────────
+export const notificationAPI = {
+  getAll: () => api.get('/notifications'),
+  markAsRead: (id) => api.patch(`/notifications/${id}/read`),
+  markAllAsRead: () => api.patch('/notifications/read-all'),
 };

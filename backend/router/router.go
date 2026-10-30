@@ -25,6 +25,9 @@ func SetupRouter() *gin.Engine {
 		MaxAge:           12 * time.Hour,
 	}))
 
+	// ── Security Headers & Body Size Limit (2MB) ──────────────────────────────
+	r.Use(middleware.SecurityMiddleware(2 * 1024 * 1024))
+
 	// ── Health check ──────────────────────────────────────────────────────────
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "ok", "service": "exam-system-mvp"})
@@ -36,7 +39,7 @@ func SetupRouter() *gin.Engine {
 	auth := api.Group("/auth")
 	{
 		auth.POST("/register", handlers.Register)
-		auth.POST("/login", handlers.Login)
+		auth.POST("/login", middleware.IPRateLimit(15, time.Minute), handlers.Login)
 	}
 
 	// ── Teacher routes ────────────────────────────────────────────────────────
@@ -52,6 +55,7 @@ func SetupRouter() *gin.Engine {
 		teacher.POST("/exams/:id/questions/bulk", handlers.TeacherBulkAddQuestions)
 		teacher.PATCH("/exams/:id/publish", handlers.TeacherPublishExam)
 		teacher.GET("/exams/:id/results", handlers.TeacherGetResults)
+		teacher.GET("/exams/:id/results/export", handlers.TeacherExportResultsCSV)
 		teacher.GET("/exams/:id/appeals", handlers.TeacherListExamAppeals)
 		teacher.GET("/appeals/:appealId", handlers.TeacherGetAppeal)
 		teacher.PATCH("/appeals/:appealId/reply", handlers.TeacherReplyAppeal)
@@ -61,6 +65,7 @@ func SetupRouter() *gin.Engine {
 		teacher.DELETE("/questions/:question_id", handlers.TeacherDeleteQuestion)
 		teacher.PATCH("/attempts/:id/score", handlers.TeacherUpdateAttemptScore)
 		teacher.DELETE("/attempts/:id", handlers.TeacherResetAttempt)
+		teacher.GET("/audit-logs", handlers.TeacherGetAuditLogs)
 		teacher.GET("/students", handlers.TeacherListStudents)
 		teacher.POST("/students", handlers.TeacherCreateStudent)
 		teacher.PUT("/students/:id", handlers.TeacherUpdateStudent)
@@ -72,7 +77,7 @@ func SetupRouter() *gin.Engine {
 	student.Use(middleware.AuthRequired(), middleware.RequireRole(models.RoleStudent))
 	{
 		student.GET("/exams/available", handlers.StudentGetAvailableExams)
-		student.GET("/exams/lookup", handlers.StudentLookupExam)
+		student.GET("/exams/lookup", middleware.IPRateLimit(15, time.Minute), handlers.StudentLookupExam)
 		student.GET("/history", handlers.StudentGetHistory)
 		student.GET("/history/:submissionId", handlers.StudentGetHistoryDetail)
 		student.POST("/appeals", handlers.StudentCreateAppeal)
@@ -80,7 +85,17 @@ func SetupRouter() *gin.Engine {
 		student.POST("/exams/:id/start", handlers.StudentStartExam)
 		student.POST("/attempts/:attempt_id/save", handlers.StudentSaveAnswers)
 		student.POST("/attempts/:attempt_id/submit", handlers.StudentSubmitExam)
+		student.POST("/attempts/:attempt_id/violation", handlers.StudentRecordViolation)
 		student.GET("/attempts/:attempt_id/result", handlers.StudentGetResult)
+	}
+
+	// ── Notification routes (authenticated users) ─────────────────────────────
+	notifications := api.Group("/notifications")
+	notifications.Use(middleware.AuthRequired())
+	{
+		notifications.GET("", handlers.GetNotifications)
+		notifications.PATCH("/:id/read", handlers.MarkNotificationAsRead)
+		notifications.PATCH("/read-all", handlers.MarkAllNotificationsAsRead)
 	}
 
 	return r

@@ -243,16 +243,18 @@ func TeacherPublishExam(c *gin.Context) {
 // ─── GET /api/teacher/exams/:id/results ──────────────────────────────────────
 
 type StudentResult struct {
-	AttemptID    uint       `json:"attempt_id"`
-	UserID       uint       `json:"user_id"`
-	FullName     string     `json:"full_name"`
-	Email        string     `json:"email"`
-	Score        float64    `json:"score"`
-	CorrectCount int        `json:"correct_count"`
-	WrongCount   int        `json:"wrong_count"`
-	Status       string     `json:"status"`
-	SubmittedAt  *time.Time `json:"submitted_at"`
-	StartedAt    time.Time  `json:"started_at"`
+	AttemptID      uint       `json:"attempt_id"`
+	UserID         uint       `json:"user_id"`
+	FullName       string     `json:"full_name"`
+	Email          string     `json:"email"`
+	Score          float64    `json:"score"`
+	TeacherNote    string     `json:"teacher_note"`
+	ViolationCount int        `json:"violation_count"`
+	CorrectCount   int        `json:"correct_count"`
+	WrongCount     int        `json:"wrong_count"`
+	Status         string     `json:"status"`
+	SubmittedAt    *time.Time `json:"submitted_at"`
+	StartedAt      time.Time  `json:"started_at"`
 }
 
 func TeacherGetResults(c *gin.Context) {
@@ -270,7 +272,7 @@ func TeacherGetResults(c *gin.Context) {
 
 	var results []StudentResult
 	config.DB.Table("exam_attempts ea").
-		Select("ea.id as attempt_id, ea.user_id, u.full_name, u.email, ea.score, ea.correct_count, ea.wrong_count, ea.status, ea.submitted_at, ea.started_at").
+		Select("ea.id as attempt_id, ea.user_id, u.full_name, u.email, ea.score, ea.teacher_note, ea.violation_count, ea.correct_count, ea.wrong_count, ea.status, ea.submitted_at, ea.started_at").
 		Joins("JOIN users u ON u.id = ea.user_id").
 		Where("ea.exam_id = ?", exam.ID).
 		Order("ea.score DESC").

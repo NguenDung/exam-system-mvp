@@ -508,6 +508,95 @@ function EditScoreModal({ attempt, onClose, onUpdated }) {
   );
 }
 
+function AuditLogModal({ onClose }) {
+  const [logs, setLogs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data } = await teacherAPI.getAuditLogs();
+        setLogs(data.logs || []);
+      } catch (err) {
+        setError(err.response?.data?.error || 'Không thể tải nhật ký thao tác');
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
+      <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full p-6 space-y-4 max-h-[85vh] flex flex-col">
+        <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+          <div>
+            <h3 className="text-base font-bold text-slate-900">Nhật ký can thiệp điểm số và lượt thi (Audit Log)</h3>
+            <p className="text-xs text-slate-500">Lưu vết minh bạch các hành vi sửa điểm hoặc cho phép thi lại</p>
+          </div>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-xl leading-none">&times;</button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto">
+          {loading ? (
+            <div className="flex justify-center py-12"><Spinner size="md" /></div>
+          ) : error ? (
+            <p className="text-xs text-red-600 p-3 bg-red-50 rounded border border-red-200">{error}</p>
+          ) : logs.length === 0 ? (
+            <p className="text-center py-10 text-slate-500 text-sm">Chưa có hành vi can thiệp nào được ghi lại.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-200 text-left text-slate-600">
+                    <th className="py-2.5 px-3">Thời gian</th>
+                    <th className="py-2.5 px-3">Người thực hiện</th>
+                    <th className="py-2.5 px-3">Hành động</th>
+                    <th className="py-2.5 px-3">Lượt thi</th>
+                    <th className="py-2.5 px-3">Nội dung chi tiết</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {logs.map((log) => (
+                    <tr key={log.id} className="hover:bg-slate-50">
+                      <td className="py-2.5 px-3 text-slate-500 whitespace-nowrap">
+                        {new Date(log.created_at).toLocaleString('vi-VN')}
+                      </td>
+                      <td className="py-2.5 px-3 font-medium text-slate-800">
+                        {log.actor?.full_name || 'Giảng viên'}
+                        {log.actor?.email && <span className="block text-[11px] text-slate-400 font-normal">{log.actor.email}</span>}
+                      </td>
+                      <td className="py-2.5 px-3">
+                        <span className={`px-2 py-0.5 rounded font-semibold text-[11px] ${
+                          log.action === 'UPDATE_SCORE'
+                            ? 'bg-blue-100 text-blue-800'
+                            : log.action === 'RESET_ATTEMPT'
+                            ? 'bg-amber-100 text-amber-800'
+                            : 'bg-slate-100 text-slate-800'
+                        }`}>
+                          {log.action === 'UPDATE_SCORE' ? 'Sửa điểm' : log.action === 'RESET_ATTEMPT' ? 'Cho thi lại' : log.action}
+                        </span>
+                      </td>
+                      <td className="py-2.5 px-3 font-mono text-slate-600">#{log.target_id}</td>
+                      <td className="py-2.5 px-3 text-slate-700 max-w-xs">{log.details}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        <div className="flex justify-end pt-3 border-t border-slate-100">
+          <button type="button" onClick={onClose} className="btn-secondary btn-sm">
+            Đóng
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function EditExamModal({ exam, onClose, onUpdated }) {
   const [form, setForm] = useState({
     title: exam.title || '',
@@ -665,6 +754,8 @@ export default function TeacherExamDetailPage() {
   const [resetLoading, setResetLoading] = useState(false);
   const [showDeleteExamModal, setShowDeleteExamModal] = useState(false);
   const [deleteExamLoading, setDeleteExamLoading] = useState(false);
+  const [showAuditModal, setShowAuditModal] = useState(false);
+  const [exportingCSV, setExportingCSV] = useState(false);
 
   const showToast = useCallback((msg, type = 'success') => {
     setToast({ msg, type });
@@ -792,6 +883,27 @@ export default function TeacherExamDetailPage() {
       showToast(err.response?.data?.error || 'Không thể xóa lượt thi', 'error');
     } finally {
       setResetLoading(false);
+    }
+  };
+
+  const handleExportCSV = async () => {
+    setExportingCSV(true);
+    try {
+      const response = await teacherAPI.exportResultsCSV(id);
+      const blob = new Blob([response.data], { type: 'text/csv;charset=utf-8;' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `bang-diem-${exam.exam_code || id}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      showToast('Đã tải xuống bảng điểm CSV thành công');
+    } catch (err) {
+      showToast(err.response?.data?.error || 'Lỗi khi xuất bảng điểm CSV', 'error');
+    } finally {
+      setExportingCSV(false);
     }
   };
 
@@ -974,7 +1086,20 @@ export default function TeacherExamDetailPage() {
               <h2 className="text-base font-bold text-slate-900">Bảng điểm thi sinh viên</h2>
               <p className="text-xs text-slate-500">Giảng viên có quyền hiệu chỉnh điểm thi hoặc cho phép sinh viên thi lại nếu gặp sự cố</p>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
+              <button
+                onClick={handleExportCSV}
+                disabled={exportingCSV}
+                className="btn-secondary btn-sm"
+              >
+                {exportingCSV ? 'Đang xuất CSV...' : 'Xuất bảng điểm (CSV)'}
+              </button>
+              <button
+                onClick={() => setShowAuditModal(true)}
+                className="btn-secondary btn-sm"
+              >
+                Nhật ký can thiệp
+              </button>
               <button onClick={fetchScores} className="btn-secondary btn-sm">Làm mới</button>
               <Link to={`/teacher/exams/${id}/results`} className="btn-secondary btn-sm">Xem thống kê phân phối</Link>
             </div>
@@ -987,12 +1112,13 @@ export default function TeacherExamDetailPage() {
             <p className="py-8 text-center text-slate-500">Chưa có sinh viên nào tham gia làm bài thi này.</p>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[650px] text-sm">
+              <table className="w-full min-w-[700px] text-sm">
                 <thead>
                   <tr className="border-b border-slate-200 text-left text-slate-500 bg-slate-50">
                     <th className="py-2.5 px-3">Họ và tên</th>
                     <th className="py-2.5 px-3">Điểm số</th>
                     <th className="py-2.5 px-3">Trạng thái</th>
+                    <th className="py-2.5 px-3 text-center">Số lần vi phạm</th>
                     <th className="py-2.5 px-3">Thời gian nộp</th>
                     <th className="py-2.5 px-3">Ghi chú</th>
                     <th className="py-2.5 px-3 text-right">Thao tác</th>
@@ -1014,6 +1140,19 @@ export default function TeacherExamDetailPage() {
                         }`}>
                           {result.status === 'completed' ? 'Đã nộp' : 'Đang làm'}
                         </span>
+                      </td>
+                      <td className="py-3 px-3 text-center">
+                        {result.violation_count >= 3 ? (
+                          <span className="px-2 py-0.5 rounded text-xs font-bold bg-red-100 text-red-800 border border-red-200">
+                            {result.violation_count} (Đình chỉ)
+                          </span>
+                        ) : result.violation_count > 0 ? (
+                          <span className="px-2 py-0.5 rounded text-xs font-semibold bg-amber-100 text-amber-800 border border-amber-200">
+                            {result.violation_count}
+                          </span>
+                        ) : (
+                          <span className="text-slate-400 text-xs">0</span>
+                        )}
                       </td>
                       <td className="py-3 px-3 text-slate-500 text-xs">
                         {result.submitted_at ? new Date(result.submitted_at).toLocaleString('vi-VN') : '—'}
@@ -1157,6 +1296,11 @@ export default function TeacherExamDetailPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Modal: Audit Log */}
+      {showAuditModal && (
+        <AuditLogModal onClose={() => setShowAuditModal(false)} />
       )}
     </div>
   );

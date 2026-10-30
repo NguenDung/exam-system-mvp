@@ -103,17 +103,18 @@ func ToQuestionSafe(q Question) QuestionSafe {
 // ─── ExamAttempt ─────────────────────────────────────────────────────────────
 
 type ExamAttempt struct {
-	ID           uint       `gorm:"primaryKey;autoIncrement" json:"id"`
-	ExamID       uint       `gorm:"not null;index" json:"exam_id"`
-	UserID       uint       `gorm:"not null;index" json:"user_id"`
-	Status       string     `gorm:"not null;default:'in_progress';size:20" json:"status"` // 'in_progress' | 'completed'
-	Score        float64    `gorm:"not null;default:0;type:decimal(8,2)" json:"score"`
-	TeacherNote  string     `gorm:"type:text" json:"teacher_note"`
-	CorrectCount int        `gorm:"not null;default:0" json:"correct_count"`
-	WrongCount   int        `gorm:"not null;default:0" json:"wrong_count"`
-	StartedAt    time.Time  `gorm:"not null" json:"started_at"`
-	LastSavedAt  *time.Time `json:"last_saved_at"`
-	SubmittedAt  *time.Time `json:"submitted_at"`
+	ID             uint       `gorm:"primaryKey;autoIncrement" json:"id"`
+	ExamID         uint       `gorm:"not null;index" json:"exam_id"`
+	UserID         uint       `gorm:"not null;index" json:"user_id"`
+	Status         string     `gorm:"not null;default:'in_progress';size:20" json:"status"` // 'in_progress' | 'completed'
+	Score          float64    `gorm:"not null;default:0;type:decimal(8,2)" json:"score"`
+	TeacherNote    string     `gorm:"type:text" json:"teacher_note"`
+	ViolationCount int        `gorm:"not null;default:0" json:"violation_count"`
+	CorrectCount   int        `gorm:"not null;default:0" json:"correct_count"`
+	WrongCount     int        `gorm:"not null;default:0" json:"wrong_count"`
+	StartedAt      time.Time  `gorm:"not null" json:"started_at"`
+	LastSavedAt    *time.Time `json:"last_saved_at"`
+	SubmittedAt    *time.Time `json:"submitted_at"`
 
 	// Associations
 	Exam           Exam            `gorm:"foreignKey:ExamID" json:"-"`
@@ -157,4 +158,32 @@ type AttemptAnswer struct {
 
 	// Associations
 	Question Question `gorm:"foreignKey:QuestionID" json:"-"`
+}
+
+// ─── AuditLog ────────────────────────────────────────────────────────────────
+
+type AuditLog struct {
+	ID        uint      `gorm:"primaryKey;autoIncrement" json:"id"`
+	ActorID   uint      `gorm:"not null;index" json:"actor_id"`
+	Action    string    `gorm:"not null;size:100;index" json:"action"`
+	TargetID  uint      `gorm:"not null;index" json:"target_id"`
+	Details   string    `gorm:"type:text" json:"details"`
+	CreatedAt time.Time `gorm:"not null;index" json:"created_at"`
+
+	// Associations
+	Actor User `gorm:"foreignKey:ActorID" json:"actor,omitempty"`
+}
+
+// ─── Notification ─────────────────────────────────────────────────────────────
+
+type Notification struct {
+	ID        uint      `gorm:"primaryKey;autoIncrement" json:"id"`
+	UserID    uint      `gorm:"not null;index" json:"user_id"`
+	Title     string    `gorm:"not null;size:255" json:"title"`
+	Message   string    `gorm:"not null;type:text" json:"message"`
+	IsRead    bool      `gorm:"not null;default:false;index" json:"is_read"`
+	CreatedAt time.Time `gorm:"not null;index" json:"created_at"`
+
+	// Associations
+	User User `gorm:"foreignKey:UserID" json:"-"`
 }

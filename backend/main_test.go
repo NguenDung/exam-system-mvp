@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"exam-system-mvp/config"
+	"exam-system-mvp/middleware"
 	"exam-system-mvp/models"
 	"exam-system-mvp/router"
 	"exam-system-mvp/utils"
@@ -212,6 +213,7 @@ func setupTestServer(t *testing.T) *gin.Engine {
 	}
 
 	config.DB = db
+	config.EnableSQLitePragmas(db)
 	os.Setenv("JWT_SECRET", "test_secret_key_2026")
 
 	// Migrate schema
@@ -222,6 +224,8 @@ func setupTestServer(t *testing.T) *gin.Engine {
 		&models.ExamAttempt{},
 		&models.AttemptAnswer{},
 		&models.Appeal{},
+		&models.AuditLog{},
+		&models.Notification{},
 	); err != nil {
 		t.Fatalf("AutoMigrate failed: %v", err)
 	}
@@ -290,6 +294,10 @@ func getFloat(m map[string]interface{}, keys ...string) float64 {
 	}
 	f, _ := cur.(float64)
 	return f
+}
+
+func getUint(m map[string]interface{}, keys ...string) uint {
+	return uint(getFloat(m, keys...))
 }
 
 // ─── Full integration test ────────────────────────────────────────────────────
@@ -1739,5 +1747,361 @@ func TestStudent_AvailableExams(t *testing.T) {
 	}
 	if first["attempt_status"].(string) != "not_attempted" {
 		t.Errorf("expected not_attempted, got %v", first["attempt_status"])
+	}
+}
+
+func TestAntiCheat_QuestionShufflingAndViolationLimit(t *testing.T) {
+	srv := setupTestServer(t)
+
+	w := do(t, srv, "POST", "/api/auth/login", "", map[string]interface{}{
+		"email": "student@test.com", "password": "123456",
+	})
+	studentToken := getString(parseJSON(t, w), "token")
+
+	// 1. Start Exam 1 (IT2026)
+	w = do(t, srv, "POST", "/api/student/exams/1/start", studentToken, map[string]interface{}{
+		"confirmed": true,
+	})
+	if w.Code != http.StatusOK {
+		t.Fatalf("start exam: %d %s", w.Code, w.Body)
+	}
+	res1 := parseJSON(t, w)
+	attemptID := getUint(res1["attempt"].(map[string]interface{}), "id")
+	questions1 := res1["questions"].([]interface{})
+
+	// 2. Resume Exam (call /start again) -> questions order must be strictly deterministic (identical)
+	w = do(t, srv, "POST", "/api/student/exams/1/start", studentToken, map[string]interface{}{})
+	if w.Code != http.StatusOK {
+		t.Fatalf("resume exam: %d %s", w.Code, w.Body)
+	}
+	res2 := parseJSON(t, w)
+	questions2 := res2["questions"].([]interface{})
+	if len(questions1) != len(questions2) {
+		t.Fatalf("question length mismatch: %d vs %d", len(questions1), len(questions2))
+	}
+	for i := range questions1 {
+		q1ID := getUint(questions1[i].(map[string]interface{}), "id")
+		q2ID := getUint(questions2[i].(map[string]interface{}), "id")
+		if q1ID != q2ID {
+			t.Fatalf("deterministic shuffle mismatch at index %d: %d vs %d", i, q1ID, q2ID)
+		}
+	}
+
+	// 3. Tab-switch violations:
+	// Violation 1
+	w = do(t, srv, "POST", fmt.Sprintf("/api/student/attempts/%d/violation", attemptID), studentToken, map[string]interface{}{
+		"reason": "tab_switch",
+	})
+	if w.Code != http.StatusOK {
+		t.Fatalf("violation 1 failed: %d %s", w.Code, w.Body)
+	}
+	vRes1 := parseJSON(t, w)
+	if getUint(vRes1, "violation_count") != 1 {
+		t.Errorf("expected violation_count 1, got %v", vRes1["violation_count"])
+	}
+	if vRes1["auto_submitted"].(bool) != false {
+		t.Errorf("violation 1 should not auto_submit")
+	}
+
+	// Violation 2
+	w = do(t, srv, "POST", fmt.Sprintf("/api/student/attempts/%d/violation", attemptID), studentToken, map[string]interface{}{
+		"reason": "window_blur",
+	})
+	if w.Code != http.StatusOK {
+		t.Fatalf("violation 2 failed: %d %s", w.Code, w.Body)
+	}
+	vRes2 := parseJSON(t, w)
+	if getUint(vRes2, "violation_count") != 2 {
+		t.Errorf("expected violation_count 2, got %v", vRes2["violation_count"])
+	}
+	if vRes2["auto_submitted"].(bool) != false {
+		t.Errorf("violation 2 should not auto_submit")
+	}
+
+	// Violation 3 -> must auto_submit and set status to completed!
+	w = do(t, srv, "POST", fmt.Sprintf("/api/student/attempts/%d/violation", attemptID), studentToken, map[string]interface{}{
+		"reason": "tab_switch",
+	})
+	if w.Code != http.StatusOK {
+		t.Fatalf("violation 3 failed: %d %s", w.Code, w.Body)
+	}
+	vRes3 := parseJSON(t, w)
+	if getUint(vRes3, "violation_count") != 3 {
+		t.Errorf("expected violation_count 3, got %v", vRes3["violation_count"])
+	}
+	if vRes3["auto_submitted"].(bool) != true {
+		t.Errorf("violation 3 should trigger auto_submitted = true")
+	}
+	attObj := vRes3["attempt"].(map[string]interface{})
+	if attObj["status"].(string) != "completed" {
+		t.Errorf("expected status completed, got %v", attObj["status"])
+	}
+
+	// Violation 4 on completed attempt -> should fail 400
+	w = do(t, srv, "POST", fmt.Sprintf("/api/student/attempts/%d/violation", attemptID), studentToken, map[string]interface{}{})
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("violation on completed attempt should return 400, got %d", w.Code)
+	}
+}
+
+func TestTeacher_AuditLogsAndCSVExport(t *testing.T) {
+	srv := setupTestServer(t)
+
+	w := do(t, srv, "POST", "/api/auth/login", "", map[string]interface{}{
+		"email": "teacher@test.com", "password": "123456",
+	})
+	teacherToken := getString(parseJSON(t, w), "token")
+
+	w = do(t, srv, "POST", "/api/auth/login", "", map[string]interface{}{
+		"email": "student@test.com", "password": "123456",
+	})
+	studentToken := getString(parseJSON(t, w), "token")
+
+	// Student starts and submits
+	w = do(t, srv, "POST", "/api/student/exams/1/start", studentToken, map[string]interface{}{"confirmed": true})
+	attID := getUint(parseJSON(t, w)["attempt"].(map[string]interface{}), "id")
+	w = do(t, srv, "POST", fmt.Sprintf("/api/student/attempts/%d/submit", attID), studentToken, nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("submit: %d %s", w.Code, w.Body)
+	}
+
+	// Teacher modifies score -> generates AuditLog
+	w = do(t, srv, "PATCH", fmt.Sprintf("/api/teacher/attempts/%d/score", attID), teacherToken, map[string]interface{}{
+		"score": 9.5,
+		"note":  "Audit log test score change",
+	})
+	if w.Code != http.StatusOK {
+		t.Fatalf("update score: %d %s", w.Code, w.Body)
+	}
+
+	// Teacher checks Audit Logs (GET /api/teacher/audit-logs)
+	w = do(t, srv, "GET", "/api/teacher/audit-logs", teacherToken, nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("get audit logs: %d %s", w.Code, w.Body)
+	}
+	logs := parseJSON(t, w)["data"].([]interface{})
+	if len(logs) == 0 {
+		t.Fatal("expected at least 1 audit log record")
+	}
+	firstLog := logs[0].(map[string]interface{})
+	if firstLog["action"].(string) != "UPDATE_SCORE" {
+		t.Errorf("expected action UPDATE_SCORE, got %v", firstLog["action"])
+	}
+
+	// Teacher exports CSV (GET /api/teacher/exams/1/results/export)
+	w = do(t, srv, "GET", "/api/teacher/exams/1/results/export", teacherToken, nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("export results csv: %d %s", w.Code, w.Body)
+	}
+	contentType := w.Header().Get("Content-Type")
+	if !strings.Contains(contentType, "text/csv") {
+		t.Errorf("expected text/csv content type, got %s", contentType)
+	}
+	contentDisp := w.Header().Get("Content-Disposition")
+	if !strings.Contains(contentDisp, "attachment") || !strings.Contains(contentDisp, ".csv") {
+		t.Errorf("expected attachment .csv header, got %s", contentDisp)
+	}
+
+	bodyBytes := w.Body.Bytes()
+	// Check UTF-8 BOM bytes (0xEF, 0xBB, 0xBF)
+	if len(bodyBytes) < 3 || bodyBytes[0] != 0xEF || bodyBytes[1] != 0xBB || bodyBytes[2] != 0xBF {
+		t.Errorf("expected UTF-8 BOM at beginning of CSV body")
+	}
+
+	bodyStr := string(bodyBytes)
+	if !strings.Contains(bodyStr, "Họ tên") || !strings.Contains(bodyStr, "Email") || !strings.Contains(bodyStr, "Số lần vi phạm") {
+		t.Errorf("expected CSV header columns in body, got:\n%s", bodyStr)
+	}
+	if !strings.Contains(bodyStr, "student@test.com") {
+		t.Errorf("expected student record in CSV body, got:\n%s", bodyStr)
+	}
+}
+
+func TestRateLimiter_Enforcement(t *testing.T) {
+	// Custom router with rate limiter active (not bypassed)
+	r := gin.New()
+	// Limit 2 requests per minute
+	r.GET("/limited", middleware.IPRateLimit(2, time.Minute), func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+	})
+
+	// Set release mode to test actual enforcement
+	gin.SetMode(gin.ReleaseMode)
+	defer gin.SetMode(gin.TestMode)
+
+	// Req 1 -> 200
+	req1, _ := http.NewRequest("GET", "/limited", nil)
+	req1.RemoteAddr = "192.0.2.10:12345"
+	w1 := httptest.NewRecorder()
+	r.ServeHTTP(w1, req1)
+	if w1.Code != http.StatusOK {
+		t.Errorf("req 1 expected 200, got %d", w1.Code)
+	}
+
+	// Req 2 -> 200
+	req2, _ := http.NewRequest("GET", "/limited", nil)
+	req2.RemoteAddr = "192.0.2.10:12345"
+	w2 := httptest.NewRecorder()
+	r.ServeHTTP(w2, req2)
+	if w2.Code != http.StatusOK {
+		t.Errorf("req 2 expected 200, got %d", w2.Code)
+	}
+
+	// Req 3 -> 429 Too Many Requests
+	req3, _ := http.NewRequest("GET", "/limited", nil)
+	req3.RemoteAddr = "192.0.2.10:12345"
+	w3 := httptest.NewRecorder()
+	r.ServeHTTP(w3, req3)
+	if w3.Code != http.StatusTooManyRequests {
+		t.Errorf("req 3 expected 429 Too Many Requests, got %d", w3.Code)
+	}
+
+	// Another IP should still be allowed -> 200
+	reqOther, _ := http.NewRequest("GET", "/limited", nil)
+	reqOther.RemoteAddr = "192.0.2.20:12345"
+	wOther := httptest.NewRecorder()
+	r.ServeHTTP(wOther, reqOther)
+	if wOther.Code != http.StatusOK {
+		t.Errorf("other IP expected 200, got %d", wOther.Code)
+	}
+}
+
+func loginUser(t *testing.T, srv *gin.Engine, email, password string) string {
+	t.Helper()
+	w := do(t, srv, "POST", "/api/auth/login", "", map[string]interface{}{
+		"email": email, "password": password,
+	})
+	if w.Code != http.StatusOK {
+		t.Fatalf("login failed for %s: %d %s", email, w.Code, w.Body.String())
+	}
+	return getString(parseJSON(t, w), "token")
+}
+
+func TestNotifications_FullWorkflow(t *testing.T) {
+	srv := setupTestServer(t)
+
+	teacherToken := loginUser(t, srv, "teacher@test.com", "123456")
+	studentToken := loginUser(t, srv, "student@test.com", "123456")
+
+	// 1. Initial notifications should be empty
+	w := do(t, srv, "GET", "/api/notifications", studentToken, nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("get notifications failed: %d", w.Code)
+	}
+	var res struct {
+		Notifications []models.Notification `json:"notifications"`
+		UnreadCount   int64                 `json:"unread_count"`
+	}
+	json.Unmarshal(w.Body.Bytes(), &res)
+	if res.UnreadCount != 0 {
+		t.Errorf("expected 0 unread notifications, got %d", res.UnreadCount)
+	}
+
+	// 2. Student takes exam and submits
+	do(t, srv, "POST", "/api/student/exams/1/start", studentToken, gin.H{"confirmed": true})
+	do(t, srv, "POST", "/api/student/attempts/1/submit", studentToken, gin.H{})
+
+	// 3. Student files an appeal -> Teacher should receive a notification
+	wAppeal := do(t, srv, "POST", "/api/student/appeals", studentToken, gin.H{
+		"submissionId": 1,
+		"title":        "Cần kiểm tra lại câu 1",
+		"content":      "Em chọn đúng theo tài liệu",
+	})
+	if wAppeal.Code != http.StatusCreated {
+		t.Fatalf("create appeal failed: %d %s", wAppeal.Code, wAppeal.Body.String())
+	}
+
+	// Verify teacher received notification
+	wTeacherNotif := do(t, srv, "GET", "/api/notifications", teacherToken, nil)
+	var teacherRes struct {
+		Notifications []models.Notification `json:"notifications"`
+		UnreadCount   int64                 `json:"unread_count"`
+	}
+	json.Unmarshal(wTeacherNotif.Body.Bytes(), &teacherRes)
+	if teacherRes.UnreadCount != 1 || len(teacherRes.Notifications) != 1 {
+		t.Fatalf("expected 1 unread notification for teacher, got %d (len=%d)", teacherRes.UnreadCount, len(teacherRes.Notifications))
+	}
+	if !strings.Contains(teacherRes.Notifications[0].Title, "Khiếu nại") {
+		t.Errorf("expected notification title about appeal, got: %s", teacherRes.Notifications[0].Title)
+	}
+
+	// 4. Teacher replies to appeal -> Student should receive notification
+	do(t, srv, "PATCH", "/api/teacher/appeals/1/reply", teacherToken, gin.H{
+		"response": "Thầy đã xem lại bài làm của em.",
+	})
+
+	// 5. Teacher updates student score -> Student should receive another notification
+	do(t, srv, "PATCH", "/api/teacher/attempts/1/score", teacherToken, gin.H{
+		"score": 9.5,
+		"note":  "Cộng thêm điểm phúc khảo",
+	})
+
+	// Verify student received 2 notifications
+	wStudentNotif := do(t, srv, "GET", "/api/notifications", studentToken, nil)
+	var studentRes struct {
+		Notifications []models.Notification `json:"notifications"`
+		UnreadCount   int64                 `json:"unread_count"`
+	}
+	json.Unmarshal(wStudentNotif.Body.Bytes(), &studentRes)
+	if studentRes.UnreadCount != 2 || len(studentRes.Notifications) != 2 {
+		t.Fatalf("expected 2 unread notifications for student, got %d (len=%d)", studentRes.UnreadCount, len(studentRes.Notifications))
+	}
+
+	// 6. Student marks 1 notification as read
+	firstNotifID := studentRes.Notifications[0].ID
+	wRead := do(t, srv, "PATCH", fmt.Sprintf("/api/notifications/%d/read", firstNotifID), studentToken, nil)
+	if wRead.Code != http.StatusOK {
+		t.Fatalf("mark read failed: %d", wRead.Code)
+	}
+
+	// Verify unread count is now 1
+	wCheck := do(t, srv, "GET", "/api/notifications", studentToken, nil)
+	json.Unmarshal(wCheck.Body.Bytes(), &studentRes)
+	if studentRes.UnreadCount != 1 {
+		t.Errorf("expected 1 unread notification after marking one, got %d", studentRes.UnreadCount)
+	}
+
+	// 7. Student marks all as read
+	wReadAll := do(t, srv, "PATCH", "/api/notifications/read-all", studentToken, nil)
+	if wReadAll.Code != http.StatusOK {
+		t.Fatalf("mark read-all failed: %d", wReadAll.Code)
+	}
+
+	// Verify unread count is now 0
+	wCheckAll := do(t, srv, "GET", "/api/notifications", studentToken, nil)
+	json.Unmarshal(wCheckAll.Body.Bytes(), &studentRes)
+	if studentRes.UnreadCount != 0 {
+		t.Errorf("expected 0 unread notifications after read-all, got %d", studentRes.UnreadCount)
+	}
+}
+
+func TestSecurityMiddleware_HeadersAndBodyLimit(t *testing.T) {
+	srv := setupTestServer(t)
+
+	// Check Security Headers
+	w := do(t, srv, "GET", "/health", "", nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("health check failed: %d", w.Code)
+	}
+
+	if w.Header().Get("X-Content-Type-Options") != "nosniff" {
+		t.Errorf("expected X-Content-Type-Options: nosniff, got %s", w.Header().Get("X-Content-Type-Options"))
+	}
+	if w.Header().Get("X-Frame-Options") != "DENY" {
+		t.Errorf("expected X-Frame-Options: DENY, got %s", w.Header().Get("X-Frame-Options"))
+	}
+	if w.Header().Get("Referrer-Policy") != "strict-origin-when-cross-origin" {
+		t.Errorf("expected Referrer-Policy: strict-origin-when-cross-origin, got %s", w.Header().Get("Referrer-Policy"))
+	}
+
+	// Test 2MB body size limit rejection
+	// Generate payload > 2MB
+	largePayload := make([]byte, 2*1024*1024+1024)
+	req := httptest.NewRequest("POST", "/api/auth/login", bytes.NewReader(largePayload))
+	req.Header.Set("Content-Type", "application/json")
+	wLarge := httptest.NewRecorder()
+	srv.ServeHTTP(wLarge, req)
+	if wLarge.Code != http.StatusBadRequest && wLarge.Code != http.StatusRequestEntityTooLarge {
+		t.Errorf("expected request exceeding 2MB to be rejected with 400 or 413, got %d", wLarge.Code)
 	}
 }

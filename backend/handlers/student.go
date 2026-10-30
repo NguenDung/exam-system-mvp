@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"math"
+	"math/rand"
 	"net/http"
 	"strings"
 	"time"
@@ -377,6 +378,14 @@ func StudentStartExam(c *gin.Context) {
 		Select("question_id, chosen_option").
 		Where("attempt_id = ?", attempt.ID).
 		Scan(&savedAnswers)
+
+	// Deterministic question shuffling based on attempt.ID as random seed
+	if attempt.ID > 0 && len(safeQuestions) > 1 {
+		r := rand.New(rand.NewSource(int64(attempt.ID)))
+		r.Shuffle(len(safeQuestions), func(i, j int) {
+			safeQuestions[i], safeQuestions[j] = safeQuestions[j], safeQuestions[i]
+		})
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"attempt":           attempt,

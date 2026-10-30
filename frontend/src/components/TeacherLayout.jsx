@@ -1,5 +1,6 @@
 import { useNavigate, NavLink, Outlet } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import NotificationDropdown from './NotificationDropdown';
 
 function NavItem({ to, children }) {
   return (
@@ -41,6 +42,7 @@ export default function TeacherLayout() {
             </nav>
           </div>
           <div className="flex items-center gap-4">
+            <NotificationDropdown />
             <span className="text-slate-300 text-sm hidden sm:block">{user?.full_name}</span>
             <button onClick={handleLogout} className="btn-secondary btn-sm bg-slate-800 text-slate-200 border-slate-700 hover:bg-slate-700">
               Đăng xuất

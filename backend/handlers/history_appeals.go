@@ -267,6 +267,7 @@ func StudentCreateAppeal(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create appeal"})
 		return
 	}
+	CreateNotification(exam.TeacherID, "Khiếu nại mới từ sinh viên", "Sinh viên đã gửi khiếu nại cho bài thi "+exam.Title+": "+appeal.Title)
 	c.JSON(http.StatusCreated, gin.H{"message": "Gửi khiếu nại thành công.", "appeal": appeal})
 }
 
@@ -515,5 +516,19 @@ func updateAppealStatus(c *gin.Context, status string, response *string) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load updated appeal"})
 		return
 	}
+
+	var statusMsg string
+	switch status {
+	case models.AppealStatusReplied:
+		statusMsg = "Giảng viên đã phản hồi đơn khiếu nại"
+	case models.AppealStatusResolved:
+		statusMsg = "Đơn khiếu nại của bạn đã được giải quyết"
+	case models.AppealStatusRejected:
+		statusMsg = "Đơn khiếu nại của bạn đã bị từ chối"
+	default:
+		statusMsg = "Đơn khiếu nại của bạn có cập nhật mới"
+	}
+	CreateNotification(appeal.StudentID, "Cập nhật khiếu nại", statusMsg+": "+appeal.Title)
+
 	c.JSON(http.StatusOK, gin.H{"appeal": appeal})
 }

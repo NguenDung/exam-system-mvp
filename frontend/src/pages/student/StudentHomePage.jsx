@@ -32,6 +32,7 @@ export default function StudentHomePage() {
   // Starting exam modal
   const [startingExam, setStartingExam] = useState(null);
   const [startingLoading, setStartingLoading] = useState(false);
+  const [actionError, setActionError] = useState('');
   const navigate = useNavigate();
 
   const fetchAvailableExams = useCallback(async () => {
@@ -97,7 +98,8 @@ export default function StudentHomePage() {
         navigate(`/student/attempts/${payload.attempt.id}/result`, { replace: true });
         return;
       }
-      alert(payload?.error || 'Không thể bắt đầu bài thi');
+      setActionError(payload?.error || 'Không thể bắt đầu bài thi');
+      setTimeout(() => setActionError(''), 6000);
     } finally {
       setStartingLoading(false);
       setStartingExam(null);
@@ -106,6 +108,15 @@ export default function StudentHomePage() {
 
   return (
     <div className="space-y-8">
+      {actionError && (
+        <div className="rounded-md bg-red-50 border border-red-200 p-3.5 text-sm text-red-800 flex items-center justify-between">
+          <span>{actionError}</span>
+          <button onClick={() => setActionError('')} className="text-red-500 hover:text-red-700 text-lg leading-none font-bold ml-2">
+            &times;
+          </button>
+        </div>
+      )}
+
       {/* Section 1: Danh sách bài thi đang mở */}
       <div>
         <div className="flex items-center justify-between mb-4 border-b border-slate-200 pb-3">

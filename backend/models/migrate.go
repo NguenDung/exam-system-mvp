@@ -17,6 +17,8 @@ func Migrate(db *gorm.DB) {
 		&ExamAttempt{},
 		&AttemptAnswer{},
 		&Appeal{},
+		&AuditLog{},
+		&Notification{},
 	); err != nil {
 		log.Fatalf("AutoMigrate failed: %v", err)
 	}

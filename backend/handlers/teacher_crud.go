@@ -432,6 +432,18 @@ func TeacherUpdateAttemptScore(c *gin.Context) {
 		return
 	}
 
+	// Record audit log
+	audit := models.AuditLog{
+		ActorID:   teacherID.(uint),
+		Action:    "UPDATE_SCORE",
+		TargetID:  attempt.ID,
+		Details:   fmt.Sprintf("Hiệu chỉnh điểm từ %.2f sang %.2f. Ghi chú: %s", attempt.Score, input.Score, strings.TrimSpace(input.Note)),
+		CreatedAt: time.Now(),
+	}
+	_ = config.DB.Create(&audit)
+
+	CreateNotification(attempt.UserID, "Cập nhật điểm thi", fmt.Sprintf("Giảng viên đã hiệu chỉnh điểm thi của bạn trên đề thi \"%s\" thành %.2f điểm.", exam.Title, input.Score))
+
 	config.DB.First(&attempt, attempt.ID)
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Attempt score updated successfully",
@@ -469,6 +481,17 @@ func TeacherResetAttempt(c *gin.Context) {
 		if err := tx.Where("submission_id = ?", attempt.ID).Delete(&models.Appeal{}).Error; err != nil {
 			return err
 		}
+		// Record audit log inside transaction
+		audit := models.AuditLog{
+			ActorID:   teacherID.(uint),
+			Action:    "RESET_ATTEMPT",
+			TargetID:  attempt.ID,
+			Details:   fmt.Sprintf("Xóa lượt thi của thí sinh (User ID: %d, Điểm cũ: %.2f) trên đề thi %d", attempt.UserID, attempt.Score, attempt.ExamID),
+			CreatedAt: time.Now(),
+		}
+		if err := tx.Create(&audit).Error; err != nil {
+			return err
+		}
 		// Delete the attempt itself
 		return tx.Delete(&attempt).Error
 	})
@@ -477,6 +500,8 @@ func TeacherResetAttempt(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to reset attempt"})
 		return
 	}
+
+	CreateNotification(attempt.UserID, "Được phép thi lại", fmt.Sprintf("Lượt thi của bạn trên đề thi \"%s\" đã được giảng viên thiết lập lại. Bạn có thể bắt đầu thi lại từ đầu.", exam.Title))
 
 	c.JSON(http.StatusOK, gin.H{"message": "Attempt reset successfully. Student can now retake this exam."})
 }

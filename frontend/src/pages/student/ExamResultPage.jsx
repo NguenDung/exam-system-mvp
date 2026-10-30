@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { studentAPI } from '../../api/endpoints';
 import Spinner from '../../components/Spinner';
 
@@ -9,6 +9,7 @@ const OPTION_FIELDS = { A: 'option_a', B: 'option_b', C: 'option_c', D: 'option_
 export default function ExamResultPage() {
   const { attempt_id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -48,6 +49,13 @@ export default function ExamResultPage() {
 
   return (
     <div className="space-y-6">
+      {(location.state?.violationNotice || attempt.violation_count >= 3) && (
+        <div className="rounded-lg bg-red-50 border border-red-300 p-4 text-sm text-red-800 space-y-1">
+          <p className="font-bold text-red-900">Thông báo từ ban giám thị / phòng thi:</p>
+          <p>{location.state?.violationNotice || 'Bài thi đã bị khóa và thu bài tự động do phát hiện rời khỏi màn hình làm bài thi 3 lần.'}</p>
+        </div>
+      )}
+
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-xl font-bold text-slate-900">Kết quả bài thi</h1>

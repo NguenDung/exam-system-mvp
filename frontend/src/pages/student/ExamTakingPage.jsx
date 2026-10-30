@@ -80,6 +80,37 @@ function OneMinuteWarningModal({ onDismiss }) {
   );
 }
 
+function ViolationWarningModal({ count, onDismiss }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+      <div
+        role="alertdialog"
+        aria-modal="true"
+        className="w-full max-w-md rounded-lg bg-white p-6 text-center shadow-xl border border-red-300 space-y-4"
+      >
+        <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-red-100 text-red-700 font-bold text-lg mb-1">
+          !
+        </div>
+        <h2 className="text-lg font-bold text-red-700">Cảnh báo vi phạm quy chế thi</h2>
+        <div className="text-sm text-slate-700 space-y-2 text-left bg-red-50 p-3.5 rounded border border-red-200">
+          <p>
+            Hệ thống phát hiện bạn vừa rời khỏi màn hình làm bài thi (Chuyển tab hoặc thu nhỏ trình duyệt).
+          </p>
+          <p className="font-semibold text-red-800">
+            Số lần vi phạm đã ghi nhận: {count} / 3 lần.
+          </p>
+          <p className="text-xs text-slate-500">
+            Lưu ý: Nếu vi phạm đạt 3 lần, bài thi sẽ bị hệ thống tự động khóa và thu bài ngay lập tức.
+          </p>
+        </div>
+        <button onClick={onDismiss} className="btn-primary w-full py-2.5">
+          Tôi đã hiểu và tiếp tục làm bài
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function SubmitConfirmModal({ answeredCount, totalCount, flaggedCount, onConfirm, onCancel, submitting }) {
   const unanswered = totalCount - answeredCount;
   return (
@@ -125,11 +156,16 @@ export default function ExamTakingPage() {
   const [showConfirm, setShowConfirm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [showTimeWarning, setShowTimeWarning] = useState(false);
+  const [violationCount, setViolationCount] = useState(0);
+  const [showViolationWarning, setShowViolationWarning] = useState(false);
+  const [loadError, setLoadError] = useState('');
+  const [submitError, setSubmitError] = useState('');
 
   const saveStatusTimerRef = useRef(null);
   const autoSaveTimerRef = useRef(null);
   const answersRef = useRef(answers);
   const autoSubmittedRef = useRef(false);
+  const lastViolationReportRef = useRef(0);
   answersRef.current = answers;
 
   const loadExam = useCallback(async () => {
@@ -146,6 +182,7 @@ export default function ExamTakingPage() {
       }
 
       setAttempt(data.attempt);
+      setViolationCount(data.attempt?.violation_count || 0);
       setQuestions(data.questions || []);
       setRemainingSeconds(Math.max(0, data.remaining_seconds));
 
@@ -160,8 +197,7 @@ export default function ExamTakingPage() {
         navigate(`/student/attempts/${payload.attempt.id}/result`, { replace: true });
         return;
       }
-      alert(payload?.error || 'Không thể tải đề thi.');
-      navigate('/student');
+      setLoadError(payload?.error || 'Không thể tải đề thi hoặc chưa được cấp quyền truy cập.');
     } finally {
       setLoading(false);
     }
@@ -220,6 +256,56 @@ export default function ExamTakingPage() {
     }));
   };
 
+  const reportViolation = useCallback(async (reason) => {
+    const now = Date.now();
+    // Throttle repeated triggers within 2 seconds
+    if (now - lastViolationReportRef.current < 2000) return;
+    lastViolationReportRef.current = now;
+
+    if (!attempt || submitting || autoSubmittedRef.current) return;
+
+    try {
+      const { data } = await studentAPI.recordViolation(attempt.id, { reason });
+      const currentViolations = data.violation_count !== undefined ? data.violation_count : (violationCount + 1);
+      setViolationCount(currentViolations);
+
+      if (data.auto_submitted || currentViolations >= 3) {
+        autoSubmittedRef.current = true;
+        navigate(`/student/attempts/${attempt.id}/result`, {
+          replace: true,
+          state: { violationNotice: 'Bài thi đã tự động khóa và thu bài do thí sinh vi phạm quy chế rời màn hình làm bài 3 lần.' }
+        });
+        return;
+      }
+
+      setShowViolationWarning(true);
+    } catch (err) {
+      console.error('Không thể ghi nhận vi phạm:', err);
+    }
+  }, [attempt, submitting, violationCount, navigate]);
+
+  useEffect(() => {
+    if (!attempt || attempt.status === 'completed') return;
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        reportViolation('visibilitychange');
+      }
+    };
+
+    const handleBlur = () => {
+      reportViolation('blur');
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('blur', handleBlur);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('blur', handleBlur);
+    };
+  }, [attempt, reportViolation]);
+
   const doSubmit = useCallback(async (finalAnswers) => {
     if (!attempt || submitting || autoSubmittedRef.current) return;
     autoSubmittedRef.current = true;
@@ -240,7 +326,8 @@ export default function ExamTakingPage() {
         navigate(`/student/attempts/${payload?.attempt?.id || attempt.id}/result`, { replace: true });
         return;
       }
-      alert(payload?.error || 'Nộp bài không thành công');
+      setSubmitError(payload?.error || 'Nộp bài không thành công. Vui lòng thử lại.');
+      setTimeout(() => setSubmitError(''), 6000);
       autoSubmittedRef.current = false;
       setSubmitting(false);
     }
@@ -269,6 +356,20 @@ export default function ExamTakingPage() {
     );
   }
 
+  if (loadError) {
+    return (
+      <div className="min-h-screen bg-slate-100 flex flex-col items-center justify-center gap-3 p-4">
+        <div className="bg-white rounded-lg border border-red-200 p-6 max-w-md w-full text-center shadow-sm space-y-4">
+          <h2 className="text-base font-bold text-red-700">Thông báo từ phòng thi</h2>
+          <p className="text-sm text-slate-700">{loadError}</p>
+          <button onClick={() => navigate('/student')} className="btn-primary w-full">
+            Quay lại trang chủ sinh viên
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (!currentQuestion) {
     return (
       <div className="min-h-screen bg-slate-100 flex flex-col items-center justify-center gap-3 p-4">
@@ -283,6 +384,12 @@ export default function ExamTakingPage() {
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900 pb-12">
+      {submitError && (
+        <div className="fixed top-4 right-4 z-50 px-4 py-2.5 rounded-md shadow-lg text-white text-sm font-medium bg-red-700">
+          {submitError}
+        </div>
+      )}
+
       {/* Top Navigation Bar */}
       <header className="sticky top-0 z-30 bg-slate-900 text-white border-b border-slate-800 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-4 flex-wrap">
@@ -292,6 +399,11 @@ export default function ExamTakingPage() {
           </div>
 
           <div className="flex items-center gap-4">
+            {violationCount > 0 && (
+              <span className="text-xs px-2 py-0.5 rounded font-medium bg-red-100 text-red-800 border border-red-200">
+                Vi phạm: {violationCount}/3
+              </span>
+            )}
             {saveStatus === 'saving' && <span className="text-xs text-slate-300">Đang lưu...</span>}
             {saveStatus === 'saved' && <span className="text-xs text-emerald-400 font-medium">Đã lưu tự động</span>}
             {saveStatus === 'error' && <span className="text-xs text-red-400">Lưu lỗi mạng</span>}
@@ -513,6 +625,14 @@ export default function ExamTakingPage() {
       {/* 1-Minute Warning Modal */}
       {showTimeWarning && !submitting && (
         <OneMinuteWarningModal onDismiss={() => setShowTimeWarning(false)} />
+      )}
+
+      {/* Violation Warning Modal */}
+      {showViolationWarning && !submitting && (
+        <ViolationWarningModal
+          count={violationCount}
+          onDismiss={() => setShowViolationWarning(false)}
+        />
       )}
     </div>
   );

@@ -98,6 +98,8 @@ export default function TeacherResultsPage() {
   const [resettingAttempt, setResettingAttempt] = useState(null);
   const [resetLoading, setResetLoading] = useState(false);
   const [feedbackMsg, setFeedbackMsg] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
+  const [exportingCSV, setExportingCSV] = useState(false);
 
   const fetchResults = useCallback(async () => {
     try {
@@ -124,9 +126,33 @@ export default function TeacherResultsPage() {
       fetchResults();
       setTimeout(() => setFeedbackMsg(''), 4000);
     } catch (err) {
-      alert(err.response?.data?.error || 'Không thể xóa lượt thi');
+      setErrorMsg(err.response?.data?.error || 'Không thể xóa lượt thi');
+      setTimeout(() => setErrorMsg(''), 5000);
     } finally {
       setResetLoading(false);
+    }
+  };
+
+  const handleExportCSV = async () => {
+    setExportingCSV(true);
+    try {
+      const response = await teacherAPI.exportResultsCSV(id);
+      const blob = new Blob([response.data], { type: 'text/csv;charset=utf-8;' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `bang-diem-${exam.exam_code || id}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      setFeedbackMsg('Đã tải xuống bảng điểm CSV');
+      setTimeout(() => setFeedbackMsg(''), 4000);
+    } catch (err) {
+      setErrorMsg(err.response?.data?.error || 'Lỗi khi xuất bảng điểm CSV');
+      setTimeout(() => setErrorMsg(''), 5000);
+    } finally {
+      setExportingCSV(false);
     }
   };
 
@@ -146,12 +172,27 @@ export default function TeacherResultsPage() {
           <h1 className="text-xl font-bold text-slate-900">{exam.title}</h1>
           <p className="text-slate-500 text-sm mt-0.5">Báo cáo bảng điểm và phân bố kết quả thi</p>
         </div>
-        <button onClick={fetchResults} className="btn-secondary btn-sm">Làm mới dữ liệu</button>
+        <div className="flex gap-2 flex-wrap">
+          <button
+            onClick={handleExportCSV}
+            disabled={exportingCSV}
+            className="btn-secondary btn-sm"
+          >
+            {exportingCSV ? 'Đang xuất CSV...' : 'Xuất bảng điểm (CSV)'}
+          </button>
+          <button onClick={fetchResults} className="btn-secondary btn-sm">Làm mới dữ liệu</button>
+        </div>
       </div>
 
       {feedbackMsg && (
         <div className="mb-4 rounded-md bg-emerald-50 border border-emerald-200 p-3 text-sm text-emerald-800">
           {feedbackMsg}
+        </div>
+      )}
+
+      {errorMsg && (
+        <div className="mb-4 rounded-md bg-red-50 border border-red-200 p-3 text-sm text-red-800">
+          {errorMsg}
         </div>
       )}
 
@@ -185,6 +226,7 @@ export default function TeacherResultsPage() {
                   <th className="px-5 py-3 font-semibold text-center">Đúng</th>
                   <th className="px-5 py-3 font-semibold text-center">Sai / Trống</th>
                   <th className="px-5 py-3 font-semibold text-center">Trạng thái</th>
+                  <th className="px-5 py-3 font-semibold text-center">Vi phạm</th>
                   <th className="px-5 py-3 font-semibold">Ghi chú</th>
                   <th className="px-5 py-3 font-semibold text-right">Thao tác</th>
                 </tr>
@@ -210,6 +252,19 @@ export default function TeacherResultsPage() {
                       }`}>
                         {r.status === 'completed' ? 'Đã nộp' : 'Đang làm'}
                       </span>
+                    </td>
+                    <td className="px-5 py-3.5 text-center">
+                      {r.violation_count >= 3 ? (
+                        <span className="px-2.5 py-0.5 rounded text-xs font-bold bg-red-100 text-red-800 border border-red-200">
+                          {r.violation_count} (Đình chỉ)
+                        </span>
+                      ) : r.violation_count > 0 ? (
+                        <span className="px-2.5 py-0.5 rounded text-xs font-semibold bg-amber-100 text-amber-800 border border-amber-200">
+                          {r.violation_count}
+                        </span>
+                      ) : (
+                        <span className="text-slate-400 text-xs">0</span>
+                      )}
                     </td>
                     <td className="px-5 py-3.5 text-slate-500 text-xs max-w-xs truncate">
                       {r.teacher_note || '—'}
