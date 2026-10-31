@@ -61,15 +61,15 @@ function CountdownTimer({ seconds, onExpire, onWarning }) {
 
 function OneMinuteWarningModal({ onDismiss }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
       <div
         role="alertdialog"
         aria-modal="true"
         aria-labelledby="time-warning-title"
-        className="w-full max-w-sm rounded-lg bg-white p-6 text-center shadow-xl border border-slate-200"
+        className="w-full max-w-sm rounded-xl bg-white dark:bg-slate-900 p-6 text-center shadow-xl border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100"
       >
-        <h2 id="time-warning-title" className="text-lg font-bold text-red-700">Thông báo sắp hết giờ</h2>
-        <p className="mt-3 text-sm text-slate-600 leading-relaxed">
+        <h2 id="time-warning-title" className="text-lg font-bold text-red-700 dark:text-red-400">Thông báo sắp hết giờ</h2>
+        <p className="mt-3 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
           Thời gian làm bài còn dưới 1 phút. Hệ thống sẽ tự động khóa và thu bài khi đồng hồ về 00:00.
         </p>
         <button onClick={onDismiss} className="btn-primary mt-5 w-full">
@@ -82,24 +82,24 @@ function OneMinuteWarningModal({ onDismiss }) {
 
 function ViolationWarningModal({ count, onDismiss }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
       <div
         role="alertdialog"
         aria-modal="true"
-        className="w-full max-w-md rounded-lg bg-white p-6 text-center shadow-xl border border-red-300 space-y-4"
+        className="w-full max-w-md rounded-xl bg-white dark:bg-slate-900 p-6 text-center shadow-xl border border-red-300 dark:border-rose-900 space-y-4 text-slate-900 dark:text-slate-100"
       >
-        <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-red-100 text-red-700 font-bold text-lg mb-1">
+        <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-red-100 dark:bg-rose-950 text-red-700 dark:text-rose-300 font-bold text-lg mb-1">
           !
         </div>
-        <h2 className="text-lg font-bold text-red-700">Cảnh báo vi phạm quy chế thi</h2>
-        <div className="text-sm text-slate-700 space-y-2 text-left bg-red-50 p-3.5 rounded border border-red-200">
+        <h2 className="text-lg font-bold text-red-700 dark:text-red-400">Cảnh báo vi phạm quy chế thi</h2>
+        <div className="text-sm text-slate-700 dark:text-slate-300 space-y-2 text-left bg-red-50 dark:bg-rose-950/40 p-3.5 rounded-lg border border-red-200 dark:border-rose-800">
           <p>
             Hệ thống phát hiện bạn vừa rời khỏi màn hình làm bài thi (Chuyển tab hoặc thu nhỏ trình duyệt).
           </p>
-          <p className="font-semibold text-red-800">
+          <p className="font-semibold text-red-800 dark:text-red-300">
             Số lần vi phạm đã ghi nhận: {count} / 3 lần.
           </p>
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-slate-500 dark:text-slate-400">
             Lưu ý: Nếu vi phạm đạt 3 lần, bài thi sẽ bị hệ thống tự động khóa và thu bài ngay lập tức.
           </p>
         </div>
@@ -114,14 +114,14 @@ function ViolationWarningModal({ count, onDismiss }) {
 function SubmitConfirmModal({ answeredCount, totalCount, flaggedCount, onConfirm, onCancel, submitting }) {
   const unanswered = totalCount - answeredCount;
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-sm p-6 text-center border border-slate-200">
-        <h3 className="text-lg font-bold text-slate-900 mb-2">Xác nhận nộp bài thi</h3>
-        <div className="space-y-1.5 text-sm mb-6 bg-slate-50 p-3.5 rounded border border-slate-100 text-left">
-          <p className="text-slate-600">Tổng số câu hỏi: <span className="font-bold text-slate-900">{totalCount}</span></p>
-          <p className="text-slate-600">Số câu đã làm: <span className="font-bold text-emerald-700">{answeredCount}</span></p>
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xl w-full max-w-sm p-6 text-center border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100">
+        <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100 mb-2">Xác nhận nộp bài thi</h3>
+        <div className="space-y-1.5 text-sm mb-6 bg-slate-50 dark:bg-slate-800/50 p-3.5 rounded-lg border border-slate-100 dark:border-slate-700 text-left">
+          <p className="text-slate-600 dark:text-slate-400">Tổng số câu hỏi: <span className="font-bold text-slate-900 dark:text-slate-100">{totalCount}</span></p>
+          <p className="text-slate-600 dark:text-slate-400">Số câu đã làm: <span className="font-bold text-emerald-700 dark:text-emerald-400">{answeredCount}</span></p>
           {flaggedCount > 0 && (
-            <p className="text-amber-700">Số câu đang đặt cờ: <span className="font-bold">{flaggedCount}</span></p>
+            <p className="text-amber-700 dark:text-amber-400">Số câu đang đặt cờ: <span className="font-bold">{flaggedCount}</span></p>
           )}
           {unanswered > 0 && (
             <p className="text-red-700 font-medium">Lưu ý: Còn {unanswered} câu chưa chọn đáp án.</p>
@@ -190,6 +190,21 @@ export default function ExamTakingPage() {
       (data.saved_answers || []).forEach((a) => {
         if (a.chosen_option) savedMap[a.question_id] = a.chosen_option;
       });
+
+      // Đối soát với localStorage offline cache phòng trường hợp mạng rớt trước đó
+      if (data.attempt?.id) {
+        try {
+          const cacheKey = `exam_attempt_${data.attempt.id}_answers`;
+          const localRaw = localStorage.getItem(cacheKey);
+          if (localRaw) {
+            const localParsed = JSON.parse(localRaw);
+            Object.assign(savedMap, localParsed);
+          }
+        } catch (e) {
+          console.warn('Không thể đọc localStorage cache:', e);
+        }
+      }
+
       setAnswers(savedMap);
     } catch (err) {
       const payload = err.response?.data;
@@ -246,6 +261,13 @@ export default function ExamTakingPage() {
   const handleSelectAnswer = (questionId, option) => {
     const newAnswers = { ...answersRef.current, [questionId]: option };
     setAnswers(newAnswers);
+    if (attempt?.id) {
+      try {
+        localStorage.setItem(`exam_attempt_${attempt.id}_answers`, JSON.stringify(newAnswers));
+      } catch (e) {
+        console.warn('Không thể ghi localStorage cache:', e);
+      }
+    }
     saveAnswersToServer(newAnswers);
   };
 
@@ -312,16 +334,39 @@ export default function ExamTakingPage() {
     setSubmitting(true);
     setShowConfirm(false);
     setShowTimeWarning(false);
-    const answersArray = Object.entries(finalAnswers || answersRef.current).map(([qId, opt]) => ({
+
+    let answersToSubmit = finalAnswers || answersRef.current;
+    if (attempt?.id) {
+      try {
+        const localRaw = localStorage.getItem(`exam_attempt_${attempt.id}_answers`);
+        if (localRaw) {
+          answersToSubmit = { ...JSON.parse(localRaw), ...answersToSubmit };
+        }
+      } catch (e) {
+        console.warn('Lỗi đọc cache khi nộp bài:', e);
+      }
+    }
+
+    const answersArray = Object.entries(answersToSubmit).map(([qId, opt]) => ({
       question_id: parseInt(qId, 10),
       chosen_option: opt,
     }));
     try {
       const { data } = await studentAPI.submitExam(attempt.id, { answers: answersArray });
+      if (attempt?.id) {
+        try {
+          localStorage.removeItem(`exam_attempt_${attempt.id}_answers`);
+        } catch (e) {}
+      }
       const resultId = data?.attempt?.id || attempt.id;
       navigate(`/student/attempts/${resultId}/result`, { replace: true });
     } catch (err) {
       const payload = err.response?.data;
+      if (attempt?.id) {
+        try {
+          localStorage.removeItem(`exam_attempt_${attempt.id}_answers`);
+        } catch (e) {}
+      }
       if (payload?.attempt?.id || attempt.id) {
         navigate(`/student/attempts/${payload?.attempt?.id || attempt.id}/result`, { replace: true });
         return;
@@ -358,10 +403,10 @@ export default function ExamTakingPage() {
 
   if (loadError) {
     return (
-      <div className="min-h-screen bg-slate-100 flex flex-col items-center justify-center gap-3 p-4">
-        <div className="bg-white rounded-lg border border-red-200 p-6 max-w-md w-full text-center shadow-sm space-y-4">
-          <h2 className="text-base font-bold text-red-700">Thông báo từ phòng thi</h2>
-          <p className="text-sm text-slate-700">{loadError}</p>
+      <div className="min-h-screen bg-slate-100 dark:bg-slate-950 flex flex-col items-center justify-center gap-3 p-4">
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-red-200 dark:border-rose-900/60 p-6 max-w-md w-full text-center shadow-sm space-y-4">
+          <h2 className="text-base font-bold text-red-700 dark:text-red-400">Thông báo từ phòng thi</h2>
+          <p className="text-sm text-slate-700 dark:text-slate-300">{loadError}</p>
           <button onClick={() => navigate('/student')} className="btn-primary w-full">
             Quay lại trang chủ sinh viên
           </button>
@@ -432,15 +477,15 @@ export default function ExamTakingPage() {
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           {/* Left Column: Current Question View (3 cols on lg) */}
           <section className="lg:col-span-3 space-y-4">
-            <div className="bg-white rounded-lg border border-slate-200 p-6 shadow-sm">
+            <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm">
               {/* Question Header */}
-              <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-4 gap-2 flex-wrap">
+              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-4 mb-4 gap-2 flex-wrap">
                 <div className="flex items-center gap-3">
-                  <span className="text-xs font-bold uppercase tracking-wider text-slate-500 bg-slate-100 px-2.5 py-1 rounded">
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded">
                     Câu {currentIndex + 1} / {totalCount}
                   </span>
-                  <span className="text-xs text-slate-500">
-                    Điểm số: <strong className="text-slate-800">{currentQuestion.points} điểm</strong>
+                  <span className="text-xs text-slate-500 dark:text-slate-400">
+                    Điểm số: <strong className="text-slate-800 dark:text-slate-200">{currentQuestion.points} điểm</strong>
                   </span>
                 </div>
 
@@ -449,18 +494,18 @@ export default function ExamTakingPage() {
                   onClick={() => toggleFlag(currentQuestion.id)}
                   className={`inline-flex items-center gap-1.5 px-3 py-1 rounded text-xs font-medium border transition-colors ${
                     isCurrentFlagged
-                      ? 'bg-amber-100 text-amber-900 border-amber-300'
-                      : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                      ? 'bg-amber-100 dark:bg-amber-950/60 text-amber-900 dark:text-amber-300 border-amber-300 dark:border-amber-700'
+                      : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700'
                   }`}
                 >
-                  <span className={`inline-block w-2 h-2 rounded-full ${isCurrentFlagged ? 'bg-amber-500' : 'bg-slate-300'}`} />
+                  <span className={`inline-block w-2 h-2 rounded-full ${isCurrentFlagged ? 'bg-amber-500' : 'bg-slate-300 dark:bg-slate-600'}`} />
                   {isCurrentFlagged ? 'Đã đặt cờ xem lại' : 'Đặt cờ câu này'}
                 </button>
               </div>
 
               {/* Question Prompt */}
               <div className="py-2 mb-6">
-                <p className="text-slate-900 text-base sm:text-lg font-medium leading-relaxed whitespace-pre-wrap">
+                <p className="text-slate-900 dark:text-slate-100 text-base sm:text-lg font-medium leading-relaxed whitespace-pre-wrap">
                   {currentQuestion.prompt}
                 </p>
               </div>
@@ -477,13 +522,13 @@ export default function ExamTakingPage() {
                       disabled={submitting}
                       className={`w-full flex items-start gap-3 p-4 rounded-lg border text-left text-sm sm:text-base transition-colors ${
                         isSelected
-                          ? 'border-indigo-600 bg-indigo-50/70 text-indigo-950 font-medium'
-                          : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'
+                          ? 'border-indigo-600 dark:border-indigo-500 bg-indigo-50/70 dark:bg-indigo-950/50 text-indigo-950 dark:text-indigo-200 font-medium'
+                          : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/80 text-slate-700 dark:text-slate-200 hover:border-slate-300 dark:hover:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800'
                       }`}
                     >
                       <span
                         className={`w-7 h-7 rounded flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5 ${
-                          isSelected ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600 border border-slate-200'
+                          isSelected ? 'bg-indigo-600 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600'
                         }`}
                       >
                         {opt}
@@ -495,7 +540,7 @@ export default function ExamTakingPage() {
               </div>
 
               {/* Question Navigation Controls */}
-              <div className="flex items-center justify-between pt-6 mt-6 border-t border-slate-100">
+              <div className="flex items-center justify-between pt-6 mt-6 border-t border-slate-100 dark:border-slate-800">
                 <button
                   onClick={() => setCurrentIndex((idx) => Math.max(0, idx - 1))}
                   disabled={currentIndex === 0}
@@ -504,11 +549,11 @@ export default function ExamTakingPage() {
                   &larr; Câu trước
                 </button>
 
-                <div className="text-xs text-slate-500 hidden sm:block">
+                <div className="text-xs text-slate-500 dark:text-slate-400 hidden sm:block">
                   {chosenOption ? (
-                    <span className="text-emerald-700 font-medium">Đã lưu phương án: {chosenOption}</span>
+                    <span className="text-emerald-700 dark:text-emerald-400 font-medium">Đã lưu phương án: {chosenOption}</span>
                   ) : (
-                    <span className="text-slate-400">Chưa chọn đáp án</span>
+                    <span className="text-slate-400 dark:text-slate-500">Chưa chọn đáp án</span>
                   )}
                 </div>
 
@@ -533,11 +578,11 @@ export default function ExamTakingPage() {
 
           {/* Right Column: Question Palette (1 col on lg) */}
           <aside className="lg:col-span-1 space-y-4">
-            <div className="bg-white rounded-lg border border-slate-200 p-5 shadow-sm sticky top-20">
-              <h3 className="font-bold text-slate-900 text-sm mb-3">Bảng câu hỏi ({totalCount})</h3>
+            <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm sticky top-20">
+              <h3 className="font-bold text-slate-900 dark:text-slate-100 text-sm mb-3">Bảng câu hỏi ({totalCount})</h3>
 
               {/* Legend */}
-              <div className="grid grid-cols-2 gap-2 text-xs text-slate-600 mb-4 pb-4 border-b border-slate-100">
+              <div className="grid grid-cols-2 gap-2 text-xs text-slate-600 dark:text-slate-400 mb-4 pb-4 border-b border-slate-100 dark:border-slate-800">
                 <div className="flex items-center gap-1.5">
                   <span className="w-3.5 h-3.5 rounded bg-emerald-600 inline-block" />
                   <span>Đã trả lời</span>
@@ -547,11 +592,11 @@ export default function ExamTakingPage() {
                   <span>Đặt cờ</span>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <span className="w-3.5 h-3.5 rounded bg-slate-100 border border-slate-300 inline-block" />
+                  <span className="w-3.5 h-3.5 rounded bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 inline-block" />
                   <span>Chưa làm</span>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <span className="w-3.5 h-3.5 rounded border-2 border-indigo-600 bg-white inline-block" />
+                  <span className="w-3.5 h-3.5 rounded border-2 border-indigo-600 bg-white dark:bg-slate-800 inline-block" />
                   <span>Đang xem</span>
                 </div>
               </div>
@@ -563,14 +608,14 @@ export default function ExamTakingPage() {
                   const isQFlagged = !!flagged[q.id];
                   const isCurrent = idx === currentIndex;
 
-                  let colorClass = 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-300';
+                  let colorClass = 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-300 dark:border-slate-700';
                   if (isQFlagged) {
                     colorClass = 'bg-amber-500 text-white font-bold border-amber-600';
                   } else if (isAnswered) {
                     colorClass = 'bg-emerald-600 text-white font-bold border-emerald-700';
                   }
 
-                  const activeRing = isCurrent ? 'ring-2 ring-indigo-500 ring-offset-1 font-extrabold' : '';
+                  const activeRing = isCurrent ? 'ring-2 ring-indigo-500 ring-offset-1 dark:ring-offset-slate-900 font-extrabold' : '';
 
                   return (
                     <button

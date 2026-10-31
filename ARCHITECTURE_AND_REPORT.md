@@ -880,15 +880,15 @@ Các request yêu cầu xác thực cần gửi kèm Header:
 
 ### 6.3. Kết quả kiểm thử tự động (Integration Test Suite)
 
-Toàn bộ logic backend được kiểm thử qua file `main_test.go` với **25 test suite kiểm thử tích hợp**, bao phủ toàn diện mọi luồng nghiệp vụ.
+Toàn bộ logic backend được kiểm thử qua file `main_test.go` với **26 kịch bản kiểm thử tích hợp**, bao phủ toàn diện mọi luồng nghiệp vụ.
 
 Kết quả thực thi lệnh `go test -v ./...`:
 ```
 PASS
-ok      exam-system-mvp 10.286s
+ok      exam-system-mvp 10.423s
 ```
 
-#### Danh sách 25 kịch bản kiểm thử:
+#### Danh sách 26 kịch bản kiểm thử:
 1. `TestMVP_FullFlow`: Luồng khảo thí tổng thể từ đăng ký, đăng nhập, tạo đề thi, xuất bản, vào thi, lưu đáp án đến nộp bài.
 2. `TestHealth`: Kiểm tra API endpoint `/health`.
 3. `TestAuth_BadInputs`: Kiểm tra validate đầu vào khi đăng ký và đăng nhập.
@@ -914,6 +914,33 @@ ok      exam-system-mvp 10.286s
 23. `TestUserProfileAndDirectory`: Lấy thông tin hồ sơ, cập nhật avatar/bio/mật khẩu và tra cứu danh bạ người dùng.
 24. `TestTeacher_UserRoleManagement`: Giảng viên phân quyền vai trò tài khoản và chặn tự đổi vai trò chính mình.
 25. `TestClassroom_FullWorkflow`: Toàn bộ quy trình lớp học phần (Tạo lớp, cập nhật, sinh viên nhập mã ghi danh, danh sách thành viên, thêm/xóa sinh viên, xóa lớp).
+26. `TestTeacher_ClassGradebook`: Sổ điểm tổng hợp lớp học phần (Ma trận điểm số, tính điểm trung bình lớp, xếp loại học lực, phân tích thống kê lớp, kiểm soát phân quyền RBAC đa tầng).
+
+---
+
+### 6.4. Các phân hệ nâng cao phục vụ đào tạo đại học và an toàn hệ thống
+
+1. **Phân hệ Bảng điểm cá nhân và Cảnh báo học vụ (/student/grades)**:
+   - Tổng hợp tự động kết quả thi từ cơ sở dữ liệu thật thành bảng điểm học kỳ và toàn khóa (CPA/GPA).
+   - Biểu đồ biến thiên SVG trực quan hóa tiến độ học tập và phân bổ tín chỉ theo thang điểm chữ (A, B+, B, C+, C, D, F).
+   - Thuật toán cảnh báo học vụ 3 cấp độ: Bám sát quy chế đào tạo tín chỉ của Bộ GD&ĐT, tự động rà soát điểm trung bình tích lũy và số tín chỉ trượt để cảnh báo Mức 1, 2 hoặc 3.
+   - Bộ dự báo học lực: Hỗ trợ sinh viên tính toán số điểm và tín chỉ cần đạt để đạt các mốc xếp loại tốt nghiệp (Khá, Giỏi, Xuất sắc).
+
+2. **Phân hệ Sổ điểm lớp học tổng hợp dành cho Giảng viên (Class Gradebook)**:
+   - Ma trận điểm số lớp: Giảng viên theo dõi danh sách toàn bộ sinh viên trong lớp kèm điểm số từng bài thi, điểm trung bình lớp và xếp loại học lực.
+   - Thống kê thời gian thực: Đo lường điểm trung bình toàn lớp, biên độ điểm ($Max - Min$) và danh sách sinh viên có nguy cơ phải thi lại (Điểm TB $< 4.0$).
+   - Xuất dữ liệu khảo thí ra Excel (CSV): Hỗ trợ xuất bảng điểm lớp có gắn UTF-8 BOM (`\uFEFF`), mở trực tiếp trên Excel mà không bị lỗi font tiếng Việt.
+   - Kiểm soát truy cập chặt chẽ: Sinh viên bị chặn mã `403 Forbidden`, giảng viên không phụ trách lớp bị chặn mã `404 Not Found`.
+
+3. **Cơ chế chống mất bài khi rớt mạng (Offline LocalStorage Sync) & Giao dịch nguyên tử**:
+   - Ghi đệm đáp án vào máy trạm: Khi sinh viên chọn đáp án, hệ thống vừa gửi API vừa lưu vào `localStorage`. Khi gặp sự cố mạng hoặc tải lại trang, client tự động phục hồi phương án đã chọn.
+   - Giao dịch nộp bài nguyên tử (`GradeAttemptAtomic`): Bọc toàn bộ thao tác lưu đáp án, chấm điểm và chuyển trạng thái `completed` vào trong một GORM Database Transaction duy nhất, bảo đảm tính nhất quán dữ liệu tuyệt đối (ACID).
+   - Khóa hạn nộp bài từ Server-side: Chặn mọi gói tin nộp bài trễ sau thời hạn kết thúc ca thi, loại bỏ hoàn toàn khả năng can thiệp client-side.
+
+4. **Kiến trúc Container hóa 3 tầng (Turnkey Docker Compose)**:
+   - Multi-stage Dockerfile cho Backend (Golang 1.22 Alpine, stripped binary, kích thước $< 20$MB, chạy dưới người dùng `appuser` phi đặc quyền).
+   - Multi-stage Dockerfile cho Frontend (Node.js 20 build -> Nginx Alpine phục vụ static bundle, nén Gzip, security headers và reverse proxy `/api` sang backend container để loại bỏ hoàn toàn lỗi CORS).
+   - `docker-compose.yml`: Kết nối 3 dịch vụ `postgres`, `backend`, `frontend` với cơ chế `condition: service_healthy`, cho phép khởi chạy toàn bộ hệ thống bằng một lệnh duy nhất.
 
 ---
 
@@ -923,7 +950,7 @@ Dự án đã hoàn thành xuất sắc các mục tiêu đề ra cho một hệ
 - Xây dựng đầy đủ các chức năng quản lý lớp học phần, ngân hàng câu hỏi, đề thi, điểm số và hồ sơ người dùng.
 - Tổ chức phòng thi trực tuyến với đồng hồ server, xáo trộn câu hỏi ngẫu nhiên theo seed, lưu bài tự động và giám sát việc chuyển tab.
 - Xây dựng quy trình xử lý đơn phúc khảo và hệ thống thông báo nội bộ có điều hướng sâu hỗ trợ tương tác tức thời giữa sinh viên và giảng viên.
-- Đạt kết quả pass 25/25 kịch bản kiểm thử tích hợp trên môi trường SQLite in-memory có cấu hình WAL mode.
+- Đạt kết quả pass 26/26 kịch bản kiểm thử tích hợp trên môi trường SQLite in-memory có cấu hình WAL mode.
 
 **Hướng phát triển tiếp theo**:
 - Bổ sung giám sát camera (webcam proctoring) và nhận diện khuôn mặt thí sinh.

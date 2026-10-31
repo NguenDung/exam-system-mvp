@@ -139,7 +139,7 @@ export default function TeacherStudentsPage() {
         />
         <button
           type="submit"
-          className="px-4 py-2 bg-white border border-slate-300 rounded-md text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+          className="px-4 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-md text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
         >
           Tìm kiếm
         </button>
@@ -150,7 +150,7 @@ export default function TeacherStudentsPage() {
               setSearchQuery('');
               fetchStudents('');
             }}
-            className="px-3 py-2 text-sm text-slate-500 hover:text-slate-800"
+            className="px-3 py-2 text-sm text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"
           >
             Đặt lại
           </button>
@@ -159,7 +159,7 @@ export default function TeacherStudentsPage() {
 
       {/* Error alert */}
       {error && (
-        <div className="rounded-md bg-red-50 p-4 border border-red-200 text-sm text-red-700">
+        <div className="rounded-md bg-red-50 dark:bg-rose-950/40 p-4 border border-red-200 dark:border-rose-800 text-sm text-red-700 dark:text-rose-300">
           {error}
         </div>
       )}
@@ -170,20 +170,20 @@ export default function TeacherStudentsPage() {
           <Spinner />
         </div>
       ) : students.length === 0 ? (
-        <div className="text-center py-12 bg-white rounded-lg border border-slate-200 text-slate-500 text-sm">
+        <div className="text-center py-12 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 text-sm shadow-sm">
           Chưa có sinh viên nào hoặc không tìm thấy kết quả phù hợp.
         </div>
       ) : (
-        <div className="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
-          <table className="min-w-full divide-y divide-slate-200 text-sm">
-            <thead className="bg-slate-50">
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm overflow-hidden">
+          <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-800 text-sm">
+            <thead className="bg-slate-50 dark:bg-slate-800/60">
               <tr>
-                <th className="px-6 py-3 text-left font-semibold text-slate-700">Mã SV / ID</th>
-                <th className="px-6 py-3 text-left font-semibold text-slate-700">Họ và tên</th>
-                <th className="px-6 py-3 text-left font-semibold text-slate-700">Email</th>
-                <th className="px-6 py-3 text-center font-semibold text-slate-700">Lượt thi</th>
-                <th className="px-6 py-3 text-left font-semibold text-slate-700">Ngày tạo</th>
-                <th className="px-6 py-3 text-right font-semibold text-slate-700">Thao tác</th>
+                <th className="px-6 py-3 text-left font-semibold text-slate-700 dark:text-slate-300">Mã SV / ID</th>
+                <th className="px-6 py-3 text-left font-semibold text-slate-700 dark:text-slate-300">Họ và tên</th>
+                <th className="px-6 py-3 text-left font-semibold text-slate-700 dark:text-slate-300">Email</th>
+                <th className="px-6 py-3 text-center font-semibold text-slate-700 dark:text-slate-300">Lượt thi</th>
+                <th className="px-6 py-3 text-left font-semibold text-slate-700 dark:text-slate-300">Ngày tạo</th>
+                <th className="px-6 py-3 text-right font-semibold text-slate-700 dark:text-slate-300">Thao tác</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
@@ -226,39 +226,39 @@ export default function TeacherStudentsPage() {
 
       {/* Modal: Create Student */}
       {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6 space-y-4">
-            <h3 className="text-lg font-bold text-slate-900">Thêm tài khoản sinh viên</h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xl max-w-md w-full p-6 space-y-4 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100">
+            <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">Thêm tài khoản sinh viên</h3>
             {modalError && (
-              <div className="rounded bg-red-50 p-3 text-xs text-red-700 border border-red-200">
+              <div className="rounded bg-red-50 dark:bg-rose-950/40 p-3 text-xs text-red-700 dark:text-rose-300 border border-red-200 dark:border-rose-800">
                 {modalError}
               </div>
             )}
             <form onSubmit={handleCreateStudent} className="space-y-4">
               <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">Họ và tên</label>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase mb-1">Họ và tên</label>
                 <input
                   type="text"
                   required
                   value={formData.full_name}
                   onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
                   placeholder="Ví dụ: Nguyễn Văn A"
-                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900"
+                  className="w-full rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 focus:border-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900"
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">Email</label>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase mb-1">Email</label>
                 <input
                   type="email"
                   required
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                   placeholder="student@university.edu.vn"
-                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900"
+                  className="w-full rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 focus:border-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900"
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">Mật khẩu ban đầu</label>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase mb-1">Mật khẩu ban đầu</label>
                 <input
                   type="password"
                   required
@@ -266,22 +266,22 @@ export default function TeacherStudentsPage() {
                   value={formData.password}
                   onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                   placeholder="Tối thiểu 6 ký tự"
-                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900"
+                  className="w-full rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 focus:border-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900"
                 />
               </div>
-              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
                 <button
                   type="button"
                   onClick={() => setShowCreateModal(false)}
                   disabled={actionLoading}
-                  className="px-4 py-2 border border-slate-300 rounded-md text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                  className="px-4 py-2 border border-slate-300 dark:border-slate-700 rounded-md text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
                 >
                   Hủy
                 </button>
                 <button
                   type="submit"
                   disabled={actionLoading}
-                  className="px-4 py-2 bg-slate-900 text-white rounded-md text-sm font-medium hover:bg-slate-800 transition-colors disabled:opacity-50"
+                  className="px-4 py-2 bg-slate-900 dark:bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-slate-800 dark:hover:bg-blue-700 transition-colors disabled:opacity-50"
                 >
                   {actionLoading ? 'Đang tạo...' : 'Tạo tài khoản'}
                 </button>
@@ -293,38 +293,38 @@ export default function TeacherStudentsPage() {
 
       {/* Modal: Edit Student */}
       {editingStudent && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6 space-y-4">
-            <h3 className="text-lg font-bold text-slate-900">Sửa thông tin sinh viên #{editingStudent.id}</h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xl max-w-md w-full p-6 space-y-4 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100">
+            <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">Sửa thông tin sinh viên #{editingStudent.id}</h3>
             {modalError && (
-              <div className="rounded bg-red-50 p-3 text-xs text-red-700 border border-red-200">
+              <div className="rounded bg-red-50 dark:bg-rose-950/40 p-3 text-xs text-red-700 dark:text-rose-300 border border-red-200 dark:border-rose-800">
                 {modalError}
               </div>
             )}
             <form onSubmit={handleUpdateStudent} className="space-y-4">
               <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">Họ và tên</label>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase mb-1">Họ và tên</label>
                 <input
                   type="text"
                   required
                   value={formData.full_name}
                   onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
-                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900"
+                  className="w-full rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 focus:border-slate-900 dark:focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-slate-900 dark:focus:ring-blue-500"
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">Email</label>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase mb-1">Email</label>
                 <input
                   type="email"
                   required
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900"
+                  className="w-full rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 focus:border-slate-900 dark:focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-slate-900 dark:focus:ring-blue-500"
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">
-                  Đổi mật khẩu mới <span className="text-slate-400 font-normal">(để trống nếu không đổi)</span>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase mb-1">
+                  Đổi mật khẩu mới <span className="text-slate-400 dark:text-slate-500 font-normal lowercase">(để trống nếu không đổi)</span>
                 </label>
                 <input
                   type="password"
@@ -332,22 +332,22 @@ export default function TeacherStudentsPage() {
                   value={formData.password}
                   onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                   placeholder="Để trống nếu giữ nguyên mật khẩu cũ"
-                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900"
+                  className="w-full rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 focus:border-slate-900 dark:focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-slate-900 dark:focus:ring-blue-500"
                 />
               </div>
-              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
                 <button
                   type="button"
                   onClick={() => setEditingStudent(null)}
                   disabled={actionLoading}
-                  className="px-4 py-2 border border-slate-300 rounded-md text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                  className="px-4 py-2 border border-slate-300 dark:border-slate-700 rounded-md text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
                 >
                   Hủy
                 </button>
                 <button
                   type="submit"
                   disabled={actionLoading}
-                  className="px-4 py-2 bg-slate-900 text-white rounded-md text-sm font-medium hover:bg-slate-800 transition-colors disabled:opacity-50"
+                  className="px-4 py-2 bg-slate-900 dark:bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-slate-800 dark:hover:bg-blue-700 transition-colors disabled:opacity-50"
                 >
                   {actionLoading ? 'Đang lưu...' : 'Lưu thay đổi'}
                 </button>
@@ -359,27 +359,27 @@ export default function TeacherStudentsPage() {
 
       {/* Modal: Confirm Delete */}
       {deletingStudent && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6 space-y-4">
-            <h3 className="text-lg font-bold text-red-600">Xác nhận xóa tài khoản sinh viên</h3>
-            <p className="text-sm text-slate-600">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xl max-w-md w-full p-6 space-y-4 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100">
+            <h3 className="text-lg font-bold text-red-600 dark:text-rose-400">Xác nhận xóa tài khoản sinh viên</h3>
+            <p className="text-sm text-slate-600 dark:text-slate-300">
               Bạn có chắc chắn muốn xóa sinh viên{' '}
-              <span className="font-semibold text-slate-900">{deletingStudent.full_name}</span> ({deletingStudent.email})?
+              <span className="font-semibold text-slate-900 dark:text-slate-100">{deletingStudent.full_name}</span> ({deletingStudent.email})?
             </p>
-            <p className="text-xs text-red-600 bg-red-50 p-2.5 rounded border border-red-200">
+            <p className="text-xs text-red-600 dark:text-rose-300 bg-red-50 dark:bg-rose-950/40 p-2.5 rounded border border-red-200 dark:border-rose-800">
               Lưu ý: Toàn bộ lượt thi, câu trả lời và khiếu nại của sinh viên này sẽ bị xóa vĩnh viễn theo cơ chế toàn vẹn dữ liệu.
             </p>
             {modalError && (
-              <div className="rounded bg-red-50 p-3 text-xs text-red-700 border border-red-200">
+              <div className="rounded bg-red-50 dark:bg-rose-950/40 p-3 text-xs text-red-700 dark:text-rose-300 border border-red-200 dark:border-rose-800">
                 {modalError}
               </div>
             )}
-            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
               <button
                 type="button"
                 onClick={() => setDeletingStudent(null)}
                 disabled={actionLoading}
-                className="px-4 py-2 border border-slate-300 rounded-md text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                className="px-4 py-2 border border-slate-300 dark:border-slate-700 rounded-md text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
               >
                 Hủy bỏ
               </button>
@@ -387,7 +387,7 @@ export default function TeacherStudentsPage() {
                 type="button"
                 onClick={handleDeleteStudent}
                 disabled={actionLoading}
-                className="px-4 py-2 bg-red-600 text-white rounded-md text-sm font-medium hover:bg-red-700 transition-colors disabled:opacity-50"
+                className="px-4 py-2 bg-red-600 dark:bg-rose-600 text-white rounded-md text-sm font-medium hover:bg-red-700 dark:hover:bg-rose-700 transition-colors disabled:opacity-50"
               >
                 {actionLoading ? 'Đang xóa...' : 'Xóa tài khoản'}
               </button>

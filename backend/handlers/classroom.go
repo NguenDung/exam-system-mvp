@@ -258,3 +258,25 @@ func (h *ClassroomHandler) GetClassDetail(c *gin.Context) {
 
 	c.JSON(http.StatusOK, res)
 }
+
+func (h *ClassroomHandler) TeacherGetClassGradebook(c *gin.Context) {
+	teacherIDVal, _ := c.Get("user_id")
+	teacherID := teacherIDVal.(uint)
+
+	classID, ok := parseUintParam(c, "id")
+	if !ok {
+		return
+	}
+
+	gradebook, err := h.service.GetClassGradebook(teacherID, classID)
+	if err != nil {
+		if errors.Is(err, service.ErrClassroomNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Classroom not found or permission denied"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load class gradebook"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gradebook)
+}

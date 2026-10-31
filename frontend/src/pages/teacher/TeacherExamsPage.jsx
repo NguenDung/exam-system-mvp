@@ -6,8 +6,10 @@ import Spinner from '../../components/Spinner';
 function StatusBadge({ status }) {
   return (
     <span
-      className={`px-2.5 py-0.5 rounded text-xs font-semibold ${
-        status === 'published' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+      className={`px-2.5 py-0.5 rounded-md text-xs font-medium border ${
+        status === 'published'
+          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+          : 'bg-amber-50 text-amber-700 border-amber-200'
       }`}
     >
       {status === 'published' ? 'Đã xuất bản' : 'Bản nháp'}
@@ -56,10 +58,10 @@ function CreateExamModal({ onClose, onCreated }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-lg border border-slate-200">
-        <div className="flex items-center justify-between p-5 border-b border-slate-200">
-          <h3 className="text-base font-bold text-slate-900">Tạo đề thi mới</h3>
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xl w-full max-w-lg border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100">
+        <div className="flex items-center justify-between p-5 border-b border-slate-200 dark:border-slate-800">
+          <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">Tạo đề thi mới</h3>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-xl leading-none">&times;</button>
         </div>
         <form onSubmit={handleSubmit} className="p-5 space-y-4">
@@ -198,10 +200,10 @@ function EditExamModal({ exam, onClose, onUpdated }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-lg border border-slate-200">
-        <div className="flex items-center justify-between p-5 border-b border-slate-200">
-          <h3 className="text-base font-bold text-slate-900">Chỉnh sửa đề thi #{exam.id}</h3>
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xl w-full max-w-lg border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100">
+        <div className="flex items-center justify-between p-5 border-b border-slate-200 dark:border-slate-800">
+          <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">Chỉnh sửa đề thi #{exam.id}</h3>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-xl leading-none">&times;</button>
         </div>
         <form onSubmit={handleSubmit} className="p-5 space-y-4">
@@ -373,11 +375,11 @@ export default function TeacherExamsPage() {
           <button onClick={() => setShowCreateModal(true)} className="btn-primary mx-auto">Tạo đề thi</button>
         </div>
       ) : (
-        <div className="grid gap-4">
+        <div className="grid gap-3.5">
           {exams.map((exam) => (
             <div
               key={exam.id}
-              className="bg-white rounded-lg border border-slate-200 p-5 hover:border-slate-300 transition-colors"
+              className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200/90 dark:border-slate-800 p-5 hover:border-slate-300 dark:hover:border-slate-700 shadow-sm transition-all"
             >
               <div className="flex items-start justify-between gap-4 flex-wrap">
                 <div
@@ -385,17 +387,17 @@ export default function TeacherExamsPage() {
                   onClick={() => navigate(`/teacher/exams/${exam.id}`)}
                 >
                   <div className="flex items-center gap-3 flex-wrap">
-                    <h3 className="font-semibold text-slate-900 text-base hover:text-indigo-600 transition-colors truncate">
+                    <h3 className="font-semibold text-slate-900 dark:text-slate-100 text-base hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors truncate">
                       {exam.title}
                     </h3>
                     <StatusBadge status={exam.status} />
                   </div>
                   {exam.description && (
-                    <p className="text-slate-600 text-sm mt-1 line-clamp-2">{exam.description}</p>
+                    <p className="text-slate-600 dark:text-slate-400 text-sm mt-1 line-clamp-2">{exam.description}</p>
                   )}
-                  <div className="flex items-center gap-5 mt-2 text-xs text-slate-500 flex-wrap">
+                  <div className="flex items-center gap-5 mt-2 text-xs text-slate-500 dark:text-slate-400 flex-wrap">
                     <span>
-                      Mã đề: <code className="bg-slate-100 px-2 py-0.5 rounded font-mono font-bold text-slate-800">{exam.exam_code}</code>
+                      Mã đề: <code className="bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded font-mono font-bold text-slate-800 dark:text-slate-200">{exam.exam_code}</code>
                     </span>
                     <span>Thời lượng: <strong>{exam.duration} phút</strong></span>
                     <span>Bắt đầu: {new Date(exam.start_time).toLocaleString('vi-VN')}</span>
@@ -450,22 +452,22 @@ export default function TeacherExamsPage() {
       )}
 
       {deletingExam && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6 space-y-4">
-            <h3 className="text-lg font-bold text-red-600">Xác nhận xóa đề thi</h3>
-            <p className="text-sm text-slate-600">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xl max-w-md w-full p-6 space-y-4 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100">
+            <h3 className="text-lg font-bold text-red-600 dark:text-red-400">Xác nhận xóa đề thi</h3>
+            <p className="text-sm text-slate-600 dark:text-slate-300">
               Bạn có chắc chắn muốn xóa vĩnh viễn đề thi{' '}
-              <span className="font-semibold text-slate-900">{deletingExam.title}</span> (Mã: {deletingExam.exam_code})?
+              <span className="font-semibold text-slate-900 dark:text-slate-100">{deletingExam.title}</span> (Mã: {deletingExam.exam_code})?
             </p>
-            <p className="text-xs text-red-600 bg-red-50 p-2.5 rounded border border-red-200">
+            <p className="text-xs text-red-600 dark:text-rose-400 bg-red-50 dark:bg-rose-950/40 p-2.5 rounded border border-red-200 dark:border-rose-800">
               Cảnh báo: Hành động này sẽ xóa toàn bộ câu hỏi, lịch sử làm bài, điểm số và khiếu nại của sinh viên thuộc đề thi này trong DB.
             </p>
             {deleteError && (
-              <div className="rounded bg-red-50 p-3 text-xs text-red-700 border border-red-200">
+              <div className="rounded bg-red-50 dark:bg-rose-950/40 p-3 text-xs text-red-700 dark:text-rose-300 border border-red-200 dark:border-rose-800">
                 {deleteError}
               </div>
             )}
-            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
               <button
                 type="button"
                 onClick={() => setDeletingExam(null)}

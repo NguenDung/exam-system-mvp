@@ -25,7 +25,7 @@ func SetupRouter() *gin.Engine {
 
 	r.Use(middleware.SecurityMiddleware(2 * 1024 * 1024))
 
-	r.GET("/health", func(c *gin.Context) {
+	r.Match([]string{"GET", "HEAD"}, "/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "ok", "service": "exam-system-mvp"})
 	})
 
@@ -70,6 +70,7 @@ func SetupRouter() *gin.Engine {
 		teacher.DELETE("/classes/:id", handlers.TeacherDeleteClass)
 		teacher.POST("/classes/:id/members", handlers.TeacherAddClassMember)
 		teacher.DELETE("/classes/:id/members/:studentId", handlers.TeacherRemoveClassMember)
+		teacher.GET("/classes/:id/gradebook", handlers.TeacherGetClassGradebook)
 	}
 
 	student := api.Group("/student")

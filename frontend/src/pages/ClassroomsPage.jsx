@@ -191,11 +191,11 @@ export default function ClassroomsPage() {
 
       {/* Class List */}
       {loading ? (
-        <div className="py-12 text-center text-slate-500 text-sm">
+        <div className="py-12 text-center text-slate-500 dark:text-slate-400 text-sm">
           Đang tải danh sách lớp học...
         </div>
       ) : classes.length === 0 ? (
-        <div className="bg-white p-8 rounded-lg border border-slate-200 text-center text-slate-500 text-sm">
+        <div className="bg-white dark:bg-slate-900 p-8 rounded-xl border border-slate-200 dark:border-slate-800 text-center text-slate-500 dark:text-slate-400 text-sm shadow-sm">
           {isTeacher
             ? 'Bạn chưa tạo lớp học nào. Hãy nhấn "Tạo lớp học mới" để bắt đầu.'
             : 'Bạn chưa tham gia lớp học nào. Nhập mã lớp do giảng viên cung cấp để tham gia.'}
@@ -205,11 +205,11 @@ export default function ClassroomsPage() {
           {classes.map((cls) => (
             <div
               key={cls.id}
-              className="bg-white p-5 rounded-lg border border-slate-200 shadow-sm flex flex-col justify-between hover:border-slate-300 transition-all"
+              className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition-all"
             >
               <div>
                 <div className="flex items-start justify-between gap-3 mb-2">
-                  <h3 className="text-base font-bold text-slate-900 leading-snug line-clamp-1">
+                  <h3 className="text-base font-bold text-slate-900 dark:text-slate-100 leading-snug line-clamp-1">
                     {cls.name}
                   </h3>
                   <div className="flex items-center gap-1.5 flex-shrink-0">
@@ -294,12 +294,12 @@ export default function ClassroomsPage() {
 
       {/* Teacher Create Class Modal */}
       {showCreateModal && (
-        <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6 space-y-4">
-            <h2 className="text-base font-bold text-slate-900">Tạo lớp học mới</h2>
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xl max-w-md w-full p-6 space-y-4 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100">
+            <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">Tạo lớp học mới</h2>
             <form onSubmit={handleCreateClass} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase mb-1">
                   Tên lớp học *
                 </label>
                 <input
@@ -308,11 +308,11 @@ export default function ClassroomsPage() {
                   placeholder="Ví dụ: Lập trình Go chuyên sâu - K18"
                   value={newClassName}
                   onChange={(e) => setNewClassName(e.target.value)}
-                  className="w-full text-sm px-3 py-2 border border-slate-300 rounded focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                  className="w-full text-sm px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:ring-1 focus:ring-blue-500 focus:outline-none"
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase mb-1">
                   Mô tả lớp học
                 </label>
                 <textarea
@@ -320,21 +320,21 @@ export default function ClassroomsPage() {
                   placeholder="Mô tả nội dung học phần, ca học hoặc yêu cầu..."
                   value={newClassDesc}
                   onChange={(e) => setNewClassDesc(e.target.value)}
-                  className="w-full text-sm px-3 py-2 border border-slate-300 rounded focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                  className="w-full text-sm px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:ring-1 focus:ring-blue-500 focus:outline-none"
                 />
               </div>
               <div className="flex justify-end gap-3 pt-2">
                 <button
                   type="button"
                   onClick={() => setShowCreateModal(false)}
-                  className="btn-secondary text-xs px-3 py-2 border border-slate-300 rounded text-slate-700 hover:bg-slate-50"
+                  className="btn-secondary text-xs px-3 py-2"
                 >
                   Hủy
                 </button>
                 <button
                   type="submit"
                   disabled={creating}
-                  className="btn-primary text-xs px-4 py-2 bg-indigo-600 text-white font-semibold rounded hover:bg-indigo-700 disabled:opacity-50"
+                  className="btn-primary text-xs px-4 py-2"
                 >
                   {creating ? 'Đang tạo...' : 'Tạo lớp'}
                 </button>
@@ -346,12 +346,12 @@ export default function ClassroomsPage() {
 
       {/* Teacher Edit Class Modal */}
       {editingClass && (
-        <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6 space-y-4">
-            <h2 className="text-base font-bold text-slate-900">Chỉnh sửa lớp học</h2>
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xl max-w-md w-full p-6 space-y-4 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100">
+            <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">Chỉnh sửa lớp học</h2>
             <form onSubmit={handleEditClass} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase mb-1">
                   Tên lớp học *
                 </label>
                 <input
@@ -359,32 +359,32 @@ export default function ClassroomsPage() {
                   required
                   value={editName}
                   onChange={(e) => setEditName(e.target.value)}
-                  className="w-full text-sm px-3 py-2 border border-slate-300 rounded focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                  className="w-full text-sm px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:ring-1 focus:ring-blue-500 focus:outline-none"
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase mb-1">
                   Mô tả lớp học
                 </label>
                 <textarea
                   rows={3}
                   value={editDesc}
                   onChange={(e) => setEditDesc(e.target.value)}
-                  className="w-full text-sm px-3 py-2 border border-slate-300 rounded focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                  className="w-full text-sm px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:ring-1 focus:ring-blue-500 focus:outline-none"
                 />
               </div>
               <div className="flex justify-end gap-3 pt-2">
                 <button
                   type="button"
                   onClick={() => setEditingClass(null)}
-                  className="btn-secondary text-xs px-3 py-2 border border-slate-300 rounded text-slate-700 hover:bg-slate-50"
+                  className="btn-secondary text-xs px-3 py-2"
                 >
                   Hủy
                 </button>
                 <button
                   type="submit"
                   disabled={updating}
-                  className="btn-primary text-xs px-4 py-2 bg-indigo-600 text-white font-semibold rounded hover:bg-indigo-700 disabled:opacity-50"
+                  className="btn-primary text-xs px-4 py-2"
                 >
                   {updating ? 'Đang lưu...' : 'Lưu thay đổi'}
                 </button>
@@ -396,15 +396,15 @@ export default function ClassroomsPage() {
 
       {/* Student Join Class Modal */}
       {showJoinModal && (
-        <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-sm w-full p-6 space-y-4">
-            <h2 className="text-base font-bold text-slate-900">Tham gia lớp học</h2>
-            <p className="text-xs text-slate-500">
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xl max-w-sm w-full p-6 space-y-4 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100">
+            <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">Tham gia lớp học</h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
               Nhập mã gồm 6 ký tự được giảng viên phụ trách cung cấp để ghi danh vào lớp.
             </p>
             <form onSubmit={handleJoinClass} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase mb-1">
                   Mã lớp học (6 ký tự) *
                 </label>
                 <input
@@ -414,21 +414,21 @@ export default function ClassroomsPage() {
                   placeholder="Ví dụ: K8M2P4"
                   value={joinCode}
                   onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
-                  className="w-full text-center tracking-widest font-mono text-lg uppercase px-3 py-2 border border-slate-300 rounded focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                  className="w-full text-center tracking-widest font-mono text-lg uppercase px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:ring-1 focus:ring-blue-500 focus:outline-none"
                 />
               </div>
               <div className="flex justify-end gap-3 pt-2">
                 <button
                   type="button"
                   onClick={() => setShowJoinModal(false)}
-                  className="btn-secondary text-xs px-3 py-2 border border-slate-300 rounded text-slate-700 hover:bg-slate-50"
+                  className="btn-secondary text-xs px-3 py-2"
                 >
                   Hủy
                 </button>
                 <button
                   type="submit"
                   disabled={joining}
-                  className="btn-primary text-xs px-4 py-2 bg-indigo-600 text-white font-semibold rounded hover:bg-indigo-700 disabled:opacity-50"
+                  className="btn-primary text-xs px-4 py-2"
                 >
                   {joining ? 'Đang tham gia...' : 'Tham gia'}
                 </button>

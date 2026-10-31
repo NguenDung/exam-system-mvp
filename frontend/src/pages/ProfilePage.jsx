@@ -148,46 +148,46 @@ export default function ProfilePage() {
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
-      <div className="border-b border-slate-200 pb-4">
-        <h1 className="text-xl font-bold text-slate-900 tracking-tight">Hồ sơ cá nhân</h1>
-        <p className="text-sm text-slate-500 mt-1">
+      <div className="border-b border-slate-200 dark:border-slate-800 pb-4">
+        <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">Hồ sơ cá nhân</h1>
+        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
           Quản lý thông tin định danh, khoa bộ môn và mật khẩu đăng nhập tài khoản.
         </p>
       </div>
 
       {error && (
-        <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded-md">
+        <div className="p-3 bg-red-50 dark:bg-rose-950/40 border border-red-200 dark:border-rose-800 text-red-700 dark:text-rose-300 text-sm rounded-md">
           {error}
         </div>
       )}
 
       {success && (
-        <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm rounded-md">
+        <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 text-sm rounded-md">
           {success}
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-6 bg-white p-6 rounded-lg border border-slate-200 shadow-sm">
+      <form onSubmit={handleSubmit} className="space-y-6 bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
         {/* Avatar Section */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 pb-6 border-b border-slate-100">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 pb-6 border-b border-slate-100 dark:border-slate-800">
           <div className="relative">
             {avatarPreview ? (
               <img
                 src={avatarPreview}
                 alt="Avatar preview"
-                className="w-20 h-20 rounded-full object-cover border-2 border-slate-300 shadow-sm"
+                className="w-20 h-20 rounded-full object-cover border-2 border-slate-300 dark:border-slate-700 shadow-sm"
               />
             ) : (
-              <div className="w-20 h-20 rounded-full bg-slate-800 text-white flex items-center justify-center font-bold text-2xl border-2 border-slate-300 shadow-sm">
+              <div className="w-20 h-20 rounded-full bg-slate-800 text-white flex items-center justify-center font-bold text-2xl border-2 border-slate-300 dark:border-slate-700 shadow-sm">
                 {initial}
               </div>
             )}
           </div>
 
           <div className="flex-1 space-y-2">
-            <label className="block text-sm font-semibold text-slate-800">Ảnh đại diện</label>
+            <label className="block text-sm font-semibold text-slate-800 dark:text-slate-200">Ảnh đại diện</label>
             <div className="flex flex-wrap items-center gap-3">
-              <label className="btn-secondary text-xs cursor-pointer px-3 py-1.5 border border-slate-300 rounded hover:bg-slate-50">
+              <label className="btn-secondary text-xs cursor-pointer px-3 py-1.5 border border-slate-300 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800">
                 Tải ảnh từ máy tính
                 <input
                   type="file"
@@ -200,7 +200,7 @@ export default function ProfilePage() {
                 <button
                   type="button"
                   onClick={handleRemoveAvatar}
-                  className="text-xs text-red-600 hover:text-red-800 font-medium"
+                  className="text-xs text-rose-600 dark:text-rose-400 hover:text-rose-800 font-medium"
                 >
                   Gỡ ảnh
                 </button>
@@ -212,7 +212,7 @@ export default function ProfilePage() {
                 placeholder="Hoặc dán URL ảnh trực tiếp (https://...)"
                 value={formData.avatar_url.startsWith('data:') ? '' : formData.avatar_url}
                 onChange={handleAvatarUrlChange}
-                className="w-full text-xs px-3 py-1.5 border border-slate-300 rounded focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                className="w-full text-xs px-3 py-1.5 border border-slate-300 dark:border-slate-700 rounded bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:ring-1 focus:ring-blue-500 focus:outline-none"
               />
             </div>
           </div>
@@ -221,28 +221,28 @@ export default function ProfilePage() {
         {/* Info Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase mb-1">
               Email tài khoản
             </label>
             <input
               type="email"
               value={formData.email}
               disabled
-              className="w-full text-sm px-3 py-2 bg-slate-50 border border-slate-200 rounded text-slate-500 cursor-not-allowed"
+              className="w-full text-sm px-3 py-2 bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded text-slate-500 dark:text-slate-400 cursor-not-allowed font-mono"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase mb-1">
               Vai trò hệ thống
             </label>
-            <div className="px-3 py-2 bg-slate-50 border border-slate-200 rounded text-sm text-slate-700 font-medium">
+            <div className="px-3 py-2 bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded text-sm text-slate-700 dark:text-slate-300 font-medium">
               {formData.role === 'teacher' ? 'Giảng viên' : 'Sinh viên'}
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase mb-1">
               Họ và tên *
             </label>
             <input
@@ -250,12 +250,12 @@ export default function ProfilePage() {
               required
               value={formData.full_name}
               onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
-              className="w-full text-sm px-3 py-2 border border-slate-300 rounded focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+              className="w-full text-sm px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:ring-1 focus:ring-blue-500 focus:outline-none"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase mb-1">
               {formData.role === 'teacher' ? 'Mã giảng viên' : 'Mã sinh viên'}
             </label>
             <input
@@ -263,12 +263,12 @@ export default function ProfilePage() {
               placeholder={formData.role === 'teacher' ? 'GV2026...' : 'SV2026...'}
               value={formData.student_code}
               onChange={(e) => setFormData({ ...formData, student_code: e.target.value })}
-              className="w-full text-sm px-3 py-2 border border-slate-300 rounded focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+              className="w-full text-sm px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:ring-1 focus:ring-blue-500 focus:outline-none"
             />
           </div>
 
           <div className="sm:col-span-2">
-            <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase mb-1">
               Khoa / Bộ môn
             </label>
             <input
@@ -276,12 +276,12 @@ export default function ProfilePage() {
               placeholder="Khoa Công nghệ thông tin, Viện An toàn thông tin..."
               value={formData.department}
               onChange={(e) => setFormData({ ...formData, department: e.target.value })}
-              className="w-full text-sm px-3 py-2 border border-slate-300 rounded focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+              className="w-full text-sm px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:ring-1 focus:ring-blue-500 focus:outline-none"
             />
           </div>
 
           <div className="sm:col-span-2">
-            <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase mb-1">
               Giới thiệu bản thân (Bio)
             </label>
             <textarea
@@ -289,17 +289,17 @@ export default function ProfilePage() {
               placeholder="Thông tin ngắn về hướng nghiên cứu, lớp sinh hoạt hoặc chuyên ngành..."
               value={formData.bio}
               onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
-              className="w-full text-sm px-3 py-2 border border-slate-300 rounded focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+              className="w-full text-sm px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:ring-1 focus:ring-blue-500 focus:outline-none"
             />
           </div>
         </div>
 
         {/* Password Change */}
-        <div className="pt-4 border-t border-slate-100">
-          <h2 className="text-sm font-bold text-slate-900 mb-3">Đổi mật khẩu (tùy chọn)</h2>
+        <div className="pt-4 border-t border-slate-100 dark:border-slate-800">
+          <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100 mb-3">Đổi mật khẩu (tùy chọn)</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
                 Mật khẩu mới
               </label>
               <input
@@ -307,11 +307,11 @@ export default function ProfilePage() {
                 placeholder="Để trống nếu không muốn đổi"
                 value={formData.new_password}
                 onChange={(e) => setFormData({ ...formData, new_password: e.target.value })}
-                className="w-full text-sm px-3 py-2 border border-slate-300 rounded focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                className="w-full text-sm px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:ring-1 focus:ring-blue-500 focus:outline-none"
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
                 Xác nhận mật khẩu mới
               </label>
               <input
@@ -319,14 +319,14 @@ export default function ProfilePage() {
                 placeholder="Nhập lại mật khẩu mới"
                 value={formData.confirm_password}
                 onChange={(e) => setFormData({ ...formData, confirm_password: e.target.value })}
-                className="w-full text-sm px-3 py-2 border border-slate-300 rounded focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                className="w-full text-sm px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:ring-1 focus:ring-blue-500 focus:outline-none"
               />
             </div>
           </div>
         </div>
 
         {/* Actions */}
-        <div className="flex justify-end pt-4 border-t border-slate-100">
+        <div className="flex justify-end pt-4 border-t border-slate-100 dark:border-slate-800">
           <button
             type="submit"
             disabled={saving}

@@ -63,6 +63,28 @@
 - **HTTP Security Headers**: Middleware tự động gắn `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin` và giới hạn request body tối đa 2MB.
 - **SQLite WAL Mode**: Cấu hình `PRAGMA journal_mode=WAL` và `busy_timeout=5000` giúp môi trường test chạy song song mượt mà, không bị lock database.
 
+### 11. Bảng điểm cá nhân & Cảnh báo học vụ (/student/grades)
+- **Học bạ tín chỉ chuẩn đại học**: Thống kê tự động CPA (toàn khóa) và GPA từng học kỳ dựa trên kết quả thi thực tế từ database.
+- **Biểu đồ trực quan hóa**: Cung cấp chế độ xem biến thiên điểm số theo môn học và biểu đồ phân bổ tín chỉ học lực theo thang chữ (A, B+, B, C+, C, D, F).
+- **Hệ thống Cảnh báo học vụ 3 cấp độ**: Tự động rà soát điểm số và số lượng học phần chưa đạt, phát cảnh báo học vụ Mức 1, 2 hoặc 3 theo đúng quy chế đào tạo tín chỉ của Bộ GD&ĐT.
+- **Bộ dự báo mục tiêu GPA**: Hỗ trợ sinh viên tính toán số tín chỉ và điểm cần đạt để nâng hạng học lực tốt nghiệp (Khá, Giỏi, Xuất sắc).
+
+### 12. Sổ điểm lớp học tổng hợp (Class Gradebook)
+- **Bảng ma trận điểm số chi tiết**: Giảng viên theo dõi toàn bộ thành viên trong lớp kèm điểm số từng bài thi, điểm trung bình lớp và xếp loại học lực.
+- **Thống kê tổng quan thời gian thực**: Đo lường điểm trung bình lớp, biên độ điểm ($Max / Min$) và số lượng sinh viên có nguy cơ phải thi lại (Điểm TB $< 4.0$).
+- **Bộ lọc đa tiêu chí**: Tra cứu nhanh theo tên, email, mã số sinh viên hoặc lọc theo danh mục học lực (*Xuất sắc*, *Giỏi*, *Khá*, *Trung bình*, *Yếu / Cảnh báo*).
+- **Xuất báo cáo lớp học**: Một click xuất toàn bộ sổ điểm ra file `.csv` chuẩn UTF-8 BOM mở bằng Microsoft Excel.
+
+### 13. Giao diện Đa chế độ Sáng / Tối (Dark / Light Mode)
+- **Chuyển đổi tức thời (Zero-flicker)**: Hỗ trợ dark mode toàn diện trên tất cả các trang, thanh sidebar, modal và biểu đồ SVG.
+- **Lưu trữ trạng thái người dùng**: Tự động lưu lựa chọn theme vào `localStorage` và đồng bộ với cài đặt hệ điều hành.
+
+### 14. Bảo mật giao dịch & Phòng chống rớt mạng
+- **Giao dịch nguyên tử khi nộp bài (`GradeAttemptAtomic`)**: Bọc quá trình chấm điểm, lưu đáp án và chuyển trạng thái `completed` trong một GORM Database Transaction duy nhất, loại bỏ triệt để rủi ro lỗi trạng thái dở dang.
+- **Bộ đệm Offline LocalStorage**: Tự động sao lưu đáp án đang chọn vào máy trạm, tự phục hồi khi tải lại trang và hỗ trợ nộp bài an toàn khi mạng WiFi bị chập chờn.
+- **Khóa hạn nộp bài nghiêm ngặt từ Server**: Chặn đứng các hành vi gian lận can thiệp client-side để gửi đáp án sau khi hết giờ ca thi.
+- **Giới hạn thời hạn phúc khảo**: Giới hạn nhận đơn trong vòng 14 ngày kể từ khi kết thúc kỳ thi và ngăn chặn hành vi spam nhiều đơn cùng lúc.
+
 ---
 
 ## Cấu trúc thư mục dự án
@@ -71,56 +93,69 @@
 exam-system-mvp/
 ├── ARCHITECTURE_AND_REPORT.md   # Báo cáo kiến trúc và đặc tả kỹ thuật chi tiết
 ├── README.md                    # Tài liệu hướng dẫn sử dụng và khởi chạy
-├── docker-compose.yml           # Cấu hình container PostgreSQL 15
+├── docker-compose.yml           # Cấu hình container 3 tầng (PostgreSQL 15, Go Backend, Nginx Frontend)
 ├── backend/                     # Backend API (Golang Gin)
+│   ├── Dockerfile               # Multi-stage Docker build cho Backend (<20MB)
 │   ├── config/
 │   │   └── database.go          # Kết nối CSDL PostgreSQL/SQLite, bật WAL Mode
+│   ├── dto/                     # Data Transfer Objects & Safe Schemas
 │   ├── handlers/
 │   │   ├── anti_cheat_audit.go  # Xử lý vi phạm chuyển tab, audit log, xuất CSV
+│   │   ├── appeal_handler.go    # Xử lý đơn khiếu nại, phúc khảo điểm
 │   │   ├── auth.go              # Đăng ký, đăng nhập, mã hóa bcrypt, JWT
+│   │   ├── classroom.go         # API nghiệp vụ lớp học phần và Sổ điểm
+│   │   ├── exam_handler.go      # Quản lý đề thi, câu hỏi và xuất bản
+│   │   ├── exam_taking_handler.go # Phòng thi trực tuyến, auto-save, nộp bài
 │   │   ├── history_appeals.go   # Lịch sử thi, quy trình xử lý đơn phúc khảo
 │   │   ├── notifications.go     # Thông báo nội bộ, đánh dấu đã đọc
-│   │   ├── student.go           # Vào phòng thi, trộn đề, auto-save, nộp bài
-│   │   ├── teacher.go           # Quản lý đề thi, xuất bản đề, xem kết quả
-│   │   ├── teacher_crud.go      # CRUD đề thi, câu hỏi, sinh viên, sửa điểm, reset bài
-│   │   └── user_class.go        # Hồ sơ, danh bạ, phân quyền và quản lý lớp học
+│   │   ├── schedule.go          # Lịch thi và thời khóa biểu
+│   │   ├── teacher_crud.go      # CRUD đề thi, sinh viên, sửa điểm, reset bài
+│   │   └── user.go              # Hồ sơ, danh bạ, phân quyền người dùng
 │   ├── middleware/
 │   │   ├── auth.go              # Xác thực JWT, phân quyền Teacher/Student
 │   │   ├── ratelimit.go         # Rate limiter 15 req/phút/IP
 │   │   └── security.go          # Security headers, giới hạn body 2MB
 │   ├── models/
-│   │   ├── migrate.go           # AutoMigrate 10 bảng, tạo 3 unique index
+│   │   ├── migrate.go           # AutoMigrate 10 bảng, tạo composite unique index
 │   │   ├── models.go            # GORM Structs (Users, Exams, Classrooms,...)
 │   │   └── seed.go              # Dữ liệu mẫu (tài khoản demo, đề thi IT2026)
+│   ├── repository/              # Data Access Layer & DB Transactions
 │   ├── router/
 │   │   └── router.go            # Định tuyến API, cấu hình CORS và middleware
+│   ├── service/                 # Tầng logic nghiệp vụ độc lập
 │   ├── utils/
 │   │   └── helpers.go           # Hàm tiện ích (random code, shuffle slice)
 │   ├── main.go                  # Entrypoint server (cổng 8081)
-│   └── main_test.go             # 25 test suite kiểm thử tích hợp
+│   └── main_test.go             # 26 kịch bản kiểm thử tích hợp tự động
 └── frontend/                    # Frontend SPA (React 19 Vite)
+    ├── Dockerfile               # Multi-stage Docker build cho Frontend
+    ├── nginx.conf               # Nginx reverse proxy, security headers & Gzip
     ├── src/
     │   ├── api/
-    │   │   ├── axios.js         # Cấu hình Axios BaseURL và JWT Interceptor
+    │   │   ├── axios.js         # Axios BaseURL thích ứng Docker/Local & JWT Interceptor
     │   │   └── endpoints.js     # Khai báo các hàm gọi API (Auth, Teacher, Student, Class,...)
     │   ├── components/
     │   │   ├── NotificationDropdown.jsx # Menu thông báo (polling 5s, deep-link navigate)
     │   │   ├── ProtectedRoute.jsx       # Bảo vệ route theo vai trò đăng nhập
     │   │   ├── Spinner.jsx              # Loading spinner
-    │   │   ├── StudentLayout.jsx        # Layout chung sinh viên kèm avatar thumbnail
-    │   │   └── TeacherLayout.jsx        # Layout chung giảng viên kèm avatar thumbnail
+    │   │   ├── StudentLayout.jsx        # Layout Sidebar sinh viên kèm theme toggle
+    │   │   ├── TeacherLayout.jsx        # Layout Sidebar giảng viên kèm theme toggle
+    │   │   └── ThemeToggle.jsx          # Nút chuyển đổi Dark / Light mode
     │   ├── contexts/
-    │   │   └── AuthContext.jsx  # Quản lý trạng thái đăng nhập và updateUser
+    │   │   ├── AuthContext.jsx  # Quản lý phiên đăng nhập và dữ liệu người dùng
+    │   │   └── ThemeContext.jsx # Quản lý trạng thái theme Dark / Light toàn cục
     │   ├── pages/
     │   │   ├── LoginPage.jsx            # Đăng nhập
     │   │   ├── RegisterPage.jsx         # Đăng ký tài khoản sinh viên
     │   │   ├── ProfilePage.jsx          # Hồ sơ cá nhân (Avatar URL/Base64, Bio, Đổi mật khẩu)
     │   │   ├── DirectoryPage.jsx        # Danh bạ người dùng, tra cứu và đổi vai trò
     │   │   ├── ClassroomsPage.jsx       # Danh sách lớp học (Tạo lớp / Tham gia bằng mã)
-    │   │   ├── ClassDetailPage.jsx      # Chi tiết lớp (Thành viên & Đề thi lớp học)
+    │   │   ├── ClassDetailPage.jsx      # Chi tiết lớp (Thành viên, Đề thi & Sổ điểm tổng hợp)
+    │   │   ├── ExamSchedulePage.jsx     # Thời khóa biểu và lịch thi
     │   │   ├── student/
     │   │   │   ├── ExamResultPage.jsx          # Kết quả thi và cảnh báo vi phạm
-    │   │   │   ├── ExamTakingPage.jsx          # Giao diện phòng thi (Question Palette)
+    │   │   │   ├── ExamTakingPage.jsx          # Giao diện phòng thi (Question Palette & Offline Cache)
+    │   │   │   ├── StudentGradesPage.jsx       # Bảng điểm cá nhân, biểu đồ GPA & Cảnh báo học vụ
     │   │   │   ├── StudentHistoryDetailPage.jsx# Xem lại bài làm, gửi đơn phúc khảo
     │   │   │   ├── StudentHistoryPage.jsx      # Danh sách lịch sử bài thi
     │   │   │   └── StudentHomePage.jsx         # Đề thi đang mở, vào thi bằng mã đề
@@ -149,16 +184,38 @@ exam-system-mvp/
 
 ## Hướng dẫn khởi chạy
 
-Yêu cầu môi trường: Docker Desktop, Golang 1.21+ và Node.js 18+.
+### Cách 1: Khởi chạy trọn gói bằng Docker Compose (Khuyên dùng cho Báo cáo & Nghiệm thu)
 
-### Bước 1: Khởi động cơ sở dữ liệu (PostgreSQL)
+Toàn bộ hệ thống (PostgreSQL, Golang Backend, Nginx + React Frontend) đã được container hóa hoàn chỉnh. Bạn chỉ cần gõ đúng 1 lệnh duy nhất tại thư mục gốc:
+
+```bash
+docker compose up --build -d
+```
+
+Sau khi các container khởi động hoàn tất:
+- **Giao diện người dùng (Frontend)**: Truy cập tại **`http://localhost:3000`**
+- **API Backend**: Truy cập tại **`http://localhost:8081`** (Kiểm tra trạng thái tại `http://localhost:8081/health`)
+- **Cơ sở dữ liệu PostgreSQL**: Cổng `5432` (`User: postgres`, `Password: postgres`, `Database: exam_mvp`)
+
+Để dừng hệ thống:
+```bash
+docker compose down
+```
+
+---
+
+### Cách 2: Khởi chạy thủ công từng phần (Dành cho Lập trình viên)
+
+Yêu cầu môi trường: Docker Desktop (để chạy PostgreSQL), Golang 1.21+ và Node.js 18+.
+
+#### Bước 1: Khởi động cơ sở dữ liệu (PostgreSQL)
 Chạy lệnh sau tại thư mục gốc của dự án:
 ```bash
-docker-compose up -d
+docker compose up postgres -d
 ```
 PostgreSQL sẽ chạy tại cổng `5432` (`User: postgres`, `Password: postgres`, `Database: exam_mvp`).
 
-### Bước 2: Khởi động Backend (Golang)
+#### Bước 2: Khởi động Backend (Golang)
 Mở terminal tại thư mục `backend`:
 ```bash
 cd backend
@@ -166,7 +223,7 @@ go run main.go
 ```
 Backend tự động chạy AutoMigrate 10 bảng và tạo dữ liệu mẫu, lắng nghe tại cổng **`8081`** (`http://localhost:8081`).
 
-### Bước 3: Khởi động Frontend (React)
+#### Bước 3: Khởi động Frontend (React)
 Mở terminal tại thư mục `frontend`:
 ```bash
 cd frontend
@@ -194,7 +251,7 @@ Mã đề thi mẫu có sẵn: **`IT2026`** (Kiểm tra Kiến thức Lập trì
 
 ## Chạy kiểm thử tự động
 
-Chạy 25 test suite kiểm thử tích hợp trong backend:
+Chạy 26 kịch bản kiểm thử tích hợp toàn diện trong backend:
 ```bash
 cd backend
 go test -v ./...

@@ -108,12 +108,12 @@ export default function ExamSchedulePage() {
     return (
       <div
         key={item.id}
-        className={`bg-white rounded-lg border p-5 shadow-sm transition-shadow hover:shadow-md flex flex-col justify-between ${
+        className={`bg-white dark:bg-slate-900 rounded-xl border p-5 shadow-sm transition-shadow hover:shadow-md flex flex-col justify-between ${
           item.time_status === 'ongoing'
-            ? 'border-emerald-300 ring-1 ring-emerald-100'
+            ? 'border-emerald-300 dark:border-emerald-700 ring-1 ring-emerald-100 dark:ring-emerald-950'
             : item.time_status === 'upcoming'
-            ? 'border-indigo-200'
-            : 'border-slate-200 opacity-90'
+            ? 'border-indigo-200 dark:border-indigo-800'
+            : 'border-slate-200 dark:border-slate-800 opacity-90'
         }`}
       >
         <div>
@@ -373,12 +373,12 @@ export default function ExamSchedulePage() {
             <section>
               <div className="flex items-center gap-2 mb-3">
                 <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-                <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wide">
+                <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wide">
                   Ca thi đang diễn ra ({ongoingList.length})
                 </h2>
               </div>
               {ongoingList.length === 0 ? (
-                <div className="p-6 bg-white rounded-lg border border-slate-200 text-center text-xs text-slate-500">
+                <div className="p-6 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 text-center text-xs text-slate-500 dark:text-slate-400 shadow-sm">
                   Hiện tại không có ca thi nào đang diễn ra.
                 </div>
               ) : (
@@ -393,12 +393,12 @@ export default function ExamSchedulePage() {
             <section>
               <div className="flex items-center gap-2 mb-3">
                 <span className="w-2.5 h-2.5 rounded-full bg-indigo-500" />
-                <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wide">
+                <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wide">
                   Ca thi sắp diễn ra ({upcomingList.length})
                 </h2>
               </div>
               {upcomingList.length === 0 ? (
-                <div className="p-6 bg-white rounded-lg border border-slate-200 text-center text-xs text-slate-500">
+                <div className="p-6 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 text-center text-xs text-slate-500 dark:text-slate-400 shadow-sm">
                   Không có ca thi nào sắp diễn ra trong danh sách.
                 </div>
               ) : (
@@ -413,12 +413,12 @@ export default function ExamSchedulePage() {
             <section>
               <div className="flex items-center gap-2 mb-3">
                 <span className="w-2.5 h-2.5 rounded-full bg-slate-400" />
-                <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wide">
+                <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wide">
                   Ca thi đã kết thúc ({pastList.length})
                 </h2>
               </div>
               {pastList.length === 0 ? (
-                <div className="p-6 bg-white rounded-lg border border-slate-200 text-center text-xs text-slate-500">
+                <div className="p-6 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 text-center text-xs text-slate-500 dark:text-slate-400 shadow-sm">
                   Chưa có ca thi nào trong danh sách kết thúc.
                 </div>
               ) : (

@@ -3,12 +3,13 @@ import { Link, useNavigate } from 'react-router-dom';
 import { authAPI } from '../api/endpoints';
 import { useAuth } from '../contexts/AuthContext';
 import Spinner from '../components/Spinner';
+import ThemeToggle from '../components/ThemeToggle';
 
 const DEMO_ACCOUNTS = [
-  { label: 'Giảng viên', email: 'teacher@test.com', password: '123456' },
-  { label: 'Sinh viên 1', email: 'student@test.com', password: '123456' },
-  { label: 'Sinh viên 2', email: 'student2@test.com', password: '123456' },
-  { label: 'Sinh viên 3', email: 'student3@test.com', password: '123456' },
+  { label: 'Giảng viên', email: 'teacher@test.com', password: '123456', role: 'Teacher' },
+  { label: 'Sinh viên 1', email: 'student@test.com', password: '123456', role: 'Student' },
+  { label: 'Sinh viên 2', email: 'student2@test.com', password: '123456', role: 'Student' },
+  { label: 'Sinh viên 3', email: 'student3@test.com', password: '123456', role: 'Student' },
 ];
 
 export default function LoginPage() {
@@ -44,28 +45,43 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
-        <div className="text-center mb-6">
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight uppercase">Hệ Thống Thi Trực Tuyến</h1>
-          <p className="text-slate-600 text-sm mt-1">Cổng khảo thí và đánh giá nội bộ</p>
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8 relative transition-colors">
+      {/* Top right theme toggle */}
+      <div className="absolute top-4 right-4">
+        <ThemeToggle />
+      </div>
+
+      <div className="sm:mx-auto sm:w-full sm:max-w-md">
+        <div className="flex justify-center mb-3">
+          <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center text-white font-bold text-sm tracking-wider shadow-sm">
+            EX
+          </div>
         </div>
+        <h1 className="text-center text-xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
+          Cổng Thi Trực Tuyến
+        </h1>
+        <p className="mt-1 text-center text-xs text-slate-500 dark:text-slate-400">
+          Hệ thống khảo thí và đánh giá kết quả học tập
+        </p>
+      </div>
 
-        <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6 sm:p-8">
-          <h2 className="text-lg font-semibold text-slate-800 mb-5">Đăng nhập tài khoản</h2>
-
+      <div className="mt-6 sm:mx-auto sm:w-full sm:max-w-md">
+        <div className="bg-white dark:bg-slate-900 py-8 px-6 sm:px-8 shadow-sm border border-slate-200/90 dark:border-slate-800 rounded-xl">
           {/* Demo quick fill */}
-          <div className="mb-6 p-3 bg-slate-50 rounded-md border border-slate-200">
-            <p className="text-xs font-semibold text-slate-600 mb-2 uppercase tracking-wide">Tài khoản thử nghiệm:</p>
+          <div className="mb-6 p-3 bg-slate-50/80 dark:bg-slate-800/60 rounded-lg border border-slate-200/70 dark:border-slate-700">
+            <div className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">
+              Tài khoản thử nghiệm:
+            </div>
             <div className="grid grid-cols-2 gap-2">
               {DEMO_ACCOUNTS.map((acc) => (
                 <button
                   key={acc.email}
                   type="button"
                   onClick={() => fillDemo(acc)}
-                  className="text-xs py-1.5 px-2.5 rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 font-medium text-left truncate transition-colors"
+                  className="p-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:border-blue-400 dark:hover:border-blue-500 hover:bg-blue-50/40 dark:hover:bg-blue-950/40 text-left transition-all"
                 >
-                  {acc.label}
+                  <div className="text-xs font-semibold text-slate-800 dark:text-slate-200 leading-tight">{acc.label}</div>
+                  <div className="text-[10px] text-slate-400 dark:text-slate-500 font-mono mt-0.5 truncate">{acc.email}</div>
                 </button>
               ))}
             </div>
@@ -100,7 +116,7 @@ export default function LoginPage() {
             </div>
 
             {error && (
-              <div className="p-3 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
+              <div className="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 rounded-lg text-rose-700 dark:text-rose-300 text-xs">
                 {error}
               </div>
             )}
@@ -111,12 +127,12 @@ export default function LoginPage() {
             </button>
           </form>
 
-          <p className="mt-6 text-center text-sm text-slate-500">
-            Thí sinh chưa có tài khoản?{' '}
-            <Link to="/register" className="text-indigo-600 font-medium hover:underline">
-              Đăng ký tại đây
+          <div className="mt-6 pt-5 border-t border-slate-100 dark:border-slate-800 text-center">
+            <span className="text-xs text-slate-500 dark:text-slate-400">Chưa có tài khoản khảo thí? </span>
+            <Link to="/register" className="text-xs font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-700 hover:underline">
+              Đăng ký sinh viên mới
             </Link>
-          </p>
+          </div>
         </div>
       </div>
     </div>

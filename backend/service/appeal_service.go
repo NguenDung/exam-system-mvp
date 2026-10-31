@@ -109,6 +109,11 @@ func (s *appealService) CreateAppeal(studentID uint, req dto.CreateAppealRequest
 		return nil, errors.New("Exam not found")
 	}
 
+	// Thời hạn phúc khảo: chỉ tiếp nhận trong vòng 14 ngày sau khi kỳ thi kết thúc
+	if !exam.EndTime.IsZero() && time.Now().After(exam.EndTime.Add(14*24*time.Hour)) {
+		return nil, errors.New("Thời hạn nhận đơn phúc khảo cho kỳ thi này đã kết thúc (tối đa 14 ngày sau khi kết thúc kỳ thi).")
+	}
+
 	appeal := models.Appeal{
 		ExamID:       exam.ID,
 		SubmissionID: attempt.ID,

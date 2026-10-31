@@ -61,12 +61,12 @@ function AppealDetailModal({ appealId, onClose, onUpdated }) {
         role="dialog"
         aria-modal="true"
         aria-labelledby="teacher-appeal-title"
-        className="max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-lg bg-white p-5 shadow-xl border border-slate-200 sm:p-6"
+        className="max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-xl bg-white dark:bg-slate-900 p-5 shadow-xl border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 sm:p-6"
       >
-        <div className="mb-5 flex items-start justify-between gap-4 border-b border-slate-200 pb-4">
+        <div className="mb-5 flex items-start justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-4">
           <div>
-            <h2 id="teacher-appeal-title" className="text-lg font-bold text-slate-900">Chi tiết đơn phúc khảo</h2>
-            {detail && <p className="mt-0.5 text-xs text-slate-500">Môn thi: {detail.exam.title}</p>}
+            <h2 id="teacher-appeal-title" className="text-lg font-bold text-slate-900 dark:text-slate-100">Chi tiết đơn phúc khảo</h2>
+            {detail && <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Môn thi: {detail.exam.title}</p>}
           </div>
           <button onClick={onClose} className="btn-secondary btn-sm">Đóng</button>
         </div>
@@ -74,10 +74,10 @@ function AppealDetailModal({ appealId, onClose, onUpdated }) {
         {loading ? (
           <div className="flex justify-center py-12"><Spinner size="lg" /></div>
         ) : error && !detail ? (
-          <div role="alert" className="rounded bg-red-50 p-4 text-sm text-red-700 border border-red-200">{error}</div>
+          <div role="alert" className="rounded-lg bg-red-50 dark:bg-rose-950/40 p-4 text-sm text-red-700 dark:text-rose-300 border border-red-200 dark:border-rose-800">{error}</div>
         ) : detail && (
           <div className="space-y-5">
-            <div className="grid gap-4 rounded-md bg-slate-50 p-4 border border-slate-200 sm:grid-cols-2 text-sm">
+            <div className="grid gap-4 rounded-lg bg-slate-50 dark:bg-slate-800/50 p-4 border border-slate-200 dark:border-slate-700 sm:grid-cols-2 text-sm">
               <div>
                 <p className="text-xs text-slate-500">Thí sinh</p>
                 <p className="font-semibold text-slate-900">{detail.student.full_name}</p>
@@ -252,20 +252,20 @@ export default function ExamAppealsTab({ examId }) {
         <button type="submit" className="btn-primary">Tìm kiếm</button>
       </form>
 
-      {error && <div role="alert" className="rounded bg-red-50 p-4 text-sm text-red-700 border border-red-200">{error}</div>}
+      {error && <div role="alert" className="rounded-lg bg-red-50 dark:bg-rose-950/40 p-4 text-sm text-red-700 dark:text-rose-300 border border-red-200 dark:border-rose-800">{error}</div>}
 
-      <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
+      <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
         {loading ? (
           <div className="flex justify-center py-16"><Spinner size="lg" /></div>
         ) : items.length === 0 ? (
-          <div className="py-16 text-center text-slate-500">
+          <div className="py-16 text-center text-slate-500 dark:text-slate-400">
             <p>{search || status ? 'Không tìm thấy đơn phúc khảo phù hợp.' : 'Chưa có đơn phúc khảo nào cho đề thi này.'}</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[850px] text-sm">
               <thead>
-                <tr className="border-b border-slate-200 bg-slate-50 text-left text-slate-600">
+                <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 text-left text-slate-600 dark:text-slate-300">
                   <th className="px-4 py-3 font-semibold">STT</th>
                   <th className="px-4 py-3 font-semibold">Thí sinh</th>
                   <th className="px-4 py-3 font-semibold">Tiêu đề</th>

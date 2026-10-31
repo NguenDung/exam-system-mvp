@@ -70,3 +70,52 @@ type ClassDetailResponse struct {
 	Members []MemberInfo       `json:"members"`
 	Exams   interface{}        `json:"exams"`
 }
+
+type StudentGradeEntry struct {
+	AttemptID      *uint      `json:"attempt_id"`
+	Score          *float64   `json:"score"`
+	Status         string     `json:"status"` // "completed" | "in_progress" | "not_attempted"
+	ViolationCount int        `json:"violation_count"`
+	SubmittedAt    *time.Time `json:"submitted_at"`
+}
+
+type StudentGradebookRow struct {
+	StudentID      uint                         `json:"student_id"`
+	FullName       string                       `json:"full_name"`
+	Email          string                       `json:"email"`
+	StudentCode    string                       `json:"student_code"`
+	Department     string                       `json:"department"`
+	AvatarURL      string                       `json:"avatar_url"`
+	ExamScores     map[uint]StudentGradeEntry   `json:"exam_scores"` // examID -> entry
+	AverageScore   float64                      `json:"average_score"`
+	CompletedCount int                          `json:"completed_count"`
+	AcademicRank   string                       `json:"academic_rank"` // "Xuất sắc", "Giỏi", "Khá", "Trung bình", "Yếu"
+}
+
+type ClassGradebookExam struct {
+	ID        uint      `json:"id"`
+	ExamCode  string    `json:"exam_code"`
+	Title     string    `json:"title"`
+	Duration  int       `json:"duration"`
+	StartTime time.Time `json:"start_time"`
+	EndTime   time.Time `json:"end_time"`
+	Status    string    `json:"status"`
+}
+
+type ClassGradebookSummary struct {
+	TotalStudents  int     `json:"total_students"`
+	TotalExams     int     `json:"total_exams"`
+	ClassAverage   float64 `json:"class_average"`
+	HighestAverage float64 `json:"highest_average"`
+	LowestAverage  float64 `json:"lowest_average"`
+	AtRiskCount    int     `json:"at_risk_count"` // Average < 4.0
+}
+
+type ClassGradebookResponse struct {
+	ClassID   uint                  `json:"class_id"`
+	ClassName string                `json:"class_name"`
+	ClassCode string                `json:"class_code"`
+	Exams     []ClassGradebookExam  `json:"exams"`
+	Students  []StudentGradebookRow `json:"students"`
+	Summary   ClassGradebookSummary `json:"summary"`
+}

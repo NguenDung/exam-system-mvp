@@ -36,6 +36,7 @@ type ClassroomService interface {
 	JoinClass(studentID uint, req dto.JoinClassRequest) (*models.Classroom, error)
 	ListClasses(userID uint, role string) ([]dto.ClassListItem, error)
 	GetClassDetail(userID uint, role string, classID uint) (*dto.ClassDetailResponse, error)
+	GetClassGradebook(teacherID, classID uint) (*dto.ClassGradebookResponse, error)
 }
 
 type classroomService struct {
@@ -362,5 +363,163 @@ func (s *classroomService) GetClassDetail(userID uint, role string, classID uint
 		},
 		Members: members,
 		Exams:   exams,
+	}, nil
+}
+
+func (s *classroomService) GetClassGradebook(teacherID, classID uint) (*dto.ClassGradebookResponse, error) {
+	class, err := s.classRepo.FindByID(classID)
+	if err != nil || class.TeacherID != teacherID {
+		return nil, ErrClassroomNotFound
+	}
+
+	rawMembers, err := s.classRepo.GetMembersWithStudent(classID)
+	if err != nil {
+		return nil, err
+	}
+
+	exams, err := s.classRepo.GetClassExams(classID)
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		exams = []models.Exam{}
+	}
+
+	var examIDs []uint
+	gradebookExams := make([]dto.ClassGradebookExam, 0, len(exams))
+	for _, ex := range exams {
+		examIDs = append(examIDs, ex.ID)
+		gradebookExams = append(gradebookExams, dto.ClassGradebookExam{
+			ID:        ex.ID,
+			ExamCode:  ex.ExamCode,
+			Title:     ex.Title,
+			Duration:  ex.Duration,
+			StartTime: ex.StartTime,
+			EndTime:   ex.EndTime,
+			Status:    ex.Status,
+		})
+	}
+
+	attempts, err := s.classRepo.GetClassAttempts(examIDs)
+	if err != nil {
+		attempts = []models.ExamAttempt{}
+	}
+
+	// Map: userID -> examID -> ExamAttempt
+	attemptMap := make(map[uint]map[uint]models.ExamAttempt)
+	for _, a := range attempts {
+		if _, ok := attemptMap[a.UserID]; !ok {
+			attemptMap[a.UserID] = make(map[uint]models.ExamAttempt)
+		}
+		attemptMap[a.UserID][a.ExamID] = a
+	}
+
+	students := make([]dto.StudentGradebookRow, 0, len(rawMembers))
+	var totalScoresSum float64
+	var totalScoresCount int
+	highestAvg := 0.0
+	lowestAvg := 10.0
+	atRiskCount := 0
+
+	for _, m := range rawMembers {
+		userAttempts := attemptMap[m.StudentID]
+		examScores := make(map[uint]dto.StudentGradeEntry)
+		var studentSum float64
+		var studentCompleted int
+
+		for _, ex := range exams {
+			if att, exists := userAttempts[ex.ID]; exists {
+				scoreVal := att.Score
+				examScores[ex.ID] = dto.StudentGradeEntry{
+					AttemptID:      &att.ID,
+					Score:          &scoreVal,
+					Status:         att.Status,
+					ViolationCount: att.ViolationCount,
+					SubmittedAt:    att.SubmittedAt,
+				}
+				if att.Status == "completed" {
+					studentSum += att.Score
+					studentCompleted++
+				}
+			} else {
+				examScores[ex.ID] = dto.StudentGradeEntry{
+					AttemptID:      nil,
+					Score:          nil,
+					Status:         "not_attempted",
+					ViolationCount: 0,
+					SubmittedAt:    nil,
+				}
+			}
+		}
+
+		var avgScore float64
+		if studentCompleted > 0 {
+			avgScore = studentSum / float64(studentCompleted)
+		}
+
+		var rank string
+		switch {
+		case studentCompleted == 0:
+			rank = "Chưa có điểm"
+		case avgScore >= 8.5:
+			rank = "Xuất sắc"
+		case avgScore >= 7.0:
+			rank = "Giỏi"
+		case avgScore >= 5.5:
+			rank = "Khá"
+		case avgScore >= 4.0:
+			rank = "Trung bình"
+		default:
+			rank = "Yếu / Cảnh báo"
+		}
+
+		if studentCompleted > 0 {
+			totalScoresSum += avgScore
+			totalScoresCount++
+			if avgScore > highestAvg {
+				highestAvg = avgScore
+			}
+			if avgScore < lowestAvg {
+				lowestAvg = avgScore
+			}
+			if avgScore < 4.0 {
+				atRiskCount++
+			}
+		}
+
+		students = append(students, dto.StudentGradebookRow{
+			StudentID:      m.StudentID,
+			FullName:       m.Student.FullName,
+			Email:          m.Student.Email,
+			StudentCode:    m.Student.StudentCode,
+			Department:     m.Student.Department,
+			AvatarURL:      m.Student.AvatarURL,
+			ExamScores:     examScores,
+			AverageScore:   avgScore,
+			CompletedCount: studentCompleted,
+			AcademicRank:   rank,
+		})
+	}
+
+	classAvg := 0.0
+	if totalScoresCount > 0 {
+		classAvg = totalScoresSum / float64(totalScoresCount)
+	} else {
+		lowestAvg = 0.0
+	}
+
+	summary := dto.ClassGradebookSummary{
+		TotalStudents:  len(rawMembers),
+		TotalExams:     len(exams),
+		ClassAverage:   classAvg,
+		HighestAverage: highestAvg,
+		LowestAverage:  lowestAvg,
+		AtRiskCount:    atRiskCount,
+	}
+
+	return &dto.ClassGradebookResponse{
+		ClassID:   class.ID,
+		ClassName: class.Name,
+		ClassCode: class.Code,
+		Exams:     gradebookExams,
+		Students:  students,
+		Summary:   summary,
 	}, nil
 }

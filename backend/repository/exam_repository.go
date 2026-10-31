@@ -39,6 +39,7 @@ type ExamRepository interface {
 	DeleteAttempt(id uint) error
 
 	SaveAnswersAtomic(attemptID uint, answers []models.AttemptAnswer) error
+	GradeAttemptAtomic(attemptID uint, updatedAnswers []models.AttemptAnswer, attempt *models.ExamAttempt) error
 	GetAttemptAnswers(attemptID uint) ([]models.AttemptAnswer, error)
 
 	CreateAuditLog(log *models.AuditLog) error
@@ -236,6 +237,27 @@ func (r *gormExamRepository) SaveAnswersAtomic(attemptID uint, answers []models.
 		Columns:   []clause.Column{{Name: "attempt_id"}, {Name: "question_id"}},
 		DoUpdates: clause.AssignmentColumns([]string{"chosen_option", "updated_at"}),
 	}).Create(&answers).Error
+}
+
+func (r *gormExamRepository) GradeAttemptAtomic(attemptID uint, updatedAnswers []models.AttemptAnswer, attempt *models.ExamAttempt) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if len(updatedAnswers) > 0 {
+			now := time.Now()
+			for i := range updatedAnswers {
+				updatedAnswers[i].AttemptID = attemptID
+				if updatedAnswers[i].UpdatedAt.IsZero() {
+					updatedAnswers[i].UpdatedAt = now
+				}
+			}
+			if err := tx.Clauses(clause.OnConflict{
+				Columns:   []clause.Column{{Name: "attempt_id"}, {Name: "question_id"}},
+				DoUpdates: clause.AssignmentColumns([]string{"chosen_option", "is_correct", "points_awarded", "updated_at"}),
+			}).Create(&updatedAnswers).Error; err != nil {
+				return err
+			}
+		}
+		return tx.Save(attempt).Error
+	})
 }
 
 func (r *gormExamRepository) GetAttemptAnswers(attemptID uint) ([]models.AttemptAnswer, error) {

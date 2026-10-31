@@ -5,9 +5,9 @@ import Spinner from '../../components/Spinner';
 
 function StatCard({ label, value }) {
   return (
-    <div className="bg-white rounded-lg border border-slate-200 p-5 text-center">
-      <div className="text-2xl font-bold text-slate-900">{value}</div>
-      <div className="text-xs text-slate-500 mt-1 uppercase tracking-wide">{label}</div>
+    <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-5 text-center shadow-sm">
+      <div className="text-2xl font-bold text-slate-900 dark:text-slate-100">{value}</div>
+      <div className="text-xs text-slate-500 dark:text-slate-400 mt-1 uppercase tracking-wide">{label}</div>
     </div>
   );
 }
@@ -37,14 +37,14 @@ function EditScoreModal({ attempt, onClose, onUpdated }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6 space-y-4">
-        <div className="flex items-center justify-between border-b border-slate-200 pb-3">
-          <h3 className="text-base font-bold text-slate-900">Điều chỉnh điểm thi thí sinh</h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-xl leading-none">&times;</button>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xl max-w-md w-full p-6 space-y-4 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100">
+        <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+          <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">Điều chỉnh điểm thi thí sinh</h3>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xl leading-none">&times;</button>
         </div>
-        <p className="text-xs text-slate-600">
-          Thí sinh: <span className="font-semibold text-slate-900">{attempt.full_name}</span> ({attempt.email})
+        <p className="text-xs text-slate-600 dark:text-slate-400">
+          Thí sinh: <span className="font-semibold text-slate-900 dark:text-slate-100">{attempt.full_name}</span> ({attempt.email})
         </p>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
@@ -204,20 +204,20 @@ export default function TeacherResultsPage() {
       </div>
 
       {/* Results table */}
-      <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
-        <div className="px-5 py-3.5 border-b border-slate-200 flex items-center justify-between">
-          <h3 className="font-semibold text-slate-900 text-sm">Bảng điểm</h3>
-          <span className="text-xs text-slate-500">{results.length} bài thi</span>
+      <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
+        <div className="px-5 py-3.5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+          <h3 className="font-semibold text-slate-900 dark:text-slate-100 text-sm">Bảng điểm</h3>
+          <span className="text-xs text-slate-500 dark:text-slate-400">{results.length} bài thi</span>
         </div>
         {results.length === 0 ? (
-          <div className="text-center py-16 text-slate-500">
+          <div className="text-center py-16 text-slate-500 dark:text-slate-400">
             <p>Chưa có sinh viên nào tham gia làm bài thi này</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="bg-slate-50 border-b border-slate-200 text-left text-slate-600">
+                <tr className="bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 text-left text-slate-600 dark:text-slate-300">
                   <th className="px-5 py-3 font-semibold">STT</th>
                   <th className="px-5 py-3 font-semibold">Họ và tên</th>
                   <th className="px-5 py-3 font-semibold">Email</th>
@@ -307,17 +307,17 @@ export default function TeacherResultsPage() {
 
       {/* Modal: Reset Attempt */}
       {resettingAttempt && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6 space-y-4">
-            <h3 className="text-base font-bold text-red-600">Xác nhận cho thi lại (Xóa lượt thi)</h3>
-            <p className="text-sm text-slate-600">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xl max-w-md w-full p-6 space-y-4 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100">
+            <h3 className="text-base font-bold text-red-600 dark:text-red-400">Xác nhận cho thi lại (Xóa lượt thi)</h3>
+            <p className="text-sm text-slate-600 dark:text-slate-300">
               Bạn có chắc chắn muốn xóa lượt thi của thí sinh{' '}
-              <span className="font-semibold text-slate-900">{resettingAttempt.full_name}</span>?
+              <span className="font-semibold text-slate-900 dark:text-slate-100">{resettingAttempt.full_name}</span>?
             </p>
-            <p className="text-xs text-slate-500 bg-slate-50 p-2.5 rounded border border-slate-200">
+            <p className="text-xs text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/50 p-2.5 rounded-lg border border-slate-200 dark:border-slate-700">
               Toàn bộ bài làm và kết quả của thí sinh sẽ bị xóa. Sinh viên có thể thi lại từ đầu.
             </p>
-            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
               <button
                 type="button"
                 onClick={() => setResettingAttempt(null)}

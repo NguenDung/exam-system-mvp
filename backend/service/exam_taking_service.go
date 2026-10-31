@@ -2,6 +2,7 @@ package service
 
 import (
 	"errors"
+	"fmt"
 	"math/rand"
 	"strings"
 	"time"
@@ -115,17 +116,13 @@ func (s *examTakingService) gradeAttemptInTransaction(attemptID uint) error {
 		totalScore += pts
 	}
 
-	if len(updatedAnswers) > 0 {
-		_ = s.examRepo.SaveAnswersAtomic(attemptID, updatedAnswers)
-	}
-
 	attempt.Score = totalScore
 	attempt.CorrectCount = correctCount
 	attempt.WrongCount = wrongCount
 	attempt.Status = "completed"
 	attempt.SubmittedAt = &now
 
-	return s.examRepo.UpdateAttempt(attempt)
+	return s.examRepo.GradeAttemptAtomic(attemptID, updatedAnswers, attempt)
 }
 
 func (s *examTakingService) GetAvailableExams(studentID uint) ([]map[string]interface{}, error) {
@@ -460,6 +457,14 @@ func (s *examTakingService) RecordViolation(studentID, attemptID uint, req dto.V
 		_ = s.gradeAttemptInTransaction(attemptID)
 		autoSubmitted = true
 		attempt, _ = s.examRepo.FindAttemptByID(attemptID)
+
+		_ = s.examRepo.CreateAuditLog(&models.AuditLog{
+			ActorID:   studentID,
+			Action:    "CHEATING_VIOLATION_AUTO_SUBMIT",
+			TargetID:  attemptID,
+			Details:   fmt.Sprintf("Tự động thu bài attempt #%d do vi phạm quy chế phòng thi %d lần", attemptID, attempt.ViolationCount),
+			CreatedAt: time.Now(),
+		})
 	} else {
 		_ = s.examRepo.UpdateAttempt(attempt)
 	}
@@ -482,23 +487,66 @@ func (s *examTakingService) SubmitExam(studentID, attemptID uint, req dto.Submit
 		return nil, errors.New("Exam already submitted")
 	}
 
-	if len(req.Answers) > 0 {
-		var answers []models.AttemptAnswer
-		for _, a := range req.Answers {
-			answers = append(answers, models.AttemptAnswer{
-				AttemptID:    attemptID,
-				QuestionID:   a.QuestionID,
-				ChosenOption: a.ChosenOption,
-			})
+	exam, err := s.examRepo.FindExamByID(attempt.ExamID)
+	if err != nil {
+		return nil, errors.New("Exam not found")
+	}
+
+	now := time.Now()
+	deadline := attemptDeadline(attempt.StartedAt, *exam)
+	isExpired := now.After(deadline.Add(saveGracePeriod))
+
+	// Chống gian lận: Chỉ chấp nhận cập nhật đáp án mới nếu chưa quá hạn nộp bài
+	if len(req.Answers) > 0 && !isExpired {
+		questions, err := s.examRepo.GetQuestionsByExamID(attempt.ExamID)
+		if err == nil {
+			validMap := make(map[uint]bool, len(questions))
+			for _, q := range questions {
+				validMap[q.ID] = true
+			}
+			var validAnswers []models.AttemptAnswer
+			for _, a := range req.Answers {
+				if validMap[a.QuestionID] {
+					if a.ChosenOption != nil && *a.ChosenOption != "" {
+						opt := strings.ToUpper(strings.TrimSpace(*a.ChosenOption))
+						if opt == "A" || opt == "B" || opt == "C" || opt == "D" {
+							validAnswers = append(validAnswers, models.AttemptAnswer{
+								AttemptID:    attemptID,
+								QuestionID:   a.QuestionID,
+								ChosenOption: &opt,
+							})
+						}
+					} else {
+						validAnswers = append(validAnswers, models.AttemptAnswer{
+							AttemptID:    attemptID,
+							QuestionID:   a.QuestionID,
+							ChosenOption: nil,
+						})
+					}
+				}
+			}
+			if len(validAnswers) > 0 {
+				_ = s.examRepo.SaveAnswersAtomic(attemptID, validAnswers)
+			}
 		}
-		_ = s.examRepo.SaveAnswersAtomic(attemptID, answers)
 	}
 
 	if err := s.gradeAttemptInTransaction(attemptID); err != nil {
 		return nil, err
 	}
 
-	return s.examRepo.FindAttemptByID(attemptID)
+	updated, err := s.examRepo.FindAttemptByID(attemptID)
+	if err == nil && updated != nil {
+		_ = s.examRepo.CreateAuditLog(&models.AuditLog{
+			ActorID:   studentID,
+			Action:    "STUDENT_SUBMIT_EXAM",
+			TargetID:  attemptID,
+			Details:   fmt.Sprintf("Sinh viên nộp bài thi %s (Điểm: %.2f, Đúng: %d, Sai: %d)", exam.ExamCode, updated.Score, updated.CorrectCount, updated.WrongCount),
+			CreatedAt: now,
+		})
+	}
+
+	return updated, nil
 }
 
 func (s *examTakingService) GetResult(studentID, attemptID uint) (map[string]interface{}, error) {

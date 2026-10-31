@@ -20,6 +20,7 @@ type ClassroomRepository interface {
 	RemoveMember(classID, studentID uint) (int64, error)
 	GetMembersWithStudent(classID uint) ([]models.ClassroomMember, error)
 	GetClassExams(classID uint) ([]models.Exam, error)
+	GetClassAttempts(examIDs []uint) ([]models.ExamAttempt, error)
 	CountMembers(classID uint) (int64, error)
 	CountExams(classID uint) (int64, error)
 	IsCodeExists(code string) (bool, error)
@@ -124,6 +125,15 @@ func (r *gormClassroomRepository) GetClassExams(classID uint) ([]models.Exam, er
 	var exams []models.Exam
 	err := r.db.Where("classroom_id = ?", classID).Order("start_time DESC, id DESC").Find(&exams).Error
 	return exams, err
+}
+
+func (r *gormClassroomRepository) GetClassAttempts(examIDs []uint) ([]models.ExamAttempt, error) {
+	if len(examIDs) == 0 {
+		return []models.ExamAttempt{}, nil
+	}
+	var attempts []models.ExamAttempt
+	err := r.db.Where("exam_id IN ?", examIDs).Find(&attempts).Error
+	return attempts, err
 }
 
 func (r *gormClassroomRepository) CountMembers(classID uint) (int64, error) {

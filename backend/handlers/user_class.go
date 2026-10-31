@@ -51,3 +51,7 @@ func ListClasses(c *gin.Context) {
 func GetClassDetail(c *gin.Context) {
 	getDefaultClassroomHandler().GetClassDetail(c)
 }
+
+func TeacherGetClassGradebook(c *gin.Context) {
+	getDefaultClassroomHandler().TeacherGetClassGradebook(c)
+}

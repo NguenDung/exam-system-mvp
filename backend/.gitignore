@@ -1,0 +1,8 @@
+# Database files
+*.db
+*.db-shm
+*.db-wal
+
+# Binaries
+server
+*.exe

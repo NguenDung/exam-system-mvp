@@ -1,6 +1,7 @@
-version: "3.9"
-
 services:
+  # ----------------------------------------------------------------------------
+  # PostgreSQL Database Service
+  # ----------------------------------------------------------------------------
   postgres:
     image: postgres:15-alpine
     container_name: exam_mvp_postgres
@@ -18,6 +19,64 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - exam_network
+
+  # ----------------------------------------------------------------------------
+  # Golang REST API Backend Service
+  # ----------------------------------------------------------------------------
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: exam_mvp_backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB_DRIVER: postgres
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: exam_mvp
+      DB_SSLMODE: disable
+      SERVER_PORT: "8081"
+      JWT_SECRET: "exam_mvp_cmc_ccyber_super_secret_key_2026"
+      RATE_LIMIT_DISABLED: "false"
+    ports:
+      - "8081:8081"
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --tries=1 -O - http://127.0.0.1:8081/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      start_period: 5s
+      retries: 3
+    networks:
+      - exam_network
+
+  # ----------------------------------------------------------------------------
+  # React/Vite SPA Frontend Service (Served via Nginx)
+  # ----------------------------------------------------------------------------
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: exam_mvp_frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "3000:80"
+    networks:
+      - exam_network
+
+networks:
+  exam_network:
+    driver: bridge
 
 volumes:
   postgres_data:
+    driver: local

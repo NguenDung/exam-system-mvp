@@ -135,7 +135,7 @@ function QuestionForm({ onSave, onCancel, saving }) {
                 className={`flex items-center gap-1.5 cursor-pointer px-3 py-1.5 rounded border text-sm font-semibold transition-all ${
                   q.correct_option === opt
                     ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
-                    : 'border-slate-300 bg-white text-slate-700 hover:border-slate-400'
+                    : 'border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:border-slate-400 dark:hover:border-slate-600'
                 }`}
               >
                 <input
@@ -197,10 +197,10 @@ function EditQuestionModal({ question, onSave, onCancel, saving }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between border-b border-slate-200 pb-3">
-          <h3 className="text-base font-bold text-slate-900">Chỉnh sửa câu hỏi #{question.id}</h3>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xl max-w-2xl w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100">
+        <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+          <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">Chỉnh sửa câu hỏi #{question.id}</h3>
           <button onClick={onCancel} className="text-slate-400 hover:text-slate-600 text-xl leading-none">&times;</button>
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -314,14 +314,14 @@ D. Telnet
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between border-b border-slate-200 pb-3">
-          <h3 className="text-base font-bold text-slate-900">Nhập nhanh câu hỏi hàng loạt</h3>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xl max-w-2xl w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100">
+        <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+          <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">Nhập nhanh câu hỏi hàng loạt</h3>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-xl leading-none">&times;</button>
         </div>
-        <p className="text-xs text-slate-600 leading-relaxed">
-          Hỗ trợ định dạng Text phân cách câu bằng dấu gạch ngang (<code className="bg-slate-100 px-1 py-0.5 rounded">---</code>) hoặc mảng JSON chuẩn.
+        <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+          Hỗ trợ định dạng Text phân cách câu bằng dấu gạch ngang (<code className="bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded text-slate-800 dark:text-slate-200">---</code>) hoặc mảng JSON chuẩn.
         </p>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
@@ -366,13 +366,13 @@ D. Telnet
 function QuestionCard({ q, index, isDraft, onEdit, onDelete }) {
   const [confirming, setConfirming] = useState(false);
   return (
-    <div className="bg-white rounded-lg border border-slate-200 p-5">
+    <div className="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 p-5">
       <div className="flex items-start gap-3">
-        <span className="flex-shrink-0 w-7 h-7 rounded bg-slate-100 text-slate-700 font-bold text-xs flex items-center justify-center">
+        <span className="flex-shrink-0 w-7 h-7 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-xs flex items-center justify-center">
           {index + 1}
         </span>
         <div className="flex-1 min-w-0">
-          <p className="font-medium text-slate-900 mb-3">{q.prompt}</p>
+          <p className="font-medium text-slate-900 dark:text-slate-100 mb-3">{q.prompt}</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {OPTION_LABELS.map((opt) => (
               <div
@@ -456,14 +456,14 @@ function EditScoreModal({ attempt, onClose, onUpdated }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6 space-y-4">
-        <div className="flex items-center justify-between border-b border-slate-200 pb-3">
-          <h3 className="text-base font-bold text-slate-900">Điều chỉnh điểm thi thí sinh</h3>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xl max-w-md w-full p-6 space-y-4 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100">
+        <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+          <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">Điều chỉnh điểm thi thí sinh</h3>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-xl leading-none">&times;</button>
         </div>
-        <p className="text-xs text-slate-600">
-          Thí sinh: <span className="font-semibold text-slate-900">{attempt.full_name}</span> ({attempt.email})
+        <p className="text-xs text-slate-600 dark:text-slate-400">
+          Thí sinh: <span className="font-semibold text-slate-900 dark:text-slate-100">{attempt.full_name}</span> ({attempt.email})
         </p>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
@@ -527,11 +527,11 @@ function AuditLogModal({ onClose }) {
   }, []);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full p-6 space-y-4 max-h-[85vh] flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xl max-w-3xl w-full p-6 space-y-4 max-h-[85vh] flex flex-col border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100">
         <div className="flex items-center justify-between border-b border-slate-200 pb-3">
           <div>
-            <h3 className="text-base font-bold text-slate-900">Nhật ký can thiệp điểm số và lượt thi (Audit Log)</h3>
+            <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">Nhật ký can thiệp điểm số và lượt thi (Audit Log)</h3>
             <p className="text-xs text-slate-500">Lưu vết minh bạch các hành vi sửa điểm hoặc cho phép thi lại</p>
           </div>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-xl leading-none">&times;</button>
@@ -639,9 +639,9 @@ function EditExamModal({ exam, onClose, onUpdated }) {
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-lg border border-slate-200">
-        <div className="flex items-center justify-between p-5 border-b border-slate-200">
-          <h3 className="text-base font-bold text-slate-900">Thiết lập thông tin đề thi #{exam.id}</h3>
+      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xl w-full max-w-lg border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100">
+        <div className="flex items-center justify-between p-5 border-b border-slate-200 dark:border-slate-800">
+          <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">Thiết lập thông tin đề thi #{exam.id}</h3>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-xl leading-none">&times;</button>
         </div>
         <form onSubmit={handleSubmit} className="p-5 space-y-4">
@@ -1004,13 +1004,13 @@ export default function TeacherExamDetailPage() {
             { label: 'Tổng điểm đề thi', value: questions.reduce((sum, question) => sum + (question.points || 1), 0).toFixed(1) },
             { label: 'Trạng thái phát hành', value: isDraft ? 'Bản nháp (Đang soạn)' : 'Đã xuất bản chính thức' },
           ].map((stat) => (
-            <div key={stat.label} className="bg-white rounded-lg border border-slate-200 p-5 text-center">
-              <div className="text-2xl font-bold text-slate-900">{stat.value}</div>
-              <div className="mt-1 text-xs text-slate-500 uppercase tracking-wide">{stat.label}</div>
+            <div key={stat.label} className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-5 text-center shadow-sm">
+              <div className="text-2xl font-bold text-slate-900 dark:text-slate-100">{stat.value}</div>
+              <div className="mt-1 text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wide">{stat.label}</div>
             </div>
           ))}
-          <div className="bg-white rounded-lg border border-slate-200 p-5 sm:col-span-3">
-            <h2 className="font-semibold text-slate-900 text-sm uppercase tracking-wide">Chi tiết thiết lập kỳ thi</h2>
+          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-5 sm:col-span-3 shadow-sm">
+            <h2 className="font-semibold text-slate-900 dark:text-slate-100 text-sm uppercase tracking-wide">Chi tiết thiết lập kỳ thi</h2>
             <dl className="mt-4 grid gap-4 text-sm sm:grid-cols-2">
               <div><dt className="text-slate-500">Mã kỳ thi</dt><dd className="font-mono font-semibold text-slate-900">{exam.exam_code}</dd></div>
               <div><dt className="text-slate-500">Thời lượng làm bài</dt><dd className="font-medium">{exam.duration} phút</dd></div>
@@ -1051,7 +1051,7 @@ export default function TeacherExamDetailPage() {
 
           <div className="mb-4 space-y-3">
             {questions.length === 0 && !showForm && (
-              <div className="bg-white rounded-lg border border-dashed border-slate-300 py-12 text-center">
+              <div className="bg-white dark:bg-slate-900 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 py-12 text-center">
                 <p className="text-slate-500">Đề thi chưa có câu hỏi nào. {isDraft && 'Bấm nút "Thêm câu hỏi mới" hoặc "Nhập nhanh câu hỏi" để bắt đầu soạn đề.'}</p>
               </div>
             )}
@@ -1080,10 +1080,10 @@ export default function TeacherExamDetailPage() {
       )}
 
       {activeTab === 'scores' && (
-        <section className="bg-white rounded-lg border border-slate-200 p-5">
+        <section className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h2 className="text-base font-bold text-slate-900">Bảng điểm thi sinh viên</h2>
+              <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">Bảng điểm thi sinh viên</h2>
               <p className="text-xs text-slate-500">Giảng viên có quyền hiệu chỉnh điểm thi hoặc cho phép sinh viên thi lại nếu gặp sự cố</p>
             </div>
             <div className="flex gap-2 flex-wrap">
@@ -1201,8 +1201,8 @@ export default function TeacherExamDetailPage() {
 
       {/* Modal: Delete Exam */}
       {showDeleteExamModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6 space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xl max-w-md w-full p-6 space-y-4 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100">
             <h3 className="text-lg font-bold text-red-600">Xác nhận xóa đề thi</h3>
             <p className="text-sm text-slate-600">
               Bạn có chắc chắn muốn xóa vĩnh viễn đề thi{' '}
@@ -1266,8 +1266,8 @@ export default function TeacherExamDetailPage() {
 
       {/* Modal: Reset Attempt */}
       {resettingAttempt && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6 space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xl max-w-md w-full p-6 space-y-4 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100">
             <h3 className="text-base font-bold text-red-600">Xác nhận cho thi lại (Xóa lượt thi)</h3>
             <p className="text-sm text-slate-600">
               Bạn có chắc chắn muốn xóa toàn bộ câu trả lời và kết quả lượt thi của thí sinh{' '}

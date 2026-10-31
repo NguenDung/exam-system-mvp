@@ -53,11 +53,11 @@ function AppealModal({ submission, onClose, onSuccess }) {
         role="dialog"
         aria-modal="true"
         aria-labelledby="appeal-title"
-        className="w-full max-w-lg space-y-4 rounded-lg bg-white p-6 shadow-xl border border-slate-200"
+        className="w-full max-w-lg space-y-4 rounded-xl bg-white dark:bg-slate-900 p-6 shadow-xl border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100"
       >
         <div>
-          <h2 id="appeal-title" className="text-lg font-bold text-slate-900">Gửi đơn phúc khảo</h2>
-          <p className="mt-0.5 text-xs text-slate-500">Môn thi: {submission.exam_title}</p>
+          <h2 id="appeal-title" className="text-lg font-bold text-slate-900 dark:text-slate-100">Gửi đơn phúc khảo</h2>
+          <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Môn thi: {submission.exam_title}</p>
         </div>
         <div>
           <label htmlFor="appeal-subject" className="label">Tiêu đề (tùy chọn)</label>
@@ -147,10 +147,10 @@ export default function StudentHistoryPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-bold text-slate-900">Lịch sử bài làm</h1>
+        <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100">Lịch sử bài làm</h1>
       </div>
 
-      <form onSubmit={handleSearch} className="bg-white rounded-lg border border-slate-200 p-4 flex flex-col gap-3 sm:flex-row">
+      <form onSubmit={handleSearch} className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4 flex flex-col gap-3 sm:flex-row shadow-sm">
         <input
           value={searchInput}
           onChange={(event) => setSearchInput(event.target.value)}
@@ -176,17 +176,17 @@ export default function StudentHistoryPage() {
       </form>
 
       {notice && (
-        <div role="status" className="rounded border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-800">
+        <div role="status" className="rounded-lg border border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 p-3 text-sm text-emerald-800 dark:text-emerald-300">
           {notice}
         </div>
       )}
       {error && (
-        <div role="alert" className="rounded border border-red-300 bg-red-50 p-4 text-sm text-red-700">
+        <div role="alert" className="rounded-lg border border-red-300 dark:border-rose-800 bg-red-50 dark:bg-rose-950/40 p-4 text-sm text-red-700 dark:text-rose-300">
           {error}
         </div>
       )}
 
-      <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
+      <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
         {loading ? (
           <div className="flex justify-center py-16"><Spinner size="lg" /></div>
         ) : items.length === 0 ? (
@@ -197,7 +197,7 @@ export default function StudentHistoryPage() {
           <div className="overflow-x-auto">
             <table className="w-full min-w-[950px] text-sm">
               <thead>
-                <tr className="border-b border-slate-200 bg-slate-50 text-left text-slate-600">
+                <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 text-left text-slate-600 dark:text-slate-400">
                   <th className="px-4 py-3 font-semibold">STT</th>
                   <th className="px-4 py-3 font-semibold">Tên bài thi</th>
                   <th className="px-4 py-3 font-semibold">Bắt đầu làm</th>
@@ -209,12 +209,12 @@ export default function StudentHistoryPage() {
               </thead>
               <tbody>
                 {items.map((item, index) => (
-                  <tr key={item.submission_id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors">
+                  <tr key={item.submission_id} className="border-b border-slate-100 dark:border-slate-800 last:border-0 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
                     <td className="px-4 py-3.5 text-slate-400 font-mono">{(page - 1) * PAGE_SIZE + index + 1}</td>
-                    <td className="px-4 py-3.5 font-medium text-slate-900">{item.exam_title}</td>
-                    <td className="px-4 py-3.5 text-slate-500 text-xs">{formatDate(item.started_at)}</td>
-                    <td className="px-4 py-3.5 text-slate-500 text-xs">{formatDate(item.submitted_at)}</td>
-                    <td className="px-4 py-3.5 text-center font-bold text-slate-900">
+                    <td className="px-4 py-3.5 font-medium text-slate-900 dark:text-slate-100">{item.exam_title}</td>
+                    <td className="px-4 py-3.5 text-slate-500 dark:text-slate-400 text-xs">{formatDate(item.started_at)}</td>
+                    <td className="px-4 py-3.5 text-slate-500 dark:text-slate-400 text-xs">{formatDate(item.submitted_at)}</td>
+                    <td className="px-4 py-3.5 text-center font-bold text-slate-900 dark:text-slate-100">
                       {Number(item.score).toFixed(2)} / {Number(item.max_score).toFixed(2)}
                     </td>
                     <td className="px-4 py-3.5">
@@ -254,7 +254,7 @@ export default function StudentHistoryPage() {
       </div>
 
       {!loading && pagination.total > 0 && (
-        <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-slate-600">
+        <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-slate-600 dark:text-slate-400">
           <span>Tổng số: {pagination.total} bài làm · Trang {page}/{pageCount}</span>
           <div className="flex gap-2">
             <button

@@ -2271,3 +2271,113 @@ func TestClassroom_FullWorkflow(t *testing.T) {
 		t.Fatalf("delete class failed: %d", wDelete.Code)
 	}
 }
+
+func TestTeacher_ClassGradebook(t *testing.T) {
+	srv := setupTestServer(t)
+	teacherToken := loginUser(t, srv, "teacher@test.com", "123456")
+	studentToken := loginUser(t, srv, "student@test.com", "123456")
+
+	// 1. Teacher creates classroom
+	wCreate := do(t, srv, "POST", "/api/teacher/classes", teacherToken, gin.H{
+		"name":        "Lớp Khảo thí An toàn thông tin",
+		"description": "Lớp thực hành bảo mật hệ thống",
+	})
+	if wCreate.Code != http.StatusCreated {
+		t.Fatalf("create class failed: %d %s", wCreate.Code, wCreate.Body.String())
+	}
+	var createRes struct {
+		Class struct {
+			ID   uint   `json:"id"`
+			Code string `json:"code"`
+		} `json:"class"`
+	}
+	json.Unmarshal(wCreate.Body.Bytes(), &createRes)
+	classID := createRes.Class.ID
+
+	// 2. Student joins classroom
+	wJoin := do(t, srv, "POST", "/api/student/classes/join", studentToken, gin.H{
+		"code": createRes.Class.Code,
+	})
+	if wJoin.Code != http.StatusOK {
+		t.Fatalf("student join class failed: %d", wJoin.Code)
+	}
+
+	// 3. Link seeded exam to this classroom
+	var exam models.Exam
+	config.DB.Where("exam_code = ?", "IT2026").First(&exam)
+	config.DB.Model(&exam).Update("classroom_id", classID)
+
+	// 4. Student takes and completes exam
+	wStart := do(t, srv, "POST", fmt.Sprintf("/api/student/exams/%d/start", exam.ID), studentToken, map[string]bool{"confirmed": true})
+	if wStart.Code == http.StatusOK {
+		attemptID := uint(parseJSON(t, wStart)["attempt"].(map[string]interface{})["id"].(float64))
+		do(t, srv, "POST", fmt.Sprintf("/api/student/attempts/%d/submit", attemptID), studentToken, map[string]interface{}{})
+	}
+
+	// 5. Teacher fetches Gradebook
+	wGradebook := do(t, srv, "GET", fmt.Sprintf("/api/teacher/classes/%d/gradebook", classID), teacherToken, nil)
+	if wGradebook.Code != http.StatusOK {
+		t.Fatalf("get gradebook failed: %d %s", wGradebook.Code, wGradebook.Body.String())
+	}
+
+	var gradebookRes struct {
+		ClassID   uint   `json:"class_id"`
+		ClassName string `json:"class_name"`
+		ClassCode string `json:"class_code"`
+		Exams     []struct {
+			ID       uint   `json:"id"`
+			ExamCode string `json:"exam_code"`
+			Title    string `json:"title"`
+		} `json:"exams"`
+		Students []struct {
+			StudentID    uint    `json:"student_id"`
+			FullName     string  `json:"full_name"`
+			Email        string  `json:"email"`
+			AverageScore float64 `json:"average_score"`
+			AcademicRank string  `json:"academic_rank"`
+		} `json:"students"`
+		Summary struct {
+			TotalStudents int     `json:"total_students"`
+			TotalExams    int     `json:"total_exams"`
+			ClassAverage  float64 `json:"class_average"`
+		} `json:"summary"`
+	}
+	json.Unmarshal(wGradebook.Body.Bytes(), &gradebookRes)
+
+	if gradebookRes.ClassID != classID {
+		t.Errorf("expected class_id %d, got %d", classID, gradebookRes.ClassID)
+	}
+	if len(gradebookRes.Students) == 0 {
+		t.Errorf("expected at least 1 student in gradebook, got 0")
+	}
+	if len(gradebookRes.Exams) == 0 {
+		t.Errorf("expected at least 1 exam linked to class, got 0")
+	}
+
+	// 6. Security & Authorization check:
+	// - Student cannot access teacher gradebook (403 Forbidden)
+	wStudentAccess := do(t, srv, "GET", fmt.Sprintf("/api/teacher/classes/%d/gradebook", classID), studentToken, nil)
+	if wStudentAccess.Code != http.StatusForbidden {
+		t.Errorf("expected 403 when student accesses teacher gradebook, got %d", wStudentAccess.Code)
+	}
+
+	// - Another teacher cannot access gradebook of a classroom they do not own (404/403)
+	otherHash, _ := bcrypt.GenerateFromPassword([]byte("123456"), bcrypt.DefaultCost)
+	otherTeacherUser := models.User{
+		Email:        "other_teacher@test.com",
+		PasswordHash: string(otherHash),
+		FullName:     "Giảng viên Khác",
+		Role:         "teacher",
+	}
+	config.DB.Where("email = ?", otherTeacherUser.Email).FirstOrCreate(&otherTeacherUser)
+	otherTeacherToken := loginUser(t, srv, "other_teacher@test.com", "123456")
+
+	wOtherTeacher := do(t, srv, "GET", fmt.Sprintf("/api/teacher/classes/%d/gradebook", classID), otherTeacherToken, nil)
+	if wOtherTeacher.Code != http.StatusNotFound {
+		t.Errorf("expected 404/403 when non-owner teacher accesses gradebook, got %d", wOtherTeacher.Code)
+	}
+
+	// Clean up
+	config.DB.Model(&exam).Update("classroom_id", nil)
+	config.DB.Delete(&models.Classroom{}, classID)
+}

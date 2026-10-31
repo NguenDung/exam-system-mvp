@@ -22,6 +22,7 @@ export const classroomAPI = {
   delete: (id) => api.delete(`/teacher/classes/${id}`),
   addMember: (id, data) => api.post(`/teacher/classes/${id}/members`, data),
   removeMember: (id, studentId) => api.delete(`/teacher/classes/${id}/members/${studentId}`),
+  getGradebook: (id) => api.get(`/teacher/classes/${id}/gradebook`),
   join: (code) => api.post('/student/classes/join', { code }),
 };
 

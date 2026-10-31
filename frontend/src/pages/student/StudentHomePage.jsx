@@ -1,19 +1,22 @@
-import { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { studentAPI } from '../../api/endpoints';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+import { studentAPI, scheduleAPI, classroomAPI } from '../../api/endpoints';
 import Spinner from '../../components/Spinner';
 
 const STATUS_LABELS = {
-  not_attempted: { label: 'Chưa thi', badgeClass: 'bg-slate-100 text-slate-700' },
-  open: { label: 'Đang mở', badgeClass: 'bg-emerald-100 text-emerald-800' },
-  in_progress: { label: 'Đang làm dở', badgeClass: 'bg-amber-100 text-amber-800' },
-  submitted: { label: 'Đã nộp bài', badgeClass: 'bg-blue-100 text-blue-800' },
-  not_started_yet: { label: 'Chưa mở', badgeClass: 'bg-slate-100 text-slate-600' },
-  expired: { label: 'Đã kết thúc', badgeClass: 'bg-red-100 text-red-800' },
-  time_up: { label: 'Hết giờ', badgeClass: 'bg-red-100 text-red-800' },
+  not_attempted: { label: 'Chưa thi', badgeClass: 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700' },
+  open: { label: 'Đang mở', badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800' },
+  in_progress: { label: 'Đang làm dở', badgeClass: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800' },
+  submitted: { label: 'Đã nộp bài', badgeClass: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800' },
+  not_started_yet: { label: 'Chưa mở', badgeClass: 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700' },
+  expired: { label: 'Đã kết thúc', badgeClass: 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800' },
+  time_up: { label: 'Hết giờ', badgeClass: 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800' },
 };
 
 export default function StudentHomePage() {
+  const navigate = useNavigate();
+
+  // Quick lookup state
   const [code, setCode] = useState('');
   const [lookupResult, setLookupResult] = useState(null);
   const [lookupLoading, setLookupLoading] = useState(false);
@@ -24,20 +27,29 @@ export default function StudentHomePage() {
   const [availableLoading, setAvailableLoading] = useState(true);
   const [availableError, setAvailableError] = useState('');
 
-  // History State
+  // Filter & Search
+  const [activeTab, setActiveTab] = useState('all'); // all, open, in_progress, submitted
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // History / Attempts State
   const [attempts, setAttempts] = useState([]);
   const [attemptsLoading, setAttemptsLoading] = useState(true);
-  const [attemptsError, setAttemptsError] = useState('');
+
+  // Widget states: Schedule & Classes
+  const [upcomingEvents, setUpcomingEvents] = useState([]);
+  const [classes, setClasses] = useState([]);
 
   // Starting exam modal
   const [startingExam, setStartingExam] = useState(null);
   const [startingLoading, setStartingLoading] = useState(false);
   const [actionError, setActionError] = useState('');
-  const navigate = useNavigate();
 
-  const fetchAvailableExams = useCallback(async () => {
+  const fetchDashboardData = useCallback(async () => {
     setAvailableLoading(true);
+    setAttemptsLoading(true);
     setAvailableError('');
+
+    // Fetch exams
     try {
       const { data } = await studentAPI.getAvailableExams();
       setAvailableExams(data.exams || []);
@@ -46,26 +58,39 @@ export default function StudentHomePage() {
     } finally {
       setAvailableLoading(false);
     }
-  }, []);
 
-  const fetchAttempts = useCallback(async () => {
-    setAttemptsLoading(true);
-    setAttemptsError('');
+    // Fetch attempts
     try {
       const { data } = await studentAPI.listAttempts();
       setAttempts(data.attempts || []);
-    } catch (err) {
+    } catch {
       setAttempts([]);
-      setAttemptsError(err.response?.data?.error || 'Không thể tải lịch sử làm bài.');
     } finally {
       setAttemptsLoading(false);
+    }
+
+    // Fetch upcoming schedule
+    try {
+      const { data } = await scheduleAPI.getSchedule();
+      const items = data.schedule || data.events || [];
+      setUpcomingEvents(Array.isArray(items) ? items.slice(0, 3) : []);
+    } catch {
+      setUpcomingEvents([]);
+    }
+
+    // Fetch classrooms
+    try {
+      const { data } = await classroomAPI.list();
+      const list = data.classrooms || data.classes || [];
+      setClasses(Array.isArray(list) ? list.slice(0, 3) : []);
+    } catch {
+      setClasses([]);
     }
   }, []);
 
   useEffect(() => {
-    fetchAvailableExams();
-    fetchAttempts();
-  }, [fetchAvailableExams, fetchAttempts]);
+    fetchDashboardData();
+  }, [fetchDashboardData]);
 
   const handleLookup = async (e) => {
     e.preventDefault();
@@ -106,303 +131,519 @@ export default function StudentHomePage() {
     }
   };
 
+  // Filtered exams
+  const filteredExams = useMemo(() => {
+    return availableExams.filter((ex) => {
+      // Tab filter
+      if (activeTab === 'open' && ex.attempt_status !== 'not_attempted') return false;
+      if (activeTab === 'in_progress' && ex.attempt_status !== 'in_progress') return false;
+      if (activeTab === 'submitted' && ex.attempt_status !== 'submitted' && ex.attempt_status !== 'time_up') return false;
+
+      // Text search
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase().trim();
+        const matchTitle = ex.title?.toLowerCase().includes(q);
+        const matchCode = ex.exam_code?.toLowerCase().includes(q);
+        return matchTitle || matchCode;
+      }
+      return true;
+    });
+  }, [availableExams, activeTab, searchQuery]);
+
+  // Calculations for stats widget
+  const stats = useMemo(() => {
+    const completed = attempts.filter((a) => a.status === 'completed');
+    const totalCompleted = completed.length;
+    const avgScore = totalCompleted > 0
+      ? (completed.reduce((acc, cur) => acc + (Number(cur.score) || 0), 0) / totalCompleted).toFixed(1)
+      : '—';
+    const passed = completed.filter((a) => (Number(a.score) || 0) >= 5).length;
+    const passRate = totalCompleted > 0 ? Math.round((passed / totalCompleted) * 100) : 0;
+
+    return { totalCompleted, avgScore, passRate };
+  }, [attempts]);
+
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
+      {/* Top Banner / Alert */}
       {actionError && (
-        <div className="rounded-md bg-red-50 border border-red-200 p-3.5 text-sm text-red-800 flex items-center justify-between">
+        <div className="rounded-lg bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 p-3.5 text-sm text-rose-800 dark:text-rose-300 flex items-center justify-between shadow-sm">
           <span>{actionError}</span>
-          <button onClick={() => setActionError('')} className="text-red-500 hover:text-red-700 text-lg leading-none font-bold ml-2">
+          <button
+            onClick={() => setActionError('')}
+            className="text-rose-500 hover:text-rose-700 text-lg leading-none font-bold ml-2"
+          >
             &times;
           </button>
         </div>
       )}
 
-      {/* Section 1: Danh sách bài thi đang mở */}
-      <div>
-        <div className="flex items-center justify-between mb-4 border-b border-slate-200 pb-3">
-          <div>
-            <h1 className="text-xl font-bold tracking-tight text-slate-900">Đề thi đang mở</h1>
-          </div>
-          <button onClick={fetchAvailableExams} className="btn-secondary btn-sm">Làm mới</button>
-        </div>
+      {/* Main 2-Column Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left Column: Primary Workspace (2 Cols) */}
+        <div className="lg:col-span-2 space-y-6">
+          {/* Quick Exam Code Entry Card */}
+          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
+              <div>
+                <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100 tracking-tight">Vào thi nhanh bằng mã đề</h2>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  Nhập mã phòng thi (ví dụ: <span className="font-mono font-semibold text-slate-700 dark:text-slate-300">MIDTERM-01</span>) do giảng viên cung cấp
+                </p>
+              </div>
+              <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-950/60 dark:text-blue-300 dark:border-blue-800 self-start sm:self-auto">
+                Khảo thí bảo mật
+              </span>
+            </div>
 
-        {availableLoading ? (
-          <div className="flex justify-center py-12"><Spinner size="lg" /></div>
-        ) : availableError ? (
-          <div className="p-4 rounded-md bg-red-50 border border-red-200 text-sm text-red-700">
-            {availableError}
-          </div>
-        ) : availableExams.length === 0 ? (
-          <div className="text-center py-12 bg-white rounded-lg border border-slate-200 text-slate-500 text-sm">
-            Hiện tại không có bài thi nào đang mở hoặc bạn chưa được phân quyền truy cập.
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {availableExams.map((ex) => {
-              const statusCfg = STATUS_LABELS[ex.attempt_status] || STATUS_LABELS.not_attempted;
-              const isNotAttempted = ex.attempt_status === 'not_attempted';
-              const isInProgress = ex.attempt_status === 'in_progress';
-              const isFinished = ex.attempt_status === 'submitted' || ex.attempt_status === 'time_up';
+            <form onSubmit={handleLookup} className="flex gap-2">
+              <div className="relative flex-1">
+                <input
+                  value={code}
+                  onChange={(e) => {
+                    setCode(e.target.value.toUpperCase());
+                    setLookupResult(null);
+                    setLookupError('');
+                  }}
+                  className="input font-mono text-sm tracking-wider uppercase"
+                  placeholder="Nhập mã đề thi..."
+                  maxLength={20}
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={lookupLoading || !code.trim()}
+                className="btn-primary h-10 px-5 text-sm font-medium flex items-center gap-2"
+              >
+                {lookupLoading ? <Spinner size="sm" /> : 'Tra cứu'}
+              </button>
+            </form>
 
-              return (
-                <div
-                  key={ex.id}
-                  className="bg-white rounded-lg border border-slate-200 p-5 shadow-sm flex flex-col justify-between hover:border-slate-300 transition-colors"
-                >
-                  <div className="space-y-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <span className={`px-2.5 py-0.5 rounded text-xs font-semibold ${statusCfg.badgeClass}`}>
-                        {statusCfg.label}
+            {lookupError && (
+              <div className="mt-3 p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 rounded-lg text-rose-700 dark:text-rose-300 text-xs">
+                {lookupError}
+              </div>
+            )}
+
+            {lookupResult && (
+              <div className="mt-4 p-4 bg-slate-50/80 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-lg">
+                <div className="flex items-start justify-between gap-4 flex-wrap">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-xs font-bold bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 px-2 py-0.5 rounded">
+                        {lookupResult.exam?.exam_code}
                       </span>
-                      <span className="font-mono text-xs font-bold bg-slate-100 text-slate-800 px-2 py-0.5 rounded">
-                        {ex.exam_code}
+                      <h3 className="font-bold text-slate-900 dark:text-slate-100 text-sm">{lookupResult.exam?.title}</h3>
+                    </div>
+                    <div className="flex items-center gap-4 text-xs text-slate-600 dark:text-slate-400 flex-wrap pt-1">
+                      <span>Thời lượng: <strong>{lookupResult.exam?.duration} phút</strong></span>
+                      <span>Hạn nộp: {new Date(lookupResult.exam?.end_time).toLocaleString('vi-VN')}</span>
+                      <span>
+                        Trạng thái:{' '}
+                        <span className="font-semibold text-slate-800 dark:text-slate-200">
+                          {STATUS_LABELS[lookupResult.attempt_status]?.label || 'Chưa làm'}
+                        </span>
                       </span>
-                    </div>
-
-                    <div>
-                      <h3 className="font-bold text-slate-900 text-base line-clamp-1">{ex.title}</h3>
-                      {ex.description && (
-                        <p className="text-xs text-slate-500 mt-1 line-clamp-2">{ex.description}</p>
-                      )}
-                    </div>
-
-                    <div className="space-y-1.5 text-xs text-slate-600 bg-slate-50 p-3 rounded">
-                      <div className="flex justify-between">
-                        <span>Thời lượng:</span>
-                        <strong className="text-slate-900">{ex.duration} phút</strong>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Số lượng câu hỏi:</span>
-                        <strong className="text-slate-900">{ex.questions_count} câu</strong>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Tổng điểm:</span>
-                        <strong className="text-slate-900">{ex.total_points} điểm</strong>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Hạn nộp bài:</span>
-                        <span className="text-slate-800">{new Date(ex.end_time).toLocaleString('vi-VN')}</span>
-                      </div>
                     </div>
                   </div>
 
-                  <div className="pt-4 border-t border-slate-100 mt-4">
-                    {isNotAttempted && (
+                  <div className="pt-1">
+                    {lookupResult.attempt_status === 'not_attempted' && lookupResult.exam_status === 'open' && (
                       <button
-                        onClick={() => setStartingExam(ex)}
-                        className="w-full btn-primary text-sm py-2"
+                        onClick={() => setStartingExam(lookupResult.exam)}
+                        className="btn-primary btn-sm text-xs"
                       >
                         Vào thi ngay
                       </button>
                     )}
-
-                    {isInProgress && (
+                    {lookupResult.attempt_status === 'in_progress' && (
                       <button
-                        onClick={() => navigate(`/student/exam/${ex.id}/take`)}
-                        className="w-full btn-primary text-sm py-2 bg-amber-600 hover:bg-amber-700"
+                        onClick={() => navigate(`/student/exam/${lookupResult.exam.id}/take`)}
+                        className="btn-primary btn-sm text-xs bg-amber-600 hover:bg-amber-700"
                       >
                         Tiếp tục làm bài
                       </button>
                     )}
-
-                    {isFinished && (
+                    {(lookupResult.attempt_status === 'submitted' || lookupResult.attempt_status === 'time_up') && lookupResult.attempt && (
                       <button
-                        onClick={() => navigate(`/student/attempts/${ex.attempt_id}/result`)}
-                        className="w-full btn-secondary text-sm py-2"
+                        onClick={() => navigate(`/student/attempts/${lookupResult.attempt.id}/result`)}
+                        className="btn-secondary btn-sm text-xs"
                       >
-                        Xem kết quả ({ex.score !== undefined ? Number(ex.score).toFixed(2) : '—'} điểm)
+                        Xem kết quả
                       </button>
                     )}
                   </div>
                 </div>
-              );
-            })}
+              </div>
+            )}
           </div>
-        )}
-      </div>
 
-      {/* Section 2: Tra cứu kỳ thi thủ công bằng mã */}
-      <div className="card max-w-2xl mx-auto border border-slate-200">
-        <h2 className="text-base font-bold text-slate-900 mb-1">Vào thi bằng mã đề</h2>
-        <p className="text-slate-500 text-xs mb-4">Nhập mã đề thi để vào phòng thi</p>
-
-        <form onSubmit={handleLookup} className="flex gap-2">
-          <input
-            value={code}
-            onChange={(e) => {
-              setCode(e.target.value.toUpperCase());
-              setLookupResult(null);
-              setLookupError('');
-            }}
-            className="input font-mono text-sm tracking-wider uppercase flex-1"
-            placeholder="Ví dụ: IT2026"
-            maxLength={20}
-          />
-          <button type="submit" disabled={lookupLoading || !code.trim()} className="btn-primary px-5">
-            {lookupLoading ? <Spinner size="sm" /> : 'Tra cứu'}
-          </button>
-        </form>
-
-        {lookupError && (
-          <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded text-red-700 text-xs">
-            {lookupError}
-          </div>
-        )}
-
-        {lookupResult && (
-          <div className="mt-4 p-4 bg-slate-50 border border-slate-200 rounded-lg">
-            <div className="flex items-start justify-between gap-4 flex-wrap">
-              <div className="space-y-1.5">
-                <h3 className="font-bold text-slate-900 text-base">{lookupResult.exam.title}</h3>
-                <div className="flex items-center gap-4 text-xs text-slate-600 flex-wrap">
-                  <span>Mã đề: <code className="font-mono font-bold text-slate-900">{lookupResult.exam.exam_code}</code></span>
-                  <span>Thời lượng: <strong>{lookupResult.exam.duration} phút</strong></span>
-                  <span>Hạn nộp: {new Date(lookupResult.exam.end_time).toLocaleString('vi-VN')}</span>
-                </div>
-                <div className="pt-1">
-                  {(() => {
-                    const s = STATUS_LABELS[lookupResult.attempt_status] || STATUS_LABELS.not_attempted;
-                    return <span className={`px-2 py-0.5 rounded text-xs font-semibold ${s.badgeClass}`}>{s.label}</span>;
-                  })()}
-                </div>
+          {/* Exam Hub & Filter Tabs */}
+          <div className="space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h1 className="text-base font-bold text-slate-900 dark:text-slate-100 tracking-tight">Đề thi của tôi</h1>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Danh sách các bài khảo thí phân quyền cho tài khoản của bạn</p>
               </div>
 
-              <div>
-                {lookupResult.attempt_status === 'not_attempted' && lookupResult.exam_status === 'open' && (
+              {/* Action: Refresh */}
+              <button
+                onClick={fetchDashboardData}
+                className="btn-secondary btn-sm self-start sm:self-auto text-xs"
+              >
+                Làm mới dữ liệu
+              </button>
+            </div>
+
+            {/* Filter Bar: Tabs + Search input */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white dark:bg-slate-900 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+              <div className="flex items-center gap-1 overflow-x-auto pb-1 sm:pb-0">
+                {[
+                  { id: 'all', label: 'Tất cả' },
+                  { id: 'open', label: 'Chưa làm' },
+                  { id: 'in_progress', label: 'Đang làm dở' },
+                  { id: 'submitted', label: 'Đã nộp bài' },
+                ].map((tab) => (
                   <button
-                    onClick={() => setStartingExam(lookupResult.exam)}
-                    className="btn-primary btn-sm"
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors ${
+                      activeTab === tab.id
+                        ? 'bg-blue-600 text-white shadow-sm'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800'
+                    }`}
                   >
-                    Bắt đầu làm bài
+                    {tab.label}
                   </button>
-                )}
-                {lookupResult.attempt_status === 'in_progress' && (
-                  <button
-                    onClick={() => navigate(`/student/exam/${lookupResult.exam.id}/take`)}
-                    className="btn-primary btn-sm bg-amber-600 hover:bg-amber-700"
-                  >
-                    Tiếp tục làm bài
-                  </button>
-                )}
-                {(lookupResult.attempt_status === 'submitted' || lookupResult.attempt_status === 'time_up') && lookupResult.attempt && (
-                  <button
-                    onClick={() => navigate(`/student/attempts/${lookupResult.attempt.id}/result`)}
-                    className="btn-secondary btn-sm"
-                  >
-                    Xem kết quả
-                  </button>
-                )}
+                ))}
+              </div>
+
+              <div className="w-full sm:w-60">
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Lọc theo tên hoặc mã đề..."
+                  className="input h-8 px-3 text-xs"
+                />
               </div>
             </div>
-          </div>
-        )}
-      </div>
 
-      {/* Section 3: Lịch sử làm bài gần đây */}
-      <div>
-        <div className="flex items-center justify-between mb-4 border-b border-slate-200 pb-3">
-          <h2 className="text-lg font-bold text-slate-900">Lịch sử bài thi gần đây</h2>
-          <button onClick={fetchAttempts} className="btn-secondary btn-sm">Làm mới</button>
-        </div>
+            {/* Exam Cards Grid */}
+            {availableLoading ? (
+              <div className="flex justify-center py-16 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800">
+                <Spinner size="lg" />
+              </div>
+            ) : availableError ? (
+              <div className="p-4 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-sm text-rose-700 dark:text-rose-300">
+                {availableError}
+              </div>
+            ) : filteredExams.length === 0 ? (
+              <div className="text-center py-12 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 text-xs shadow-sm">
+                Không tìm thấy bài thi nào phù hợp với bộ lọc hiện tại.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {filteredExams.map((ex) => {
+                  const statusCfg = STATUS_LABELS[ex.attempt_status] || STATUS_LABELS.not_attempted;
+                  const isNotAttempted = ex.attempt_status === 'not_attempted';
+                  const isInProgress = ex.attempt_status === 'in_progress';
+                  const isFinished = ex.attempt_status === 'submitted' || ex.attempt_status === 'time_up';
 
-        {attemptsLoading ? (
-          <div className="flex justify-center py-10"><Spinner size="lg" /></div>
-        ) : attemptsError ? (
-          <div className="p-4 rounded-md bg-red-50 border border-red-200 text-sm text-red-700">
-            {attemptsError}
-          </div>
-        ) : attempts.length === 0 ? (
-          <div className="text-center py-10 bg-white rounded-lg border border-slate-200 text-slate-500 text-sm">
-            Chưa có bản ghi bài thi nào.
-          </div>
-        ) : (
-          <div className="bg-white rounded-lg border border-slate-200 overflow-hidden shadow-sm">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-slate-50 border-b border-slate-200 text-left text-slate-600">
-                    <th className="px-5 py-3 font-semibold">Tên bài thi</th>
-                    <th className="px-5 py-3 font-semibold text-center">Mã đề</th>
-                    <th className="px-5 py-3 font-semibold text-center">Điểm số</th>
-                    <th className="px-5 py-3 font-semibold text-center">Đúng / Sai</th>
-                    <th className="px-5 py-3 font-semibold text-center">Trạng thái</th>
-                    <th className="px-5 py-3 font-semibold">Thời điểm bắt đầu</th>
-                    <th className="px-5 py-3 font-semibold text-right">Thao tác</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {attempts.map((a) => (
-                    <tr key={a.id} className="hover:bg-slate-50 transition-colors">
-                      <td className="px-5 py-3.5 font-medium text-slate-900">{a.exam_title}</td>
-                      <td className="px-5 py-3.5 text-center">
-                        <code className="bg-slate-100 px-2 py-0.5 rounded font-mono text-slate-800 text-xs">{a.exam_code}</code>
-                      </td>
-                      <td className="px-5 py-3.5 text-center font-bold text-slate-900">
-                        {a.status === 'completed' ? Number(a.score).toFixed(2) : '-'}
-                      </td>
-                      <td className="px-5 py-3.5 text-center text-xs">
-                        {a.status === 'completed' ? (
-                          <span>
-                            <span className="text-emerald-700 font-semibold">{a.correct_count}</span>
-                            <span className="text-slate-400"> / </span>
-                            <span className="text-red-600 font-semibold">{a.wrong_count}</span>
+                  return (
+                    <div
+                      key={ex.id}
+                      className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm flex flex-col justify-between hover:border-blue-400 dark:hover:border-blue-600 hover:shadow transition-all"
+                    >
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className={`px-2 py-0.5 rounded text-[11px] font-semibold border ${statusCfg.badgeClass}`}>
+                            {statusCfg.label}
                           </span>
-                        ) : '-'}
-                      </td>
-                      <td className="px-5 py-3.5 text-center">
-                        <span className={`px-2.5 py-0.5 rounded text-xs font-semibold ${
-                          a.status === 'completed' ? 'bg-blue-100 text-blue-800' : 'bg-amber-100 text-amber-800'
-                        }`}>
-                          {a.status === 'completed' ? 'Đã nộp' : 'Đang làm'}
-                        </span>
-                      </td>
-                      <td className="px-5 py-3.5 text-slate-500 text-xs">
-                        {new Date(a.started_at).toLocaleString('vi-VN')}
-                      </td>
-                      <td className="px-5 py-3.5 text-right">
-                        {a.status === 'completed' ? (
+                          <span className="font-mono text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700">
+                            {ex.exam_code}
+                          </span>
+                        </div>
+
+                        <div>
+                          <h3 className="font-bold text-slate-900 dark:text-slate-100 text-sm line-clamp-1">{ex.title}</h3>
+                          {ex.description && (
+                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 line-clamp-2">{ex.description}</p>
+                          )}
+                        </div>
+
+                        <div className="space-y-1.5 text-xs text-slate-600 dark:text-slate-400 bg-slate-50/70 dark:bg-slate-800/60 p-2.5 rounded-lg border border-slate-100 dark:border-slate-800">
+                          <div className="flex justify-between">
+                            <span className="text-slate-500 dark:text-slate-400">Thời lượng:</span>
+                            <strong className="text-slate-800 dark:text-slate-200">{ex.duration} phút</strong>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-slate-500 dark:text-slate-400">Số lượng:</span>
+                            <strong className="text-slate-800 dark:text-slate-200">{ex.questions_count} câu ({ex.total_points} điểm)</strong>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-slate-500 dark:text-slate-400">Hạn chót:</span>
+                            <span className="text-slate-700 dark:text-slate-300 font-medium">
+                              {new Date(ex.end_time).toLocaleDateString('vi-VN', {
+                                hour: '2-digit',
+                                minute: '2-digit',
+                                day: '2-digit',
+                                month: '2-digit',
+                              })}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="pt-3.5 border-t border-slate-100 dark:border-slate-800 mt-3">
+                        {isNotAttempted && (
                           <button
-                            onClick={() => navigate(`/student/attempts/${a.id}/result`)}
-                            className="btn-secondary btn-sm text-xs"
+                            onClick={() => setStartingExam(ex)}
+                            className="w-full btn-primary text-xs py-2"
                           >
-                            Xem kết quả
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => navigate(`/student/exam/${a.exam_id}/take`)}
-                            className="btn-primary btn-sm text-xs bg-amber-600 hover:bg-amber-700"
-                          >
-                            Làm tiếp
+                            Bắt đầu làm bài
                           </button>
                         )}
-                      </td>
+
+                        {isInProgress && (
+                          <button
+                            onClick={() => navigate(`/student/exam/${ex.id}/take`)}
+                            className="w-full btn-primary text-xs py-2 bg-amber-600 hover:bg-amber-700 focus:ring-amber-500"
+                          >
+                            Tiếp tục làm bài
+                          </button>
+                        )}
+
+                        {isFinished && (
+                          <button
+                            onClick={() => navigate(`/student/attempts/${ex.attempt_id}/result`)}
+                            className="w-full btn-secondary text-xs py-2 font-medium"
+                          >
+                            Xem kết quả ({ex.score !== undefined ? Number(ex.score).toFixed(2) : '—'} điểm)
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Recent Attempts Quick View */}
+          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
+            <div className="px-5 py-3.5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+              <div>
+                <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100">Bài thi đã làm gần đây</h2>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">Xem lại các lần làm bài và kết quả khảo thí</p>
+              </div>
+              <Link
+                to="/student/history"
+                className="text-xs font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-700 transition-colors"
+              >
+                Xem tất cả lịch sử &rarr;
+              </Link>
+            </div>
+
+            {attemptsLoading ? (
+              <div className="py-8 flex justify-center"><Spinner size="md" /></div>
+            ) : attempts.length === 0 ? (
+              <div className="p-6 text-center text-xs text-slate-500 dark:text-slate-400">
+                Chưa có bản ghi kết quả nào. Hãy hoàn thành bài thi đầu tiên của bạn!
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800 text-left text-slate-600 dark:text-slate-400 font-semibold">
+                      <th className="px-4 py-2.5">Tên đề thi</th>
+                      <th className="px-4 py-2.5 text-center">Mã đề</th>
+                      <th className="px-4 py-2.5 text-center">Điểm số</th>
+                      <th className="px-4 py-2.5 text-center">Trạng thái</th>
+                      <th className="px-4 py-2.5 text-right">Chi tiết</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {attempts.slice(0, 4).map((a) => (
+                      <tr key={a.id} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition-colors">
+                        <td className="px-4 py-3 font-medium text-slate-900 dark:text-slate-100 max-w-[180px] truncate">
+                          {a.exam_title}
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <code className="font-mono bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-slate-700 dark:text-slate-300">
+                            {a.exam_code}
+                          </code>
+                        </td>
+                        <td className="px-4 py-3 text-center font-bold text-slate-900 dark:text-slate-100">
+                          {a.status === 'completed' ? Number(a.score).toFixed(2) : '—'}
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <span
+                            className={`px-2 py-0.5 rounded font-semibold text-[11px] ${
+                              a.status === 'completed'
+                                ? 'bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800'
+                                : 'bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800'
+                            }`}
+                          >
+                            {a.status === 'completed' ? 'Đã nộp' : 'Đang làm'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          {a.status === 'completed' ? (
+                            <Link
+                              to={`/student/attempts/${a.id}/result`}
+                              className="text-blue-600 dark:text-blue-400 hover:text-blue-800 font-semibold"
+                            >
+                              Xem điểm
+                            </Link>
+                          ) : (
+                            <Link
+                              to={`/student/exam/${a.exam_id}/take`}
+                              className="text-amber-600 dark:text-amber-400 hover:text-amber-800 font-semibold"
+                            >
+                              Làm tiếp
+                            </Link>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Right Column: Widgets (1 Col) */}
+        <div className="space-y-5">
+          {/* Widget 1: Personal Performance / Stats */}
+          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm">
+            <h3 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-3">
+              Tiến độ học tập
+            </h3>
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 text-center">
+                <div className="text-2xl font-bold text-slate-900 dark:text-slate-100">{stats.totalCompleted}</div>
+                <div className="text-[11px] text-slate-500 dark:text-slate-400 font-medium mt-0.5">Bài đã hoàn thành</div>
+              </div>
+              <div className="p-3 rounded-lg bg-blue-50/60 dark:bg-blue-950/40 border border-blue-100 dark:border-blue-900 text-center">
+                <div className="text-2xl font-bold text-blue-700 dark:text-blue-300">{stats.avgScore}</div>
+                <div className="text-[11px] text-blue-600 dark:text-blue-400 font-medium mt-0.5">Điểm trung bình</div>
+              </div>
+            </div>
+
+            <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 space-y-2">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-slate-600 dark:text-slate-300 font-medium">Tỷ lệ đạt (&ge; 5.0):</span>
+                <span className="font-bold text-slate-800 dark:text-slate-200">{stats.passRate}%</span>
+              </div>
+              <div className="w-full bg-slate-200 dark:bg-slate-700 h-1.5 rounded-full overflow-hidden">
+                <div
+                  className="bg-blue-600 h-full rounded-full transition-all duration-500"
+                  style={{ width: `${stats.passRate}%` }}
+                />
+              </div>
+            </div>
+
+            <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800">
+              <Link
+                to="/student/grades"
+                className="w-full flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 dark:hover:bg-blue-900 text-blue-700 dark:text-blue-300 text-xs font-semibold transition-colors border border-blue-200 dark:border-blue-800"
+              >
+                <span>Xem bảng điểm &amp; GPA tích lũy &rarr;</span>
+              </Link>
             </div>
           </div>
-        )}
+
+          {/* Widget 2: Upcoming Schedule */}
+          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+                Lịch thi sắp tới
+              </h3>
+              <Link to="/schedule" className="text-[11px] font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-700">
+                Toàn bộ &rarr;
+              </Link>
+            </div>
+
+            {upcomingEvents.length === 0 ? (
+              <div className="p-4 text-center text-xs text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/40 rounded-lg border border-slate-100 dark:border-slate-800">
+                Không có lịch thi nào được lên kế hoạch trong tuần này.
+              </div>
+            ) : (
+              <div className="space-y-2.5">
+                {upcomingEvents.map((ev, idx) => (
+                  <div
+                    key={idx}
+                    className="p-3 rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 hover:border-slate-200 dark:hover:border-slate-700 transition-colors"
+                  >
+                    <div className="font-semibold text-xs text-slate-900 dark:text-slate-100 line-clamp-1">
+                      {ev.title || ev.exam_title || 'Bài thi định kỳ'}
+                    </div>
+                    <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 flex items-center justify-between">
+                      <span>{ev.start_time ? new Date(ev.start_time).toLocaleDateString('vi-VN') : 'Sắp diễn ra'}</span>
+                      <span className="font-mono text-[10px] bg-slate-200 dark:bg-slate-700 px-1 rounded text-slate-700 dark:text-slate-300">
+                        {ev.exam_code || 'EXAM'}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Widget 3: Enrolled Classes */}
+          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+                Lớp học phần
+              </h3>
+              <Link to="/classes" className="text-[11px] font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-700">
+                Xem tất cả &rarr;
+              </Link>
+            </div>
+
+            {classes.length === 0 ? (
+              <div className="p-4 text-center text-xs text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/40 rounded-lg border border-slate-100 dark:border-slate-800">
+                Chưa có lớp học phần nào. Tham gia lớp bằng mã lớp tại trang Lớp học.
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {classes.map((c) => (
+                  <Link
+                    key={c.id}
+                    to={`/classes/${c.id}`}
+                    className="block p-2.5 rounded-lg border border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/60 hover:border-slate-200 dark:hover:border-slate-700 transition-colors"
+                  >
+                    <div className="font-semibold text-xs text-slate-800 dark:text-slate-200 line-clamp-1">{c.name}</div>
+                    <div className="text-[11px] text-slate-400 font-mono mt-0.5">Mã: {c.code}</div>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Modal: Xác nhận bắt đầu bài thi */}
       {startingExam && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
-          <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl border border-slate-200 space-y-4">
-            <h2 className="text-lg font-bold text-slate-900">Xác nhận vào phòng thi</h2>
-            <div className="text-sm text-slate-600 space-y-2 bg-slate-50 p-3.5 rounded border border-slate-100">
-              <p>Môn thi: <strong className="text-slate-900">{startingExam.title}</strong></p>
-              <p>Thời lượng làm bài: <strong className="text-slate-900">{startingExam.duration} phút</strong></p>
-              <p className="text-xs text-amber-800">
-                Lưu ý: Đồng hồ tính giờ sẽ bắt đầu đếm ngược ngay khi bạn xác nhận vào thi. Hãy đảm bảo đường truyền mạng ổn định.
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-md rounded-xl bg-white dark:bg-slate-900 p-6 shadow-xl border border-slate-200 dark:border-slate-800 space-y-4">
+            <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">Xác nhận vào phòng thi</h2>
+            <div className="text-xs text-slate-600 dark:text-slate-300 space-y-2 bg-slate-50 dark:bg-slate-800/60 p-3.5 rounded-lg border border-slate-200 dark:border-slate-700">
+              <p>Môn thi: <strong className="text-slate-900 dark:text-slate-100">{startingExam.title}</strong></p>
+              <p>Thời lượng làm bài: <strong className="text-slate-900 dark:text-slate-100">{startingExam.duration} phút</strong></p>
+              <p>Số lượng câu hỏi: <strong className="text-slate-900 dark:text-slate-100">{startingExam.questions_count} câu</strong></p>
+              <p className="text-amber-800 dark:text-amber-400 font-medium pt-1 border-t border-slate-200 dark:border-slate-700">
+                Lưu ý: Đồng hồ tính giờ sẽ bắt đầu đếm ngược ngay khi bạn xác nhận vào thi. Hãy đảm bảo kết nối mạng ổn định.
               </p>
             </div>
-            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
               <button
                 type="button"
                 onClick={() => setStartingExam(null)}
                 disabled={startingLoading}
-                className="btn-secondary"
+                className="btn-secondary text-xs"
               >
                 Hủy bỏ
               </button>
@@ -410,7 +651,7 @@ export default function StudentHomePage() {
                 type="button"
                 onClick={() => handleStartExam(startingExam.id)}
                 disabled={startingLoading}
-                className="btn-primary"
+                className="btn-primary text-xs"
               >
                 {startingLoading ? <Spinner size="sm" /> : 'Bắt đầu làm bài'}
               </button>
