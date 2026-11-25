@@ -26,8 +26,7 @@ func getDefaultAuthHandler() *AuthHandler {
 	return NewAuthHandler(authSvc)
 }
 
-// Register handles student registration.
-// POST /api/auth/register
+// Register handles student account creation.
 func (h *AuthHandler) Register(c *gin.Context) {
 	var req dto.RegisterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -51,8 +50,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	c.JSON(http.StatusCreated, res)
 }
 
-// Login handles user authentication and issuance of JWT.
-// POST /api/auth/login
+// Login authenticates a user and returns a signed JWT.
 func (h *AuthHandler) Login(c *gin.Context) {
 	var req dto.LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {

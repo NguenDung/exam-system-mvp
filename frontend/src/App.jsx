@@ -5,7 +5,6 @@ import ProtectedRoute from './components/ProtectedRoute';
 import TeacherLayout from './components/TeacherLayout';
 import StudentLayout from './components/StudentLayout';
 
-// Pages
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import TeacherExamsPage from './pages/teacher/TeacherExamsPage';

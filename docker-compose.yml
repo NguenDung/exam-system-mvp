@@ -1,7 +1,4 @@
 services:
-  # ----------------------------------------------------------------------------
-  # PostgreSQL Database Service
-  # ----------------------------------------------------------------------------
   postgres:
     image: postgres:15-alpine
     container_name: exam_mvp_postgres
@@ -22,9 +19,6 @@ services:
     networks:
       - exam_network
 
-  # ----------------------------------------------------------------------------
-  # Golang REST API Backend Service
-  # ----------------------------------------------------------------------------
   backend:
     build:
       context: ./backend
@@ -56,9 +50,6 @@ services:
     networks:
       - exam_network
 
-  # ----------------------------------------------------------------------------
-  # React/Vite SPA Frontend Service (Served via Nginx)
-  # ----------------------------------------------------------------------------
   frontend:
     build:
       context: ./frontend

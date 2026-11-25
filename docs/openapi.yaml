@@ -1,19 +1,22 @@
 openapi: 3.0.3
 info:
   title: Online Exam System API
-  description: Hệ thống thi trắc nghiệm trực tuyến đại học (Clean Layered Architecture in Golang).
+  description: REST API hệ thống thi trắc nghiệm trực tuyến đại học (Clean Layered Architecture trong Golang Gin).
   version: 1.0.0
 servers:
   - url: http://localhost:8081
-    description: Local Development Server
+    description: Local Backend Server
+  - url: http://localhost:3000
+    description: Docker Nginx Reverse Proxy
 
 paths:
   /health:
     get:
-      summary: Health check service
+      summary: Kiểm tra trạng thái dịch vụ
+      tags: [System]
       responses:
         '200':
-          description: Service is healthy
+          description: Dịch vụ hoạt động bình thường
 
   /api/auth/register:
     post:
@@ -28,12 +31,14 @@ paths:
       responses:
         '201':
           description: Đăng ký thành công
+        '400':
+          description: Dữ liệu đầu vào không hợp lệ
         '409':
           description: Email đã tồn tại
 
   /api/auth/login:
     post:
-      summary: Đăng nhập hệ thống (Giáo viên / Sinh viên)
+      summary: Đăng nhập hệ thống (Giảng viên / Sinh viên)
       tags: [Auth]
       requestBody:
         required: true
@@ -46,10 +51,221 @@ paths:
           description: Đăng nhập thành công, trả về JWT token
         '401':
           description: Sai email hoặc mật khẩu
+        '429':
+          description: Vượt quá giới hạn tần suất (15 request/phút/IP)
+
+  /api/profile:
+    get:
+      summary: Lấy thông tin hồ sơ cá nhân hiện tại
+      tags: [Profile & Directory]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Thông tin hồ sơ người dùng
+    put:
+      summary: Cập nhật hồ sơ cá nhân hoặc đổi mật khẩu
+      tags: [Profile & Directory]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProfileRequest'
+      responses:
+        '200':
+          description: Cập nhật hồ sơ thành công
+
+  /api/users/directory:
+    get:
+      summary: Tra cứu danh bạ người dùng toàn hệ thống
+      tags: [Profile & Directory]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: q
+          in: query
+          schema:
+            type: string
+        - name: role
+          in: query
+          schema:
+            type: string
+            enum: [teacher, student]
+        - name: department
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Danh sách người dùng phù hợp
+
+  /api/exams/schedule:
+    get:
+      summary: Lấy thời khóa biểu và lịch thi (đang mở, sắp diễn ra, đã kết thúc)
+      tags: [Schedule]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Lịch thi phân nhóm theo trạng thái thời gian
+
+  /api/classes:
+    get:
+      summary: Danh sách lớp học phần của người dùng hiện tại
+      tags: [Classrooms]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Danh sách lớp học phần
+
+  /api/classes/{id}:
+    get:
+      summary: Chi tiết lớp học phần (thành viên và đề thi)
+      tags: [Classrooms]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PathID'
+      responses:
+        '200':
+          description: Chi tiết lớp học phần
+        '403':
+          description: Không có quyền truy cập lớp này
+        '404':
+          description: Không tìm thấy lớp học phần
+
+  /api/teacher/classes:
+    post:
+      summary: Giảng viên tạo lớp học phần mới (sinh mã 6 ký tự)
+      tags: [Teacher Classrooms]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClassroomRequest'
+      responses:
+        '201':
+          description: Tạo lớp thành công
+
+  /api/teacher/classes/{id}:
+    put:
+      summary: Cập nhật thông tin lớp học phần
+      tags: [Teacher Classrooms]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PathID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClassroomRequest'
+      responses:
+        '200':
+          description: Cập nhật lớp thành công
+    delete:
+      summary: Xóa lớp học phần
+      tags: [Teacher Classrooms]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PathID'
+      responses:
+        '200':
+          description: Đã xóa lớp học phần
+
+  /api/teacher/classes/{id}/members:
+    post:
+      summary: Thêm sinh viên vào lớp học phần
+      tags: [Teacher Classrooms]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PathID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                student_id:
+                  type: integer
+                email:
+                  type: string
+                student_code:
+                  type: string
+      responses:
+        '201':
+          description: Đã thêm sinh viên vào lớp
+        '409':
+          description: Sinh viên đã ở trong lớp
+
+  /api/teacher/classes/{id}/members/{studentId}:
+    delete:
+      summary: Xóa sinh viên khỏi lớp học phần
+      tags: [Teacher Classrooms]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PathID'
+        - name: studentId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Đã xóa sinh viên khỏi lớp
+
+  /api/teacher/classes/{id}/gradebook:
+    get:
+      summary: Lấy sổ điểm tổng hợp lớp học phần
+      tags: [Teacher Classrooms]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PathID'
+      responses:
+        '200':
+          description: Ma trận điểm số, thống kê lớp và xếp loại học lực
+
+  /api/student/classes/join:
+    post:
+      summary: Sinh viên ghi danh vào lớp học phần bằng mã tham gia
+      tags: [Student Classrooms]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code:
+                  type: string
+                  example: CS2026
+      responses:
+        '200':
+          description: Ghi danh thành công
+        '404':
+          description: Mã lớp không tồn tại
+        '409':
+          description: Đã tham gia lớp trước đó
 
   /api/teacher/exams:
     get:
-      summary: Danh sách đề thi của giáo viên
+      summary: Danh sách đề thi của giảng viên
       tags: [Teacher Exams]
       security:
         - BearerAuth: []
@@ -71,6 +287,108 @@ paths:
         '201':
           description: Tạo đề thi thành công
 
+  /api/teacher/exams/{id}:
+    get:
+      summary: Chi tiết đề thi và danh sách câu hỏi
+      tags: [Teacher Exams]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PathID'
+      responses:
+        '200':
+          description: Thông tin đề thi và câu hỏi
+    put:
+      summary: Cập nhật thông tin đề thi
+      tags: [Teacher Exams]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PathID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateExamRequest'
+      responses:
+        '200':
+          description: Cập nhật đề thi thành công
+    delete:
+      summary: Xóa đề thi và dữ liệu liên quan
+      tags: [Teacher Exams]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PathID'
+      responses:
+        '200':
+          description: Đã xóa đề thi
+
+  /api/teacher/exams/{id}/questions:
+    post:
+      summary: Thêm câu hỏi vào đề thi
+      tags: [Teacher Exams]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PathID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QuestionsPayload'
+      responses:
+        '201':
+          description: Thêm câu hỏi thành công
+
+  /api/teacher/exams/{id}/questions/bulk:
+    post:
+      summary: Nhập câu hỏi hàng loạt trong một transaction
+      tags: [Teacher Exams]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PathID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QuestionsPayload'
+      responses:
+        '201':
+          description: Nhập hàng loạt thành công
+
+  /api/teacher/questions/{id}:
+    put:
+      summary: Cập nhật câu hỏi trong đề nháp
+      tags: [Teacher Exams]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PathID'
+      responses:
+        '200':
+          description: Cập nhật câu hỏi thành công
+
+  /api/teacher/questions/{question_id}:
+    delete:
+      summary: Xóa câu hỏi khỏi đề nháp
+      tags: [Teacher Exams]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: question_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Xóa câu hỏi thành công
+
   /api/teacher/exams/{id}/publish:
     patch:
       summary: Công bố đề thi để sinh viên có thể thấy và làm bài
@@ -78,14 +396,232 @@ paths:
       security:
         - BearerAuth: []
       parameters:
-        - name: id
+        - $ref: '#/components/parameters/PathID'
+      responses:
+        '200':
+          description: Xuất bản đề thi thành công
+
+  /api/teacher/exams/{id}/results:
+    get:
+      summary: Xem bảng điểm và thống kê kết quả đề thi
+      tags: [Teacher Results & Audit]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PathID'
+      responses:
+        '200':
+          description: Danh sách điểm số và thống kê
+
+  /api/teacher/exams/{id}/results/export:
+    get:
+      summary: Xuất bảng điểm CSV có gắn UTF-8 BOM
+      tags: [Teacher Results & Audit]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PathID'
+      responses:
+        '200':
+          description: Tệp CSV UTF-8 BOM
+
+  /api/teacher/attempts/{id}/score:
+    patch:
+      summary: Điều chỉnh điểm bài làm kèm ghi chú và audit log
+      tags: [Teacher Results & Audit]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PathID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [score]
+              properties:
+                score:
+                  type: number
+                  example: 9.5
+                teacher_note:
+                  type: string
+                  example: Điều chỉnh sau khi kiểm tra lại đáp án
+      responses:
+        '200':
+          description: Cập nhật điểm thành công
+
+  /api/teacher/attempts/{id}:
+    delete:
+      summary: Xóa lượt làm bài để cho phép sinh viên thi lại
+      tags: [Teacher Results & Audit]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PathID'
+      responses:
+        '200':
+          description: Đã cấp quyền thi lại
+
+  /api/teacher/audit-logs:
+    get:
+      summary: Xem nhật ký kiểm toán thao tác điểm số và lượt thi
+      tags: [Teacher Results & Audit]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Danh sách nhật ký kiểm toán
+
+  /api/teacher/exams/{id}/appeals:
+    get:
+      summary: Danh sách đơn phúc khảo của một đề thi
+      tags: [Teacher Appeals]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PathID'
+      responses:
+        '200':
+          description: Danh sách đơn phúc khảo phân trang
+
+  /api/teacher/appeals/{appealId}:
+    get:
+      summary: Chi tiết đơn phúc khảo và bài làm liên quan
+      tags: [Teacher Appeals]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: appealId
           in: path
           required: true
           schema:
             type: integer
       responses:
         '200':
-          description: Xuất bản đề thi thành công
+          description: Chi tiết đơn phúc khảo
+
+  /api/teacher/appeals/{appealId}/reply:
+    patch:
+      summary: Gửi phản hồi đơn phúc khảo
+      tags: [Teacher Appeals]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: appealId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Đã phản hồi đơn phúc khảo
+
+  /api/teacher/appeals/{appealId}/reject:
+    patch:
+      summary: Từ chối đơn phúc khảo
+      tags: [Teacher Appeals]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: appealId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Đã từ chối đơn phúc khảo
+
+  /api/teacher/appeals/{appealId}/resolve:
+    patch:
+      summary: Chấp thuận và đóng đơn phúc khảo
+      tags: [Teacher Appeals]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: appealId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Đã chấp thuận đơn phúc khảo
+
+  /api/teacher/students:
+    get:
+      summary: Danh sách sinh viên (hỗ trợ tìm kiếm ?q=)
+      tags: [Teacher Users]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Danh sách sinh viên
+    post:
+      summary: Tạo tài khoản sinh viên mới
+      tags: [Teacher Users]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: Tạo sinh viên thành công
+
+  /api/teacher/students/{id}:
+    put:
+      summary: Cập nhật thông tin sinh viên hoặc đặt lại mật khẩu
+      tags: [Teacher Users]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PathID'
+      responses:
+        '200':
+          description: Cập nhật thành công
+    delete:
+      summary: Xóa tài khoản sinh viên
+      tags: [Teacher Users]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PathID'
+      responses:
+        '200':
+          description: Xóa thành công
+
+  /api/teacher/users/{id}/role:
+    patch:
+      summary: Chuyển đổi vai trò tài khoản (teacher / student)
+      tags: [Teacher Users]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PathID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role]
+              properties:
+                role:
+                  type: string
+                  enum: [teacher, student]
+      responses:
+        '200':
+          description: Cập nhật vai trò thành công
 
   /api/student/exams/available:
     get:
@@ -99,7 +635,7 @@ paths:
 
   /api/student/exams/lookup:
     get:
-      summary: Tra cứu đề thi qua Exam Code
+      summary: Tra cứu đề thi theo mã đề
       tags: [Student Exam]
       security:
         - BearerAuth: []
@@ -112,19 +648,17 @@ paths:
       responses:
         '200':
           description: Thông tin đề thi
+        '429':
+          description: Vượt quá giới hạn tần suất (15 request/phút/IP)
 
   /api/student/exams/{id}/start:
     post:
-      summary: Bắt đầu làm bài thi (xác nhận tham gia, xáo đề)
+      summary: Bắt đầu hoặc tiếp tục làm bài thi
       tags: [Student Exam]
       security:
         - BearerAuth: []
       parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: integer
+        - $ref: '#/components/parameters/PathID'
       requestBody:
         required: true
         content:
@@ -137,13 +671,23 @@ paths:
                   example: true
       responses:
         '200':
-          description: Trả về câu hỏi xáo trộn và thời gian còn lại
+          description: Danh sách câu hỏi đã xáo trộn theo seed và thời gian còn lại
         '428':
           description: Yêu cầu xác nhận tham gia trước khi thi
 
+  /api/student/attempts:
+    get:
+      summary: Danh sách các lượt thi của sinh viên
+      tags: [Student Exam]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Danh sách lượt làm bài
+
   /api/student/attempts/{attempt_id}/save:
     post:
-      summary: Tự động lưu đáp án câu hỏi (Atomic UPSERT)
+      summary: Tự động lưu đáp án (Atomic UPSERT)
       tags: [Student Exam]
       security:
         - BearerAuth: []
@@ -163,11 +707,11 @@ paths:
         '200':
           description: Lưu thành công
         '409':
-          description: Hết giờ thi, tự động nộp bài
+          description: Hết giờ thi, hệ thống đã tự động nộp bài
 
   /api/student/attempts/{attempt_id}/submit:
     post:
-      summary: Nộp bài thi chính thức
+      summary: Nộp bài thi chính thức và chấm điểm nguyên tử
       tags: [Student Exam]
       security:
         - BearerAuth: []
@@ -181,21 +725,16 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                answers:
-                  type: array
-                  items:
-                    type: object
+              $ref: '#/components/schemas/SaveAnswersRequest'
       responses:
         '200':
-          description: Nộp bài thành công và tự động tính điểm
+          description: Nộp bài thành công và trả về kết quả chấm điểm
         '400':
-          description: Đã nộp bài trước đó
+          description: Bài thi đã được nộp trước đó
 
   /api/student/attempts/{attempt_id}/violation:
     post:
-      summary: Ghi nhận vi phạm chống gian lận (chuyển tab, mất tiêu điểm)
+      summary: Ghi nhận vi phạm chuyển tab / rời màn hình thi
       tags: [Anti Cheat]
       security:
         - BearerAuth: []
@@ -217,12 +756,54 @@ paths:
                   example: tab_switch_detected
       responses:
         '200':
-          description: Ghi nhận vi phạm, tự động nộp bài nếu vượt quá 3 lần
+          description: Ghi nhận vi phạm; tự động thu bài khi đạt 3 lần
+
+  /api/student/attempts/{attempt_id}/result:
+    get:
+      summary: Xem kết quả điểm số của lượt thi
+      tags: [Student Exam]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: attempt_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Kết quả làm bài và chi tiết câu trả lời
+
+  /api/student/history:
+    get:
+      summary: Lịch sử các bài thi đã hoàn thành
+      tags: [Student History & Appeals]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Danh sách lịch sử thi phân trang
+
+  /api/student/history/{submissionId}:
+    get:
+      summary: Chi tiết bài thi trong lịch sử (chỉ hiện đáp án đúng sau khi ca thi đóng)
+      tags: [Student History & Appeals]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: submissionId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Chi tiết bài làm và trạng thái phúc khảo
 
   /api/student/appeals:
     post:
-      summary: Gửi đơn phúc khảo điểm thi
-      tags: [Appeals]
+      summary: Gửi đơn phúc khảo điểm thi (trong vòng 14 ngày sau khi kết thúc kỳ thi)
+      tags: [Student History & Appeals]
       security:
         - BearerAuth: []
       requestBody:
@@ -233,11 +814,65 @@ paths:
               $ref: '#/components/schemas/CreateAppealRequest'
       responses:
         '201':
-          description: Tạo khiếu nại thành công
+          description: Tạo đơn phúc khảo thành công
         '400':
-          description: Nội dung khiếu nại quá ngắn hoặc quá dài (10 - 1000 ký tự)
+          description: Nội dung không hợp lệ hoặc quá hạn phúc khảo
         '409':
-          description: Đã có khiếu nại đang chờ xử lý
+          description: Đã tồn tại đơn phúc khảo đang chờ xử lý
+
+  /api/notifications:
+    get:
+      summary: Lấy danh sách thông báo và số lượng chưa đọc
+      tags: [Notifications]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Danh sách thông báo
+
+  /api/notifications/{id}/read:
+    patch:
+      summary: Đánh dấu một thông báo là đã đọc
+      tags: [Notifications]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PathID'
+      responses:
+        '200':
+          description: Đã đánh dấu đã đọc
+
+  /api/notifications/read-all:
+    patch:
+      summary: Đánh dấu toàn bộ thông báo là đã đọc
+      tags: [Notifications]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Đã cập nhật toàn bộ thông báo
+
+  /api/notifications/clear-read:
+    delete:
+      summary: Xóa tất cả thông báo đã đọc
+      tags: [Notifications]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Đã dọn dẹp thông báo đã đọc
+
+  /api/notifications/{id}:
+    delete:
+      summary: Xóa một thông báo
+      tags: [Notifications]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PathID'
+      responses:
+        '200':
+          description: Đã xóa thông báo
 
 components:
   securitySchemes:
@@ -245,6 +880,14 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
+
+  parameters:
+    PathID:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
 
   schemas:
     LoginRequest:
@@ -256,7 +899,7 @@ components:
           example: student@test.com
         password:
           type: string
-          example: password123
+          example: 123456
 
     RegisterRequest:
       type: object
@@ -267,13 +910,40 @@ components:
           example: student_new@test.com
         password:
           type: string
-          example: password123
+          example: 123456
         full_name:
           type: string
           example: Nguyễn Văn A
         student_code:
           type: string
           example: SV202601
+
+    UpdateProfileRequest:
+      type: object
+      properties:
+        full_name:
+          type: string
+        avatar_url:
+          type: string
+        bio:
+          type: string
+        department:
+          type: string
+        student_code:
+          type: string
+        password:
+          type: string
+
+    ClassroomRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          example: Kiến trúc phần mềm - Nhóm 01
+        description:
+          type: string
+          example: Lớp học phần học kỳ 2026
 
     CreateExamRequest:
       type: object
@@ -288,6 +958,9 @@ components:
         duration:
           type: integer
           example: 45
+        classroom_id:
+          type: integer
+          nullable: true
         start_time:
           type: string
           format: date-time
@@ -295,16 +968,48 @@ components:
           type: string
           format: date-time
 
+    QuestionsPayload:
+      type: object
+      required: [questions]
+      properties:
+        questions:
+          type: array
+          items:
+            type: object
+            required: [prompt, option_a, option_b, option_c, option_d, correct_option]
+            properties:
+              prompt:
+                type: string
+              option_a:
+                type: string
+              option_b:
+                type: string
+              option_c:
+                type: string
+              option_d:
+                type: string
+              correct_option:
+                type: string
+                enum: [A, B, C, D]
+              points:
+                type: number
+                example: 1.0
+
     SaveAnswersRequest:
       type: object
       properties:
-        question_id:
-          type: integer
-          example: 1
-        chosen_option:
-          type: string
-          enum: [A, B, C, D]
-          example: A
+        answers:
+          type: array
+          items:
+            type: object
+            properties:
+              question_id:
+                type: integer
+                example: 1
+              chosen_option:
+                type: string
+                enum: [A, B, C, D]
+                example: A
 
     CreateAppealRequest:
       type: object

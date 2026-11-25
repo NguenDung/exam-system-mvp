@@ -2,15 +2,15 @@
 ## DỰ ÁN: HỆ THỐNG THI TRẮC NGHIỆM TRỰC TUYẾN ĐẠI HỌC
 - **Hệ thống**: Online Exam System
 - **Kiến trúc**: Client-Server (REST API)
-- **Công nghệ**: Golang 1.21+ (Gin) | React 19 (Vite) | PostgreSQL 15 / SQLite In-Memory
+- **Công nghệ**: Golang 1.22+ (Gin) | React 19 (Vite) | PostgreSQL 15 / SQLite (WAL Mode)
 
 ---
 
 ## 1. TỔNG QUAN KIẾN TRÚC HỆ THỐNG VÀ CƠ SỞ DỮ LIỆU
 
-### 1.1. Mô hình kiến trúc phân tầng chuẩn Enterprise (Clean Layered Architecture)
+### 1.1. Mô hình kiến trúc phân tầng (Clean Layered Architecture)
 
-Hệ thống được thiết kế theo kiến trúc phân tầng chuẩn mực (Layered Architecture kết hợp Dependency Injection & Interface), đảm bảo tách biệt hoàn toàn giữa giao diện Web, xử lý nghiệp vụ và truy xuất cơ sở dữ liệu:
+Hệ thống được tổ chức theo kiến trúc phân tầng (Layered Architecture kết hợp Dependency Injection qua Repository Interface), tách biệt giữa giao diện Web, xử lý nghiệp vụ và truy xuất cơ sở dữ liệu:
 
 ```
 [CLIENT LAYER - React 19 SPA]
@@ -785,6 +785,7 @@ Các request yêu cầu xác thực cần gửi kèm Header:
 | `DELETE`| `/api/teacher/classes/:id` | Teacher | Không | `200`, `403`, `404` | Xóa lớp học phần kèm giải tán thành viên |
 | `POST` | `/api/teacher/classes/:id/members` | Teacher | `{student_id?, email?, student_code?}` | `201`, `400`, `404`, `409` | Thêm sinh viên vào lớp học phần |
 | `DELETE`| `/api/teacher/classes/:id/members/:studentId` | Teacher | Không | `200`, `403`, `404` | Xóa sinh viên khỏi lớp học phần |
+| `GET` | `/api/teacher/classes/:id/gradebook` | Teacher | Không | `200`, `403`, `404` | Lấy sổ điểm tổng hợp lớp học phần (ma trận điểm, trung bình, xếp loại) |
 | `POST` | `/api/student/classes/join` | Student | `{code: "ABCXYZ"}` | `200`, `400`, `404`, `409` | Sinh viên ghi danh vào lớp bằng mã 6 ký tự |
 
 #### D. Nhóm Giảng viên (Đề thi, Điểm số, Sinh viên)
@@ -880,12 +881,12 @@ Các request yêu cầu xác thực cần gửi kèm Header:
 
 ### 6.3. Kết quả kiểm thử tự động (Integration Test Suite)
 
-Toàn bộ logic backend được kiểm thử qua file `main_test.go` với **26 kịch bản kiểm thử tích hợp**, bao phủ toàn diện mọi luồng nghiệp vụ.
+Toàn bộ logic backend được kiểm thử qua file `main_test.go` với **26 kịch bản kiểm thử tích hợp**, bao phủ đầy đủ các luồng nghiệp vụ và bảo mật chính.
 
-Kết quả thực thi lệnh `go test -v ./...`:
-```
-PASS
-ok      exam-system-mvp 10.423s
+Chạy kiểm thử bằng lệnh:
+```bash
+cd backend
+go test -v ./...
 ```
 
 #### Danh sách 26 kịch bản kiểm thử:
@@ -934,23 +935,23 @@ ok      exam-system-mvp 10.423s
 
 3. **Cơ chế chống mất bài khi rớt mạng (Offline LocalStorage Sync) & Giao dịch nguyên tử**:
    - Ghi đệm đáp án vào máy trạm: Khi sinh viên chọn đáp án, hệ thống vừa gửi API vừa lưu vào `localStorage`. Khi gặp sự cố mạng hoặc tải lại trang, client tự động phục hồi phương án đã chọn.
-   - Giao dịch nộp bài nguyên tử (`GradeAttemptAtomic`): Bọc toàn bộ thao tác lưu đáp án, chấm điểm và chuyển trạng thái `completed` vào trong một GORM Database Transaction duy nhất, bảo đảm tính nhất quán dữ liệu tuyệt đối (ACID).
-   - Khóa hạn nộp bài từ Server-side: Chặn mọi gói tin nộp bài trễ sau thời hạn kết thúc ca thi, loại bỏ hoàn toàn khả năng can thiệp client-side.
+   - Giao dịch nộp bài nguyên tử (`GradeAttemptAtomic`): Bọc toàn bộ thao tác lưu đáp án, chấm điểm và chuyển trạng thái `completed` vào trong một GORM Database Transaction duy nhất, đảm bảo tính nhất quán dữ liệu (ACID).
+   - Khóa hạn nộp bài từ Server-side: Chặn các yêu cầu nộp bài hoặc cập nhật đáp án trễ sau thời hạn kết thúc ca thi.
 
-4. **Kiến trúc Container hóa 3 tầng (Turnkey Docker Compose)**:
-   - Multi-stage Dockerfile cho Backend (Golang 1.22 Alpine, stripped binary, kích thước $< 20$MB, chạy dưới người dùng `appuser` phi đặc quyền).
-   - Multi-stage Dockerfile cho Frontend (Node.js 20 build -> Nginx Alpine phục vụ static bundle, nén Gzip, security headers và reverse proxy `/api` sang backend container để loại bỏ hoàn toàn lỗi CORS).
+4. **Kiến trúc Container hóa 3 tầng (Docker Compose)**:
+   - Multi-stage Dockerfile cho Backend (Golang 1.22 Alpine, stripped binary, chạy dưới người dùng `appuser` phi đặc quyền).
+   - Multi-stage Dockerfile cho Frontend (Node.js 20 build -> Nginx Alpine phục vụ static bundle, nén Gzip, security headers và reverse proxy `/api` sang backend container để tránh lỗi CORS).
    - `docker-compose.yml`: Kết nối 3 dịch vụ `postgres`, `backend`, `frontend` với cơ chế `condition: service_healthy`, cho phép khởi chạy toàn bộ hệ thống bằng một lệnh duy nhất.
 
 ---
 
 ## 7. KẾT LUẬN VÀ HƯỚNG PHÁT TRIỂN
 
-Dự án đã hoàn thành xuất sắc các mục tiêu đề ra cho một hệ thống thi trắc nghiệm trực tuyến ở quy mô đồ án môn học / đồ án tốt nghiệp:
+Hệ thống đáp ứng đầy đủ các yêu cầu nghiệp vụ và kỹ thuật cho một ứng dụng thi trắc nghiệm trực tuyến ở quy mô đồ án đại học:
 - Xây dựng đầy đủ các chức năng quản lý lớp học phần, ngân hàng câu hỏi, đề thi, điểm số và hồ sơ người dùng.
 - Tổ chức phòng thi trực tuyến với đồng hồ server, xáo trộn câu hỏi ngẫu nhiên theo seed, lưu bài tự động và giám sát việc chuyển tab.
-- Xây dựng quy trình xử lý đơn phúc khảo và hệ thống thông báo nội bộ có điều hướng sâu hỗ trợ tương tác tức thời giữa sinh viên và giảng viên.
-- Đạt kết quả pass 26/26 kịch bản kiểm thử tích hợp trên môi trường SQLite in-memory có cấu hình WAL mode.
+- Xây dựng quy trình xử lý đơn phúc khảo và hệ thống thông báo nội bộ có điều hướng sâu hỗ trợ tương tác giữa sinh viên và giảng viên.
+- Vượt qua 26/26 kịch bản kiểm thử tích hợp trên SQLite (WAL mode) và vận hành ổn định qua Docker Compose 3 tầng.
 
 **Hướng phát triển tiếp theo**:
 - Bổ sung giám sát camera (webcam proctoring) và nhận diện khuôn mặt thí sinh.

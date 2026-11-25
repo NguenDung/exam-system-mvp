@@ -13,7 +13,6 @@ export default function ThemeToggle({ className = '' }) {
       className={`p-2 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-slate-100 dark:hover:bg-slate-800 transition-colors ${className}`}
     >
       {isDark ? (
-        // Sun icon (click to switch to light)
         <svg
           className="w-4 h-4 text-amber-400"
           fill="none"
@@ -28,7 +27,6 @@ export default function ThemeToggle({ className = '' }) {
           />
         </svg>
       ) : (
-        // Moon icon (click to switch to dark)
         <svg
           className="w-4 h-4 text-slate-600"
           fill="none"

@@ -496,7 +496,7 @@ func (s *examTakingService) SubmitExam(studentID, attemptID uint, req dto.Submit
 	deadline := attemptDeadline(attempt.StartedAt, *exam)
 	isExpired := now.After(deadline.Add(saveGracePeriod))
 
-	// Chống gian lận: Chỉ chấp nhận cập nhật đáp án mới nếu chưa quá hạn nộp bài
+	// Reject answer updates once the submission grace period has elapsed.
 	if len(req.Answers) > 0 && !isExpired {
 		questions, err := s.examRepo.GetQuestionsByExamID(attempt.ExamID)
 		if err == nil {

@@ -175,38 +175,38 @@ exam-system-mvp/
 
 ## Công nghệ sử dụng
 
-- **Backend**: Golang 1.21+ (Gin Web Framework, GORM ORM, golang-jwt/jwt/v5, bcrypt).
+- **Backend**: Golang 1.22+ (Gin Web Framework, GORM ORM, `golang-jwt/jwt/v5`, `bcrypt`).
 - **Cơ sở dữ liệu**: PostgreSQL 15 (Docker), hỗ trợ transaction ACID, khóa dòng `SELECT ... FOR UPDATE`, lệnh nguyên tử `ON CONFLICT DO UPDATE` và cascade foreign key.
-- **Frontend**: React 19, Vite, TailwindCSS, React Router v6, Axios.
-- **Kiểm thử**: Gói `testing` và `net/http/httptest` của Go, chạy 25 kịch bản kiểm thử tích hợp trên SQLite in-memory (WAL mode).
+- **Frontend**: React 19, Vite, TailwindCSS, React Router v7, Axios.
+- **Kiểm thử**: Gói `testing` và `net/http/httptest` của Go, chạy 26 kịch bản kiểm thử tích hợp trên SQLite với WAL mode.
 
 ---
 
 ## Hướng dẫn khởi chạy
 
-### Cách 1: Khởi chạy trọn gói bằng Docker Compose (Khuyên dùng cho Báo cáo & Nghiệm thu)
+### Cách 1: Khởi chạy bằng Docker Compose
 
-Toàn bộ hệ thống (PostgreSQL, Golang Backend, Nginx + React Frontend) đã được container hóa hoàn chỉnh. Bạn chỉ cần gõ đúng 1 lệnh duy nhất tại thư mục gốc:
+Hệ thống (PostgreSQL 15, Golang Backend, Nginx + React Frontend) được cấu hình chạy đồng bộ qua Docker Compose. Tại thư mục gốc của dự án:
 
 ```bash
 docker compose up --build -d
 ```
 
-Sau khi các container khởi động hoàn tất:
-- **Giao diện người dùng (Frontend)**: Truy cập tại **`http://localhost:3000`**
-- **API Backend**: Truy cập tại **`http://localhost:8081`** (Kiểm tra trạng thái tại `http://localhost:8081/health`)
-- **Cơ sở dữ liệu PostgreSQL**: Cổng `5432` (`User: postgres`, `Password: postgres`, `Database: exam_mvp`)
+Sau khi các container ở trạng thái sẵn sàng:
+- **Frontend**: `http://localhost:3000`
+- **Backend API**: `http://localhost:8081` (kiểm tra health check tại `http://localhost:8081/health`)
+- **PostgreSQL**: cổng `5432` (`User: postgres`, `Password: postgres`, `Database: exam_mvp`)
 
-Để dừng hệ thống:
+Dừng hệ thống:
 ```bash
 docker compose down
 ```
 
 ---
 
-### Cách 2: Khởi chạy thủ công từng phần (Dành cho Lập trình viên)
+### Cách 2: Khởi chạy thủ công từng dịch vụ
 
-Yêu cầu môi trường: Docker Desktop (để chạy PostgreSQL), Golang 1.21+ và Node.js 18+.
+Yêu cầu môi trường: Docker (để chạy PostgreSQL), Golang 1.22+ và Node.js 20+.
 
 #### Bước 1: Khởi động cơ sở dữ liệu (PostgreSQL)
 Chạy lệnh sau tại thư mục gốc của dự án:
@@ -262,14 +262,13 @@ Tất cả các test case đều chạy trên SQLite in-memory với các bảng
 
 ## Tài liệu API & Kiểm thử với Postman / Swagger
 
-Hệ thống được trang bị đầy đủ tài liệu API chuẩn công nghiệp nằm trong thư mục `docs/`:
+Tài liệu đặc tả API được đặt trong thư mục `docs/`:
 
 1. **Postman Collection (`docs/exam_system_postman_collection.json`)**:
-   - Chứa toàn bộ các REST API được phân nhóm theo nghiệp vụ (Auth, Exam Management, Exam Taking Flow, History & Appeals, Profile, Notifications).
-   - Tích hợp sẵn biến môi trường `baseUrl` (`http://localhost:8081`).
-   - Tự động trích xuất và lưu Bearer JWT token sau khi gọi API đăng nhập, không cần copy/paste thủ công.
-   - **Cách sử dụng**: Mở phần mềm Postman -> Chọn nút **Import** -> Kéo thả tệp `docs/exam_system_postman_collection.json`.
+   - Tập hợp các request mẫu phân nhóm theo nghiệp vụ (Auth, Exam Management, Exam Taking Flow, History & Appeals, Profile, Notifications).
+   - Thiết lập sẵn biến `baseUrl` (`http://localhost:8081`) và script tự lưu Bearer JWT token sau khi đăng nhập.
+   - **Cách sử dụng**: Mở Postman -> chọn **Import** -> chọn tệp `docs/exam_system_postman_collection.json`.
 
-2. **OpenAPI / Swagger 3.0 Specification (`docs/openapi.yaml`)**:
-   - Đặc tả cấu trúc Request/Response, DTOs, mã trạng thái HTTP theo chuẩn OpenAPI 3.0.
-   - Có thể mở trực tiếp trên [Swagger Editor](https://editor.swagger.io) hoặc import vào các công cụ API testing khác.
+2. **OpenAPI 3.0 Specification (`docs/openapi.yaml`)**:
+   - Đặc tả đầy đủ các endpoint, schema Request/Response và mã trạng thái HTTP theo chuẩn OpenAPI 3.0.
+   - Có thể mở trực tiếp trên [Swagger Editor](https://editor.swagger.io) hoặc import vào các công cụ kiểm thử API.

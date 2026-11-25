@@ -308,7 +308,7 @@ func TestMVP_FullFlow(t *testing.T) {
 	var teacherToken, studentToken, examCode string
 	var examID, q1ID, q2ID, attemptID float64
 
-	// UC01 – Register & Login
+	// UC01: Register & Login
 
 	t.Run("UC01_Register_Student", func(t *testing.T) {
 		w := do(t, srv, "POST", "/api/auth/register", "", map[string]interface{}{
@@ -398,7 +398,7 @@ func TestMVP_FullFlow(t *testing.T) {
 		}
 	})
 
-	// UC02 – Teacher creates exam, adds questions, publishes
+	// UC02: Teacher creates exam, adds questions, publishes
 
 	t.Run("UC02_Create_Exam", func(t *testing.T) {
 		now := time.Now()
@@ -509,7 +509,7 @@ func TestMVP_FullFlow(t *testing.T) {
 		}
 	})
 
-	// UC03 – Student looks up exam by code
+	// UC03: Student looks up exam by code
 
 	t.Run("UC03_Lookup_Exam_By_Code", func(t *testing.T) {
 		// Student looks up created exam by code
@@ -533,7 +533,7 @@ func TestMVP_FullFlow(t *testing.T) {
 		}
 	})
 
-	// UC04 – Student starts exam, saves answer, resumes
+	// UC04: Student starts exam, saves answer, resumes
 
 	t.Run("UC04_Start_Exam", func(t *testing.T) {
 		url := fmt.Sprintf("/api/student/exams/%.0f/start", examID)
@@ -613,7 +613,7 @@ func TestMVP_FullFlow(t *testing.T) {
 		}
 	})
 
-	// UC05 – Submit and auto-grade
+	// UC05: Submit and auto-grade
 
 	t.Run("UC05_Submit_With_Answers", func(t *testing.T) {
 		url := fmt.Sprintf("/api/student/attempts/%.0f/submit", attemptID)
@@ -655,7 +655,7 @@ func TestMVP_FullFlow(t *testing.T) {
 		}
 	})
 
-	// UC06 – View results (student & teacher)
+	// UC06: View results (student & teacher)
 
 	t.Run("UC06_Student_View_Result", func(t *testing.T) {
 		url := fmt.Sprintf("/api/student/attempts/%.0f/result", attemptID)
@@ -675,7 +675,7 @@ func TestMVP_FullFlow(t *testing.T) {
 			t.Fatalf("expected 2 answers, got %d", len(answers))
 		}
 
-		// Exam is still open (end_time = 7 days from now) → correct_option hidden
+		// Exam is still open (end_time = 7 days from now); correct_option must stay hidden.
 		showCorrect, _ := body["show_correct_answers"].(bool)
 		if showCorrect {
 			t.Error("should NOT show correct answers while exam is still open")
@@ -886,14 +886,14 @@ func TestStudent_GradingAccuracy(t *testing.T) {
 		return qs[i].(map[string]interface{})["id"].(float64)
 	}
 
-	// Answer: Q1=A(✓), Q2=A(✗), Q3=C(✓), Q4=skip → score=2, correct=2, wrong=2
-	// (blank answers count as wrong so correct+wrong == total questions)
+	// Answer: Q1=A (correct), Q2=A (wrong), Q3=C (correct), Q4=skip -> score=2, correct=2, wrong=2.
+	// Blank answers count as wrong so correct + wrong equals total questions.
 	w = do(t, srv, "POST", fmt.Sprintf("/api/student/attempts/%.0f/submit", attemptID), studentToken, map[string]interface{}{
 		"answers": []map[string]interface{}{
-			{"question_id": int(getQID(0)), "chosen_option": "A"}, // correct
-			{"question_id": int(getQID(1)), "chosen_option": "A"}, // wrong (B)
-			{"question_id": int(getQID(2)), "chosen_option": "C"}, // correct
-			// Q4 not answered = skip → counted as wrong
+			{"question_id": int(getQID(0)), "chosen_option": "A"},
+			{"question_id": int(getQID(1)), "chosen_option": "A"},
+			{"question_id": int(getQID(2)), "chosen_option": "C"},
+			// Q4 omitted to verify skipped answers count as wrong.
 		},
 	})
 	if w.Code != http.StatusOK {
@@ -992,7 +992,7 @@ func TestSecurity_IDOR_SaveForeignQuestion(t *testing.T) {
 	w = do(t, srv, "POST", fmt.Sprintf("/api/student/exams/%.0f/start", examAID), studentToken, nil)
 	attemptID := parseJSON(t, w)["attempt"].(map[string]interface{})["id"].(float64)
 
-	// Try to save a question belonging to Exam B → must 400
+	// Saving a question belonging to Exam B must return 400.
 	w = do(t, srv, "POST", fmt.Sprintf("/api/student/attempts/%.0f/save", attemptID), studentToken, map[string]interface{}{
 		"answers": []map[string]interface{}{
 			{"question_id": int(qBID), "chosen_option": "A"},
@@ -1098,7 +1098,7 @@ func TestTeacher_Stats_OnlyCompleted(t *testing.T) {
 		"answers": []map[string]interface{}{{"question_id": int(qID), "chosen_option": "A"}},
 	})
 
-	// Student 2: start but leave in_progress (score still 0) — must NOT skew avg/min/max
+	// Student 2 starts an attempt without submitting (score=0) and must not skew avg/min/max.
 	do(t, srv, "POST", "/api/auth/register", "", map[string]interface{}{
 		"full_name": "S2", "email": "s2stats@exam.local", "password": "password123",
 	})

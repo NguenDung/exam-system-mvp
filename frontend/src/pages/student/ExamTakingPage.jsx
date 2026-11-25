@@ -191,7 +191,7 @@ export default function ExamTakingPage() {
         if (a.chosen_option) savedMap[a.question_id] = a.chosen_option;
       });
 
-      // Đối soát với localStorage offline cache phòng trường hợp mạng rớt trước đó
+      // Reconcile server answers with local offline cache in case previous requests failed.
       if (data.attempt?.id) {
         try {
           const cacheKey = `exam_attempt_${data.attempt.id}_answers`;

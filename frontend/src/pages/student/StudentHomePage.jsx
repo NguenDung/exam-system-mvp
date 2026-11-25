@@ -16,30 +16,24 @@ const STATUS_LABELS = {
 export default function StudentHomePage() {
   const navigate = useNavigate();
 
-  // Quick lookup state
   const [code, setCode] = useState('');
   const [lookupResult, setLookupResult] = useState(null);
   const [lookupLoading, setLookupLoading] = useState(false);
   const [lookupError, setLookupError] = useState('');
 
-  // Available Exams State
   const [availableExams, setAvailableExams] = useState([]);
   const [availableLoading, setAvailableLoading] = useState(true);
   const [availableError, setAvailableError] = useState('');
 
-  // Filter & Search
-  const [activeTab, setActiveTab] = useState('all'); // all, open, in_progress, submitted
+  const [activeTab, setActiveTab] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
 
-  // History / Attempts State
   const [attempts, setAttempts] = useState([]);
   const [attemptsLoading, setAttemptsLoading] = useState(true);
 
-  // Widget states: Schedule & Classes
   const [upcomingEvents, setUpcomingEvents] = useState([]);
   const [classes, setClasses] = useState([]);
 
-  // Starting exam modal
   const [startingExam, setStartingExam] = useState(null);
   const [startingLoading, setStartingLoading] = useState(false);
   const [actionError, setActionError] = useState('');
@@ -49,7 +43,6 @@ export default function StudentHomePage() {
     setAttemptsLoading(true);
     setAvailableError('');
 
-    // Fetch exams
     try {
       const { data } = await studentAPI.getAvailableExams();
       setAvailableExams(data.exams || []);
@@ -59,7 +52,6 @@ export default function StudentHomePage() {
       setAvailableLoading(false);
     }
 
-    // Fetch attempts
     try {
       const { data } = await studentAPI.listAttempts();
       setAttempts(data.attempts || []);
@@ -69,7 +61,6 @@ export default function StudentHomePage() {
       setAttemptsLoading(false);
     }
 
-    // Fetch upcoming schedule
     try {
       const { data } = await scheduleAPI.getSchedule();
       const items = data.schedule || data.events || [];
@@ -78,7 +69,6 @@ export default function StudentHomePage() {
       setUpcomingEvents([]);
     }
 
-    // Fetch classrooms
     try {
       const { data } = await classroomAPI.list();
       const list = data.classrooms || data.classes || [];

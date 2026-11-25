@@ -11,7 +11,7 @@ export function ThemeProvider({ children }) {
         return 'dark';
       }
     } catch {
-      // fallback
+      // Ignore storage access errors in restricted browser contexts.
     }
     return 'light';
   });
@@ -26,7 +26,7 @@ export function ThemeProvider({ children }) {
     try {
       localStorage.setItem('app_theme', theme);
     } catch {
-      // fallback
+      // Ignore storage write errors.
     }
   }, [theme]);
 

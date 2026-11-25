@@ -24,7 +24,6 @@ function SidebarLink({ to, end, children, icon: Icon, onClick }) {
   );
 }
 
-// Minimalist neutral icons (Standard SVG - No AI emoji)
 function IconExam({ className }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>

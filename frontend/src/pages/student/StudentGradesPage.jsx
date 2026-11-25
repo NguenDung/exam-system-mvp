@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { studentAPI, classroomAPI } from '../../api/endpoints';
 import Spinner from '../../components/Spinner';
 
-// Quy chế đào tạo tín chỉ: Quy đổi điểm hệ 10 sang Điểm chữ & Thang 4
+// Map 10-point score to Vietnamese university credit letter grade and 4.0 GPA scale.
 function calculateScale(score10) {
   if (score10 === null || score10 === undefined || isNaN(score10)) {
     return { letter: '—', scale4: null, status: 'Chưa có điểm', badge: 'bg-slate-100 text-slate-600 border border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700' };
@@ -24,9 +24,8 @@ export default function StudentGradesPage() {
   const [attempts, setAttempts] = useState([]);
   const [availableExams, setAvailableExams] = useState([]);
   const [classes, setClasses] = useState([]);
-  const [chartView, setChartView] = useState('subjects'); // 'subjects' | 'distribution'
+  const [chartView, setChartView] = useState('subjects');
 
-  // Simulator State
   const [simCredits, setSimCredits] = useState(12);
   const [simTargetGrade, setSimTargetGrade] = useState('3.5');
 
@@ -57,12 +56,10 @@ export default function StudentGradesPage() {
     loadAcademicData();
   }, []);
 
-  // Process Real Course List from DB
   const processedCourses = useMemo(() => {
     const now = new Date();
     const map = new Map();
 
-    // 1. Populate from available exams
     availableExams.forEach((ex) => {
       const isPastDeadline = new Date(ex.end_time) < now;
       map.set(ex.id, {
@@ -80,7 +77,6 @@ export default function StudentGradesPage() {
       });
     });
 
-    // 2. Overlay with attempts
     attempts.forEach((att) => {
       const existing = map.get(att.exam_id) || {
         examId: att.exam_id,
@@ -103,7 +99,6 @@ export default function StudentGradesPage() {
       });
     });
 
-    // Calculate grades
     return Array.from(map.values()).map((course) => {
       let finalScore = course.score10;
       if (course.isMissed) {
@@ -122,7 +117,6 @@ export default function StudentGradesPage() {
     });
   }, [availableExams, attempts]);
 
-  // Overall Statistics from Real Data
   const stats = useMemo(() => {
     const evaluatedCourses = processedCourses.filter((c) => c.isCompleted || c.isMissed);
     const completedPassed = evaluatedCourses.filter((c) => c.finalScore !== null && c.finalScore >= 4.0);
@@ -137,7 +131,6 @@ export default function StudentGradesPage() {
     const totalWeightedPoints10 = evaluatedCourses.reduce((acc, c) => acc + ((c.finalScore || 0) * c.credits), 0);
     const cpa10 = totalCredits > 0 ? (totalWeightedPoints10 / totalCredits).toFixed(2) : '0.00';
 
-    // 1. Tự động xếp loại học lực tốt nghiệp
     let graduationRank = 'Chưa đủ điều kiện';
     let rankBadge = 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300';
     const cpaNum = Number(cpa4);
@@ -161,7 +154,6 @@ export default function StudentGradesPage() {
       }
     }
 
-    // 2. Hệ thống cảnh báo học vụ
     let warningLevel = 0;
     let warningText = 'Tình trạng học vụ: Bình thường';
 
@@ -206,7 +198,6 @@ export default function StudentGradesPage() {
     };
   }, [processedCourses]);
 
-  // GPA Simulator
   const simulatedCPA = useMemo(() => {
     const currentCredits = stats.totalCredits;
     const currentPoints = Number(stats.cpa4) * currentCredits;

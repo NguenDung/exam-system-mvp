@@ -1,16 +1,27 @@
-# React + Vite
+# Online Exam System — Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+Giao diện web Single-Page Application (SPA) cho hệ thống thi trắc nghiệm trực tuyến, xây dựng bằng React 19, Vite, TailwindCSS và React Router.
 
-Currently, two official plugins are available:
+## Cấu trúc chính
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- `src/api/`: cấu hình Axios client (`axios.js`) và tập hợp hàm gọi REST API (`endpoints.js`).
+- `src/contexts/`: `AuthContext.jsx` (quản lý JWT và thông tin tài khoản) và `ThemeContext.jsx` (chuyển đổi giao diện Sáng / Tối).
+- `src/components/`: layout cho Sinh viên và Giảng viên, thanh thông báo `NotificationDropdown.jsx`, `ProtectedRoute.jsx`, `ThemeToggle.jsx`, `Spinner.jsx`.
+- `src/pages/`: các màn hình nghiệp vụ (`LoginPage`, `RegisterPage`, `ProfilePage`, `DirectoryPage`, `ClassroomsPage`, `ClassDetailPage`, `ExamSchedulePage`, cùng hai thư mục `student/` và `teacher/`).
+- `nginx.conf` & `Dockerfile`: đóng gói bundle production và reverse proxy `/api/` tới dịch vụ backend trong Docker Compose.
 
-## React Compiler
+## Biến môi trường
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- `VITE_API_URL` (tùy chọn): URL gốc của backend API khi chạy ngoài Docker. Mặc định:
+  - Development (`npm run dev`): `http://localhost:8081/api`
+  - Production (`npm run build` / Nginx Docker): `/api`
 
-## Expanding the Oxlint configuration
+## Lệnh phát triển
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and Oxlint's TypeScript related rules in your project.
+```bash
+npm install
+npm run dev      # Khởi chạy Vite dev server tại http://localhost:5173
+npm run build    # Tạo bản build production trong thư mục dist/
+npm run lint     # Kiểm tra mã nguồn bằng oxlint
+npm run preview  # Xem trước bản build production
+```

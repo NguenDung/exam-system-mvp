@@ -6,7 +6,7 @@ const api = axios.create({
   timeout: 10000,
 });
 
-// ── Request interceptor: attach JWT ──────────────────────────────────────────
+// Attach bearer JWT token from local storage.
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token');
@@ -18,7 +18,7 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// ── Response interceptor: handle 401 globally ────────────────────────────────
+// Clear local session and redirect to login on 401 responses.
 api.interceptors.response.use(
   (response) => response,
   (error) => {

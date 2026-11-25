@@ -16,7 +16,7 @@ export default function NotificationDropdown() {
       setNotifications(data.notifications || []);
       setUnreadCount(data.unread_count || 0);
     } catch {
-      // Polling background error ignored
+      // Keep previous state when background polling fails.
     }
   }, []);
 

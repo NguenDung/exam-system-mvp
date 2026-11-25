@@ -546,7 +546,6 @@ func (s *examService) DeleteStudent(teacherID, studentID uint) error {
 	if err != nil || student.Role != models.RoleStudent {
 		return errors.New("Student not found")
 	}
-	// Soft delete student via repository
 	return s.userRepo.UpdateFields(student, map[string]interface{}{"deleted_at": time.Now()})
 }
 
