@@ -4,14 +4,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"math"
 	"net/http"
 	"strings"
 	"time"
 
-	"exam-system-mvp/config"
+	"exam-system-mvp/apiresponse"
 	"exam-system-mvp/models"
+	"exam-system-mvp/observability"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -30,45 +30,44 @@ func attemptDeadline(startedAt time.Time, exam models.Exam) time.Time {
 }
 
 // gradeExpiredAttempts auto-grades all in_progress attempts for an exam that are past deadline.
-func gradeExpiredAttempts(examID uint) {
+func gradeExpiredAttempts(db *gorm.DB, examID uint) error {
 	var exam models.Exam
-	if err := config.DB.First(&exam, examID).Error; err != nil {
-		log.Printf("Auto-submit: failed to load exam %d: %v", examID, err)
-		return
+	if err := db.First(&exam, examID).Error; err != nil {
+		return fmt.Errorf("auto-submit failed to load exam %d: %w", examID, err)
 	}
 
 	var attempts []models.ExamAttempt
-	if err := config.DB.Where("exam_id = ? AND status = ?", examID, "in_progress").Find(&attempts).Error; err != nil {
-		log.Printf("Auto-submit: failed to load attempts for exam %d: %v", examID, err)
-		return
+	if err := db.Where("exam_id = ? AND status = ?", examID, "in_progress").Find(&attempts).Error; err != nil {
+		return fmt.Errorf("auto-submit failed to load attempts for exam %d: %w", examID, err)
 	}
 
 	now := time.Now()
 	for _, a := range attempts {
 		if !now.Before(attemptDeadline(a.StartedAt, exam)) {
-			if err := gradeAttemptInTransaction(a.ID); err != nil {
-				log.Printf("Auto-submit: failed to grade attempt %d: %v", a.ID, err)
+			if err := gradeAttemptInTransaction(db, a.ID); err != nil {
+				return fmt.Errorf("auto-submit failed to grade attempt %d: %w", a.ID, err)
 			}
 		}
 	}
+	return nil
 }
 
 // StartAttemptAutoSubmitWorker grades expired attempts even when a student has
 // left the exam page or disconnected.
-func StartAttemptAutoSubmitWorker() {
+func StartAttemptAutoSubmitWorker(db *gorm.DB) {
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 
 	for range ticker.C {
-		if err := autoSubmitExpiredAttempts(); err != nil {
-			log.Printf("Auto-submit: %v", err)
+		if err := autoSubmitExpiredAttempts(db); err != nil {
+			observability.Error("auto-submit worker failed", "error", err)
 		}
 	}
 }
 
-func autoSubmitExpiredAttempts() error {
+func autoSubmitExpiredAttempts(db *gorm.DB) error {
 	var attempts []models.ExamAttempt
-	if err := config.DB.Where("status = ?", "in_progress").Find(&attempts).Error; err != nil {
+	if err := db.Where("status = ?", "in_progress").Find(&attempts).Error; err != nil {
 		return fmt.Errorf("failed to load in-progress attempts: %w", err)
 	}
 
@@ -83,7 +82,7 @@ func autoSubmitExpiredAttempts() error {
 
 	var exams []models.Exam
 	if len(examIDs) > 0 {
-		if err := config.DB.Where("id IN ?", examIDs).Find(&exams).Error; err != nil {
+		if err := db.Where("id IN ?", examIDs).Find(&exams).Error; err != nil {
 			return fmt.Errorf("failed to load exams for in-progress attempts: %w", err)
 		}
 	}
@@ -103,7 +102,7 @@ func autoSubmitExpiredAttempts() error {
 		if now.Before(attemptDeadline(attempt.StartedAt, exam)) {
 			continue
 		}
-		if err := gradeAttemptInTransaction(attempt.ID); err != nil {
+		if err := gradeAttemptInTransaction(db, attempt.ID); err != nil {
 			submitErrors = append(submitErrors, fmt.Errorf("failed to grade attempt %d: %w", attempt.ID, err))
 		}
 	}
@@ -151,23 +150,26 @@ func upsertAnswers(tx *gorm.DB, attempt models.ExamAttempt, answers []SaveAnswer
 	return nil
 }
 
-// ─── GET /api/student/exams/lookup?code=XYZ ──────────────────────────────────
+// â”€â”€â”€ GET /api/student/exams/lookup?code=XYZ â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-func StudentLookupExam(c *gin.Context) {
+func (h *StudentHandler) StudentLookupExam(c *gin.Context) {
 	userID, _ := c.Get("user_id")
 	code := strings.ToUpper(strings.TrimSpace(c.Query("code")))
 	if code == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Query parameter 'code' is required"})
+		apiresponse.Error(c, http.StatusBadRequest, "Query parameter 'code' is required")
 		return
 	}
 
 	var exam models.Exam
-	if err := config.DB.Where("exam_code = ? AND status = 'published'", code).First(&exam).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Exam not found or not published"})
+	if err := h.db.Where("exam_code = ? AND status = 'published'", code).First(&exam).Error; err != nil {
+		lookupFailure(c, err, http.StatusNotFound, "Exam not found or not published", "Failed to look up exam")
 		return
 	}
 
-	gradeExpiredAttempts(exam.ID)
+	if err := gradeExpiredAttempts(h.db, exam.ID); err != nil {
+		apiresponse.Error(c, http.StatusInternalServerError, "Failed to submit expired attempts", err)
+		return
+	}
 
 	now := time.Now()
 
@@ -184,7 +186,12 @@ func StudentLookupExam(c *gin.Context) {
 
 	// Check student's attempt (reload after possible auto-grade)
 	var attempt models.ExamAttempt
-	hasAttempt := config.DB.Where("exam_id = ? AND user_id = ?", exam.ID, userID).First(&attempt).Error == nil
+	attemptErr := h.db.Where("exam_id = ? AND user_id = ?", exam.ID, userID).First(&attempt).Error
+	if attemptErr != nil && !errors.Is(attemptErr, gorm.ErrRecordNotFound) {
+		apiresponse.Error(c, http.StatusInternalServerError, "Failed to look up exam attempt", attemptErr)
+		return
+	}
+	hasAttempt := attemptErr == nil
 
 	var attemptStatus string
 	if hasAttempt {
@@ -202,58 +209,56 @@ func StudentLookupExam(c *gin.Context) {
 		attemptStatus = "not_attempted"
 	}
 
-	response := gin.H{
-		"exam":           exam,
-		"exam_status":    examTimeStatus,
-		"attempt_status": attemptStatus,
-	}
+	response := ExamLookupResponse{ResponseMeta: ResponseMeta{Code: "EXAM_LOOKUP_COMPLETED"}, Exam: exam, ExamStatus: examTimeStatus, AttemptStatus: attemptStatus}
 	if hasAttempt {
-		response["attempt"] = attempt
+		response.Attempt = &attempt
 	}
 
-	c.JSON(http.StatusOK, response)
+	apiresponse.JSON(c, http.StatusOK, response)
 }
 
-// ─── GET /api/student/attempts ───────────────────────────────────────────────
+// â”€â”€â”€ GET /api/student/attempts â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-func StudentListAttempts(c *gin.Context) {
+func (h *StudentHandler) StudentListAttempts(c *gin.Context) {
 	userID, _ := c.Get("user_id")
 
 	// Grade expired attempts for all exams this student has started
 	var examIDs []uint
-	config.DB.Model(&models.ExamAttempt{}).
+	if err := h.db.Model(&models.ExamAttempt{}).
 		Where("user_id = ? AND status = ?", userID, "in_progress").
 		Distinct("exam_id").
-		Pluck("exam_id", &examIDs)
+		Pluck("exam_id", &examIDs).Error; err != nil {
+		apiresponse.Error(c, http.StatusInternalServerError, "Failed to load exam attempts", err)
+		return
+	}
 	for _, eid := range examIDs {
-		gradeExpiredAttempts(eid)
+		if err := gradeExpiredAttempts(h.db, eid); err != nil {
+			apiresponse.Error(c, http.StatusInternalServerError, "Failed to submit expired attempts", err)
+			return
+		}
 	}
 
-	type AttemptWithExam struct {
-		models.ExamAttempt
-		ExamTitle    string `json:"exam_title"`
-		ExamCode     string `json:"exam_code"`
-		ExamDuration int    `json:"exam_duration"`
-	}
-
-	var attempts []AttemptWithExam
-	config.DB.Table("exam_attempts ea").
+	var attempts []AttemptSummaryDTO
+	if err := h.db.Table("exam_attempts ea").
 		Select("ea.*, e.title as exam_title, e.exam_code, e.duration as exam_duration").
 		Joins("JOIN exams e ON e.id = ea.exam_id").
 		Where("ea.user_id = ?", userID).
 		Order("ea.started_at DESC").
-		Scan(&attempts)
+		Scan(&attempts).Error; err != nil {
+		apiresponse.Error(c, http.StatusInternalServerError, "Failed to load exam attempts", err)
+		return
+	}
 
-	c.JSON(http.StatusOK, gin.H{"attempts": attempts})
+	apiresponse.JSON(c, http.StatusOK, AttemptsResponse{ResponseMeta: ResponseMeta{Code: "ATTEMPTS_LISTED"}, Attempts: attempts})
 }
 
-// ─── POST /api/student/exams/:id/start ───────────────────────────────────────
+// â”€â”€â”€ POST /api/student/exams/:id/start â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 type StartExamInput struct {
 	Confirmed bool `json:"confirmed"`
 }
 
-func StudentStartExam(c *gin.Context) {
+func (h *StudentHandler) StudentStartExam(c *gin.Context) {
 	userID, _ := c.Get("user_id")
 	examID, ok := parseUintParam(c, "id")
 	if !ok {
@@ -261,68 +266,74 @@ func StudentStartExam(c *gin.Context) {
 	}
 
 	var exam models.Exam
-	if err := config.DB.Where("id = ? AND status = 'published'", examID).First(&exam).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Exam not found or not published"})
+	if err := h.db.Where("id = ? AND status = 'published'", examID).First(&exam).Error; err != nil {
+		lookupFailure(c, err, http.StatusNotFound, "Exam not found or not published", "Failed to load exam")
 		return
 	}
 
 	now := time.Now()
 	if now.Before(exam.StartTime) {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Exam has not started yet"})
+		apiresponse.Error(c, http.StatusForbidden, "Exam has not started yet")
 		return
 	}
 
-	// Check for existing attempt BEFORE blocking on exam.EndTime —
+	// Check for existing attempt BEFORE blocking on exam.EndTime â€”
 	// an in-progress attempt past its deadline must still be auto-graded & returned.
 	var attempt models.ExamAttempt
-	existingErr := config.DB.Where("exam_id = ? AND user_id = ?", exam.ID, userID).First(&attempt).Error
+	existingErr := h.db.Where("exam_id = ? AND user_id = ?", exam.ID, userID).First(&attempt).Error
+	if existingErr != nil && !errors.Is(existingErr, gorm.ErrRecordNotFound) {
+		apiresponse.Error(c, http.StatusInternalServerError, "Failed to load existing exam attempt", existingErr)
+		return
+	}
 	hasAttempt := existingErr == nil
 
 	if hasAttempt {
 		if attempt.Status == "completed" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "You have already submitted this exam", "attempt": attempt})
+			apiresponse.ErrorWithData(c, http.StatusBadRequest, "You have already submitted this exam", apiresponse.ErrorData{Attempt: attempt})
 			return
 		}
 
 		deadline := attemptDeadline(attempt.StartedAt, exam)
 		if !now.Before(deadline) {
-			if err := gradeAttemptInTransaction(attempt.ID); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to automatically submit exam"})
+			if err := gradeAttemptInTransaction(h.db, attempt.ID); err != nil {
+				apiresponse.Error(c, http.StatusInternalServerError, "Failed to automatically submit exam", err)
 				return
 			}
-			if err := config.DB.First(&attempt, attempt.ID).Error; err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load submitted exam"})
+			if err := h.db.First(&attempt, attempt.ID).Error; err != nil {
+				apiresponse.Error(c, http.StatusInternalServerError, "Failed to load submitted exam", err)
 				return
 			}
-			c.JSON(http.StatusOK, gin.H{
-				"message":           "Time is up. Your exam has been automatically submitted.",
-				"remaining_seconds": 0,
-				"attempt":           attempt,
-				"auto_submitted":    true,
+			apiresponse.JSON(c, http.StatusOK, AutoSubmittedResponse{
+				ResponseMeta:     ResponseMeta{Code: "EXAM_AUTOSUBMITTED"},
+				Message:          apiresponse.SuccessMessage(c, "EXAM_AUTOSUBMITTED"),
+				RemainingSeconds: 0, Attempt: attempt, AutoSubmitted: true,
 			})
 			return
 		}
 	} else {
-		// No attempt yet — block new starts after exam window ends
+		// No attempt yet â€” block new starts after exam window ends
 		if now.After(exam.EndTime) {
-			c.JSON(http.StatusForbidden, gin.H{"error": "Exam has expired"})
+			apiresponse.Error(c, http.StatusForbidden, "Exam has expired")
 			return
 		}
 
 		var input StartExamInput
 		if err := c.ShouldBindJSON(&input); err != nil && !errors.Is(err, io.EOF) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			apiresponse.Validation(c, err)
 			return
 		}
 		if !input.Confirmed {
-			c.JSON(http.StatusPreconditionRequired, gin.H{"error": "Confirm participation before starting the exam"})
+			apiresponse.Error(c, http.StatusPreconditionRequired, "Confirm participation before starting the exam")
 			return
 		}
 	}
 
 	// Load questions (without correct_option)
 	var questions []models.Question
-	config.DB.Where("exam_id = ?", exam.ID).Order("sort_order ASC").Find(&questions)
+	if err := h.db.Where("exam_id = ?", exam.ID).Order("sort_order ASC").Find(&questions).Error; err != nil {
+		apiresponse.Error(c, http.StatusInternalServerError, "Failed to load exam questions", err)
+		return
+	}
 
 	safeQuestions := make([]models.QuestionSafe, len(questions))
 	for i, q := range questions {
@@ -339,18 +350,18 @@ func StudentStartExam(c *gin.Context) {
 			StartedAt: now,
 		}
 		// OnConflict DoNothing guards against concurrent duplicate creates
-		if err := config.DB.Clauses(clause.OnConflict{DoNothing: true}).Create(&attempt).Error; err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create attempt"})
+		if err := h.db.Clauses(clause.OnConflict{DoNothing: true}).Create(&attempt).Error; err != nil {
+			apiresponse.Error(c, http.StatusInternalServerError, "Failed to create attempt", err)
 			return
 		}
 		// Re-fetch in case another request won the race
 		if attempt.ID == 0 {
-			if err := config.DB.Where("exam_id = ? AND user_id = ?", exam.ID, userID).First(&attempt).Error; err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create attempt"})
+			if err := h.db.Where("exam_id = ? AND user_id = ?", exam.ID, userID).First(&attempt).Error; err != nil {
+				apiresponse.Error(c, http.StatusInternalServerError, "Failed to create attempt", err)
 				return
 			}
 			if attempt.Status == "completed" {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "You have already submitted this exam", "attempt": attempt})
+				apiresponse.ErrorWithData(c, http.StatusBadRequest, "You have already submitted this exam", apiresponse.ErrorData{Attempt: attempt})
 				return
 			}
 		}
@@ -369,24 +380,22 @@ func StudentStartExam(c *gin.Context) {
 	}
 
 	// Load saved answers
-	var savedAnswers []struct {
-		QuestionID   uint    `json:"question_id"`
-		ChosenOption *string `json:"chosen_option"`
-	}
-	config.DB.Table("attempt_answers").
+	var savedAnswers []SavedAnswerDTO
+	if err := h.db.Table("attempt_answers").
 		Select("question_id, chosen_option").
 		Where("attempt_id = ?", attempt.ID).
-		Scan(&savedAnswers)
+		Scan(&savedAnswers).Error; err != nil {
+		apiresponse.Error(c, http.StatusInternalServerError, "Failed to load saved answers", err)
+		return
+	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"attempt":           attempt,
-		"remaining_seconds": remainingSeconds,
-		"questions":         safeQuestions,
-		"saved_answers":     savedAnswers,
+	apiresponse.JSON(c, http.StatusOK, StartExamResponse{
+		ResponseMeta: ResponseMeta{Code: "EXAM_STARTED"},
+		Attempt:      attempt, RemainingSeconds: remainingSeconds, Questions: safeQuestions, SavedAnswers: savedAnswers,
 	})
 }
 
-// ─── POST /api/student/attempts/:attempt_id/save ─────────────────────────────
+// â”€â”€â”€ POST /api/student/attempts/:attempt_id/save â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 type SaveAnswerInput struct {
 	QuestionID   uint   `json:"question_id" binding:"required"`
@@ -400,7 +409,7 @@ type SaveAnswersInput struct {
 	ChosenOption string `json:"chosen_option" binding:"omitempty,oneof=A B C D"`
 }
 
-func StudentSaveAnswers(c *gin.Context) {
+func (h *StudentHandler) StudentSaveAnswers(c *gin.Context) {
 	userID, _ := c.Get("user_id")
 	attemptID, ok := parseUintParam(c, "attempt_id")
 	if !ok {
@@ -409,7 +418,7 @@ func StudentSaveAnswers(c *gin.Context) {
 
 	var input SaveAnswersInput
 	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		apiresponse.Validation(c, err)
 		return
 	}
 
@@ -422,14 +431,14 @@ func StudentSaveAnswers(c *gin.Context) {
 		}}
 	}
 	if len(answers) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "No answers provided"})
+		apiresponse.Error(c, http.StatusBadRequest, "No answers provided")
 		return
 	}
 
 	var expiredAutoGraded bool
 	var gradedAttempt models.ExamAttempt
 
-	err := config.DB.Transaction(func(tx *gorm.DB) error {
+	err := h.db.Transaction(func(tx *gorm.DB) error {
 		var attempt models.ExamAttempt
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
 			Where("id = ? AND user_id = ?", attemptID, userID).
@@ -448,7 +457,7 @@ func StudentSaveAnswers(c *gin.Context) {
 		now := time.Now()
 		deadline := attemptDeadline(attempt.StartedAt, exam)
 		if now.After(deadline.Add(saveGracePeriod)) {
-			// Past grace period — grade with previously saved answers only; reject new saves
+			// Past grace period â€” grade with previously saved answers only; reject new saves
 			if err := gradeAttemptInTx(tx, attempt.ID); err != nil {
 				return err
 			}
@@ -467,40 +476,36 @@ func StudentSaveAnswers(c *gin.Context) {
 	})
 
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Attempt not found"})
+		apiresponse.Error(c, http.StatusNotFound, "Attempt not found")
 		return
 	}
 	if errors.Is(err, errAlreadySubmitted) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Exam already submitted"})
+		apiresponse.Error(c, http.StatusBadRequest, "Exam already submitted")
 		return
 	}
 	if errors.Is(err, errTimeExpired) || expiredAutoGraded {
-		c.JSON(http.StatusConflict, gin.H{
-			"error":          "Time is up. Your exam has been automatically submitted.",
-			"auto_submitted": true,
-			"attempt":        gradedAttempt,
-		})
+		apiresponse.ErrorWithData(c, http.StatusConflict, "Time is up. Your exam has been automatically submitted.", apiresponse.ErrorData{AutoSubmitted: true, Attempt: gradedAttempt})
 		return
 	}
 	if err != nil {
 		if strings.Contains(err.Error(), "does not belong") {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			apiresponse.Error(c, http.StatusBadRequest, err.Error())
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save answers"})
+		apiresponse.Error(c, http.StatusInternalServerError, "Failed to save answers", err)
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Answers saved successfully", "saved_at": time.Now()})
+	apiresponse.JSON(c, http.StatusOK, SaveAnswersResponse{ResponseMeta: ResponseMeta{Code: "ANSWERS_SAVED"}, Message: apiresponse.SuccessMessage(c, "ANSWERS_SAVED"), SavedAt: time.Now()})
 }
 
-// ─── POST /api/student/attempts/:attempt_id/submit ───────────────────────────
+// â”€â”€â”€ POST /api/student/attempts/:attempt_id/submit â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 type FinalAnswerInput struct {
 	Answers []SaveAnswerInput `json:"answers" binding:"omitempty,dive"`
 }
 
-func StudentSubmitExam(c *gin.Context) {
+func (h *StudentHandler) StudentSubmitExam(c *gin.Context) {
 	userID, _ := c.Get("user_id")
 	attemptID, ok := parseUintParam(c, "attempt_id")
 	if !ok {
@@ -509,13 +514,13 @@ func StudentSubmitExam(c *gin.Context) {
 
 	var input FinalAnswerInput
 	if err := c.ShouldBindJSON(&input); err != nil && !errors.Is(err, io.EOF) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		apiresponse.Validation(c, err)
 		return
 	}
 
 	var finalAttempt models.ExamAttempt
 
-	err := config.DB.Transaction(func(tx *gorm.DB) error {
+	err := h.db.Transaction(func(tx *gorm.DB) error {
 		var attempt models.ExamAttempt
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
 			Where("id = ? AND user_id = ?", attemptID, userID).
@@ -550,31 +555,28 @@ func StudentSubmitExam(c *gin.Context) {
 	})
 
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Attempt not found"})
+		apiresponse.Error(c, http.StatusNotFound, "Attempt not found")
 		return
 	}
 	if errors.Is(err, errAlreadySubmitted) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Exam already submitted"})
+		apiresponse.Error(c, http.StatusBadRequest, "Exam already submitted")
 		return
 	}
 	if err != nil {
 		if strings.Contains(err.Error(), "does not belong") {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			apiresponse.Error(c, http.StatusBadRequest, err.Error())
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to grade exam"})
+		apiresponse.Error(c, http.StatusInternalServerError, "Failed to grade exam", err)
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"message": "Exam submitted and graded successfully",
-		"attempt": finalAttempt,
-	})
+	apiresponse.JSON(c, http.StatusOK, SubmitExamResponse{ResponseMeta: ResponseMeta{Code: "EXAM_SUBMITTED"}, Message: apiresponse.SuccessMessage(c, "EXAM_SUBMITTED"), Attempt: finalAttempt})
 }
 
-// ─── GET /api/student/attempts/:attempt_id/result ────────────────────────────
+// â”€â”€â”€ GET /api/student/attempts/:attempt_id/result â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-func StudentGetResult(c *gin.Context) {
+func (h *StudentHandler) StudentGetResult(c *gin.Context) {
 	userID, _ := c.Get("user_id")
 	attemptID, ok := parseUintParam(c, "attempt_id")
 	if !ok {
@@ -582,42 +584,34 @@ func StudentGetResult(c *gin.Context) {
 	}
 
 	var attempt models.ExamAttempt
-	if err := config.DB.Where("id = ? AND user_id = ?", attemptID, userID).First(&attempt).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Attempt not found"})
+	if err := h.db.Where("id = ? AND user_id = ?", attemptID, userID).First(&attempt).Error; err != nil {
+		lookupFailure(c, err, http.StatusNotFound, "Attempt not found", "Failed to load exam attempt")
 		return
 	}
 	if attempt.Status != "completed" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Exam not yet submitted"})
+		apiresponse.Error(c, http.StatusBadRequest, "Exam not yet submitted")
 		return
 	}
 
 	var exam models.Exam
-	config.DB.First(&exam, attempt.ExamID)
+	if err := h.db.First(&exam, attempt.ExamID).Error; err != nil {
+		lookupFailure(c, err, http.StatusNotFound, "Exam not found", "Failed to load exam result")
+		return
+	}
 
 	now := time.Now()
 	showCorrectAnswers := now.After(exam.EndTime)
 
-	type AnswerDetail struct {
-		QuestionID    uint    `json:"question_id"`
-		Prompt        string  `json:"prompt"`
-		OptionA       string  `json:"option_a"`
-		OptionB       string  `json:"option_b"`
-		OptionC       string  `json:"option_c"`
-		OptionD       string  `json:"option_d"`
-		CorrectOption *string `json:"correct_option,omitempty"`
-		ChosenOption  *string `json:"chosen_option"`
-		IsCorrect     bool    `json:"is_correct"`
-		PointsAwarded float64 `json:"points_awarded"`
-		Points        float64 `json:"points"`
-	}
-
-	var answers []AnswerDetail
-	config.DB.Table("attempt_answers aa").
+	var answers []AnswerDetailDTO
+	if err := h.db.Table("attempt_answers aa").
 		Select("aa.question_id, q.prompt, q.option_a, q.option_b, q.option_c, q.option_d, q.correct_option, aa.chosen_option, aa.is_correct, aa.points_awarded, q.points").
 		Joins("JOIN questions q ON q.id = aa.question_id").
 		Where("aa.attempt_id = ?", attemptID).
 		Order("q.sort_order ASC").
-		Scan(&answers)
+		Scan(&answers).Error; err != nil {
+		apiresponse.Error(c, http.StatusInternalServerError, "Failed to load exam answers", err)
+		return
+	}
 
 	if !showCorrectAnswers {
 		for i := range answers {
@@ -625,15 +619,13 @@ func StudentGetResult(c *gin.Context) {
 		}
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"attempt":              attempt,
-		"exam":                 exam,
-		"show_correct_answers": showCorrectAnswers,
-		"answers":              answers,
+	apiresponse.JSON(c, http.StatusOK, ExamResultResponse{
+		ResponseMeta: ResponseMeta{Code: "EXAM_RESULT_RETRIEVED"},
+		Attempt:      attempt, Exam: exam, ShowCorrectAnswers: showCorrectAnswers, Answers: answers,
 	})
 }
 
-// ─── Internal grading helpers ────────────────────────────────────────────────
+// â”€â”€â”€ Internal grading helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 var (
 	errAlreadySubmitted = errors.New("already submitted")
@@ -641,8 +633,8 @@ var (
 )
 
 // gradeAttemptInTransaction wraps gradeAttemptInTx in its own DB transaction.
-func gradeAttemptInTransaction(attemptID uint) error {
-	return config.DB.Transaction(func(tx *gorm.DB) error {
+func gradeAttemptInTransaction(db *gorm.DB, attemptID uint) error {
+	return db.Transaction(func(tx *gorm.DB) error {
 		return gradeAttemptInTx(tx, attemptID)
 	})
 }
@@ -680,7 +672,7 @@ func gradeAttemptInTx(tx *gorm.DB, attemptID uint) error {
 	for _, q := range questions {
 		ans, exists := ansMap[q.ID]
 		if !exists {
-			// Unanswered — create blank record and count as wrong
+			// Unanswered â€” create blank record and count as wrong
 			if err := tx.Exec(`
 				INSERT INTO attempt_answers (attempt_id, question_id, chosen_option, is_correct, points_awarded, updated_at)
 				VALUES (?, ?, NULL, false, 0, ?)
