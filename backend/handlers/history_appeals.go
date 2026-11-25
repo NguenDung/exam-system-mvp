@@ -2,13 +2,14 @@ package handlers
 
 import (
 	"errors"
+	"exam-system-mvp/apiresponse"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
 
-	"exam-system-mvp/config"
 	"exam-system-mvp/models"
 
 	"github.com/gin-gonic/gin"
@@ -58,21 +59,27 @@ type StudentHistoryItem struct {
 }
 
 // StudentGetHistory returns a paginated list of completed exams taken by the student.
-func StudentGetHistory(c *gin.Context) {
+func (h *StudentHandler) StudentGetHistory(c *gin.Context) {
 	userID, _ := c.Get("user_id")
 
 	// Proactively grade any expired in-progress attempts so they appear in history
 	var examIDs []uint
-	config.DB.Model(&models.ExamAttempt{}).
+	if err := h.db.Model(&models.ExamAttempt{}).
 		Where("user_id = ? AND status = ?", userID, "in_progress").
 		Distinct("exam_id").
-		Pluck("exam_id", &examIDs)
+		Pluck("exam_id", &examIDs).Error; err != nil {
+		apiresponse.Error(c, http.StatusInternalServerError, "Failed to load exam attempts", err)
+		return
+	}
 	for _, eid := range examIDs {
-		gradeExpiredAttempts(eid)
+		if err := gradeExpiredAttempts(h.db, eid); err != nil {
+			apiresponse.Error(c, http.StatusInternalServerError, "Failed to submit expired attempts", err)
+			return
+		}
 	}
 
 	paging := parsePagination(c)
-	query := config.DB.Table("exam_attempts ea").
+	query := h.db.Table("exam_attempts ea").
 		Joins("JOIN exams e ON e.id = ea.exam_id").
 		Where("ea.user_id = ? AND ea.status = ?", userID, "completed")
 
@@ -81,7 +88,7 @@ func StudentGetHistory(c *gin.Context) {
 	}
 	if status := strings.TrimSpace(c.Query("appeal_status")); status != "" {
 		if !isAppealStatus(status) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid appeal_status"})
+			apiresponse.Error(c, http.StatusBadRequest, "Invalid appeal_status")
 			return
 		}
 		query = query.Where(`
@@ -92,7 +99,7 @@ func StudentGetHistory(c *gin.Context) {
 		`, status)
 	}
 	if err := query.Count(&paging.Total).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load exam history"})
+		apiresponse.Error(c, http.StatusInternalServerError, "Failed to load exam history", err)
 		return
 	}
 
@@ -119,11 +126,11 @@ func StudentGetHistory(c *gin.Context) {
 		Limit(paging.PageSize).
 		Scan(&items).Error
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load exam history"})
+		apiresponse.Error(c, http.StatusInternalServerError, "Failed to load exam history", err)
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"items": items, "pagination": paging})
+	apiresponse.JSON(c, http.StatusOK, HistoryResponse{ResponseMeta: ResponseMeta{Code: "EXAM_HISTORY_LISTED"}, Items: items, Pagination: paging})
 }
 
 type HistoryAnswer struct {
@@ -142,7 +149,7 @@ type HistoryAnswer struct {
 }
 
 // StudentGetHistoryDetail returns full details of a completed exam submission including review answers and appeals.
-func StudentGetHistoryDetail(c *gin.Context) {
+func (h *StudentHandler) StudentGetHistoryDetail(c *gin.Context) {
 	userID, _ := c.Get("user_id")
 	submissionID, ok := parseUintParam(c, "submissionId")
 	if !ok {
@@ -150,20 +157,20 @@ func StudentGetHistoryDetail(c *gin.Context) {
 	}
 
 	var attempt models.ExamAttempt
-	if err := config.DB.Where("id = ? AND user_id = ? AND status = 'completed'", submissionID, userID).
+	if err := h.db.Where("id = ? AND user_id = ? AND status = 'completed'", submissionID, userID).
 		First(&attempt).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Submission not found"})
+		lookupFailure(c, err, http.StatusNotFound, "Submission not found", "Failed to load submission")
 		return
 	}
 
 	var exam models.Exam
-	if err := config.DB.First(&exam, attempt.ExamID).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Exam not found"})
+	if err := h.db.First(&exam, attempt.ExamID).Error; err != nil {
+		lookupFailure(c, err, http.StatusNotFound, "Exam not found", "Failed to load exam")
 		return
 	}
 
 	answers := make([]HistoryAnswer, 0)
-	err := config.DB.Table("questions q").
+	err := h.db.Table("questions q").
 		Select(`
 			q.id AS question_id, q.sort_order, q.prompt,
 			q.option_a, q.option_b, q.option_c, q.option_d,
@@ -175,77 +182,78 @@ func StudentGetHistoryDetail(c *gin.Context) {
 		Order("q.sort_order ASC, q.id ASC").
 		Scan(&answers).Error
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load submission details"})
+		apiresponse.Error(c, http.StatusInternalServerError, "Failed to load submission details", err)
 		return
 	}
 
 	var maxScore float64
-	if err := config.DB.Model(&models.Question{}).Where("exam_id = ?", exam.ID).
+	if err := h.db.Model(&models.Question{}).Where("exam_id = ?", exam.ID).
 		Select("COALESCE(SUM(points), 0)").Scan(&maxScore).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load exam score"})
+		apiresponse.Error(c, http.StatusInternalServerError, "Failed to load exam score", err)
 		return
 	}
 
 	var appeals []models.Appeal
-	if err := config.DB.Where("submission_id = ? AND student_id = ?", attempt.ID, userID).
+	if err := h.db.Where("submission_id = ? AND student_id = ?", attempt.ID, userID).
 		Order("created_at DESC, id DESC").Find(&appeals).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load appeals"})
+		apiresponse.Error(c, http.StatusInternalServerError, "Failed to load appeals", err)
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"submission_id": attempt.ID,
-		"exam": gin.H{
-			"id": exam.ID, "title": exam.Title, "exam_code": exam.ExamCode,
-		},
-		"score": attempt.Score, "max_score": maxScore,
-		"started_at": attempt.StartedAt, "submitted_at": attempt.SubmittedAt,
-		"answers": answers, "appeals": appeals,
+	apiresponse.JSON(c, http.StatusOK, HistoryDetailResponse{
+		ResponseMeta: ResponseMeta{Code: "SUBMISSION_DETAIL_RETRIEVED"},
+		SubmissionID: attempt.ID,
+		Exam:         ExamSummaryDTO{ID: exam.ID, Title: exam.Title, ExamCode: exam.ExamCode},
+		Score:        attempt.Score, MaxScore: maxScore, StartedAt: attempt.StartedAt,
+		SubmittedAt: attempt.SubmittedAt, Answers: answers, Appeals: appeals,
 	})
 }
 
 type CreateAppealInput struct {
 	SubmissionID uint   `json:"submissionId" binding:"required"`
 	Title        string `json:"title" binding:"max=255"`
-	Content      string `json:"content" binding:"required"`
+	Content      string `json:"content" binding:"required,min=10,max=1000"`
 }
 
 // StudentCreateAppeal creates a new appeal for a completed submission.
-func StudentCreateAppeal(c *gin.Context) {
+func (h *StudentHandler) StudentCreateAppeal(c *gin.Context) {
 	userID, _ := c.Get("user_id")
 	var input CreateAppealInput
 	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		apiresponse.Validation(c, err)
 		return
 	}
 
 	input.Title = strings.TrimSpace(input.Title)
 	input.Content = strings.TrimSpace(input.Content)
 	if utf8.RuneCountInString(input.Content) < 10 || utf8.RuneCountInString(input.Content) > 1000 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "content must contain between 10 and 1000 characters"})
+		apiresponse.Error(c, http.StatusBadRequest, "content must contain between 10 and 1000 characters")
 		return
 	}
 
 	var attempt models.ExamAttempt
-	if err := config.DB.Where("id = ? AND user_id = ? AND status = 'completed'", input.SubmissionID, userID).
+	if err := h.db.Where("id = ? AND user_id = ? AND status = 'completed'", input.SubmissionID, userID).
 		First(&attempt).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Completed submission not found"})
+		lookupFailure(c, err, http.StatusNotFound, "Completed submission not found", "Failed to load submission for appeal")
 		return
 	}
 
 	var exam models.Exam
-	if err := config.DB.First(&exam, attempt.ExamID).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Exam not found"})
+	if err := h.db.First(&exam, attempt.ExamID).Error; err != nil {
+		lookupFailure(c, err, http.StatusNotFound, "Exam not found", "Failed to load exam")
 		return
 	}
 
 	// Prevent duplicate pending appeals on the same submission
 	var pendingCount int64
-	config.DB.Model(&models.Appeal{}).
+	if err := h.db.Model(&models.Appeal{}).
 		Where("submission_id = ? AND student_id = ? AND status = ?", attempt.ID, userID, models.AppealStatusPending).
-		Count(&pendingCount)
+		Count(&pendingCount).Error; err != nil {
+		apiresponse.Error(c, http.StatusInternalServerError, "Failed to check pending appeals", err)
+		return
+	}
 	if pendingCount > 0 {
-		c.JSON(http.StatusConflict, gin.H{"error": "Bạn đã có khiếu nại đang chờ xử lý cho bài thi này."})
+		apiresponse.Error(c, http.StatusConflict, "Bạn đã có khiếu nại đang chờ xử lý cho bài thi này.")
 		return
 	}
 
@@ -263,11 +271,11 @@ func StudentCreateAppeal(c *gin.Context) {
 		Content:      input.Content,
 		Status:       models.AppealStatusPending,
 	}
-	if err := config.DB.Create(&appeal).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create appeal"})
+	if err := h.db.Create(&appeal).Error; err != nil {
+		apiresponse.Error(c, http.StatusInternalServerError, "Failed to create appeal", err)
 		return
 	}
-	c.JSON(http.StatusCreated, gin.H{"message": "Gửi khiếu nại thành công.", "appeal": appeal})
+	apiresponse.JSON(c, http.StatusCreated, AppealCreatedResponse{ResponseMeta: ResponseMeta{Code: "APPEAL_CREATED"}, Message: apiresponse.SuccessMessage(c, "APPEAL_CREATED"), Appeal: appeal})
 }
 
 func isAppealStatus(status string) bool {
@@ -295,25 +303,25 @@ type TeacherAppealItem struct {
 }
 
 // TeacherListExamAppeals lists all appeals for a specific exam owned by the teacher.
-func TeacherListExamAppeals(c *gin.Context) {
+func (h *TeacherHandler) TeacherListExamAppeals(c *gin.Context) {
 	teacherID, _ := c.Get("user_id")
 	examID, ok := parseUintParam(c, "id")
 	if !ok {
 		return
 	}
 	var exam models.Exam
-	if err := config.DB.Where("id = ? AND teacher_id = ?", examID, teacherID).First(&exam).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Exam not found"})
+	if err := h.db.Where("id = ? AND teacher_id = ?", examID, teacherID).First(&exam).Error; err != nil {
+		lookupFailure(c, err, http.StatusNotFound, "Exam not found", "Failed to load exam")
 		return
 	}
 
 	paging := parsePagination(c)
-	query := config.DB.Table("appeals ap").
+	query := h.db.Table("appeals ap").
 		Joins("JOIN users u ON u.id = ap.student_id").
 		Where("ap.exam_id = ? AND ap.teacher_id = ?", exam.ID, teacherID)
 	if status := strings.TrimSpace(c.Query("status")); status != "" {
 		if !isAppealStatus(status) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid status"})
+			apiresponse.Error(c, http.StatusBadRequest, "Invalid status")
 			return
 		}
 		query = query.Where("ap.status = ?", status)
@@ -323,7 +331,7 @@ func TeacherListExamAppeals(c *gin.Context) {
 		query = query.Where("(LOWER(u.full_name) LIKE ? OR LOWER(ap.title) LIKE ? OR LOWER(ap.content) LIKE ?)", like, like, like)
 	}
 	if err := query.Count(&paging.Total).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load appeals"})
+		apiresponse.Error(c, http.StatusInternalServerError, "Failed to load appeals", err)
 		return
 	}
 
@@ -340,10 +348,10 @@ func TeacherListExamAppeals(c *gin.Context) {
 		Limit(paging.PageSize).
 		Scan(&items).Error
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load appeals"})
+		apiresponse.Error(c, http.StatusInternalServerError, "Failed to load appeals", err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"items": items, "pagination": paging})
+	apiresponse.JSON(c, http.StatusOK, AppealsResponse{ResponseMeta: ResponseMeta{Code: "APPEALS_LISTED"}, Items: items, Pagination: paging})
 }
 
 type TeacherAppealAnswer struct {
@@ -361,7 +369,7 @@ type TeacherAppealAnswer struct {
 }
 
 // TeacherGetAppeal gets detail of a single appeal.
-func TeacherGetAppeal(c *gin.Context) {
+func (h *TeacherHandler) TeacherGetAppeal(c *gin.Context) {
 	teacherID, _ := c.Get("user_id")
 	appealID, ok := parseUintParam(c, "appealId")
 	if !ok {
@@ -369,38 +377,38 @@ func TeacherGetAppeal(c *gin.Context) {
 	}
 
 	var appeal models.Appeal
-	if err := config.DB.Where(`
+	if err := h.db.Where(`
 		id = ? AND teacher_id = ?
 		AND EXISTS (SELECT 1 FROM exams e WHERE e.id = appeals.exam_id AND e.teacher_id = ?)
 	`, appealID, teacherID, teacherID).First(&appeal).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Appeal not found"})
+		lookupFailure(c, err, http.StatusNotFound, "Appeal not found", "Failed to load appeal")
 		return
 	}
 
-	var student models.User
-	if err := config.DB.Select("id, full_name, email").First(&student, appeal.StudentID).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load student"})
+	var student StudentSummaryDTO
+	if err := h.db.Select("id, full_name, email").First(&student, appeal.StudentID).Error; err != nil {
+		apiresponse.Error(c, http.StatusInternalServerError, "Failed to load student", err)
 		return
 	}
 	var exam models.Exam
-	if err := config.DB.First(&exam, appeal.ExamID).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load exam"})
+	if err := h.db.First(&exam, appeal.ExamID).Error; err != nil {
+		apiresponse.Error(c, http.StatusInternalServerError, "Failed to load exam", err)
 		return
 	}
 	var attempt models.ExamAttempt
-	if err := config.DB.Where("id = ? AND exam_id = ? AND user_id = ?", appeal.SubmissionID, appeal.ExamID, appeal.StudentID).
+	if err := h.db.Where("id = ? AND exam_id = ? AND user_id = ?", appeal.SubmissionID, appeal.ExamID, appeal.StudentID).
 		First(&attempt).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load submission"})
+		apiresponse.Error(c, http.StatusInternalServerError, "Failed to load submission", err)
 		return
 	}
 	var maxScore float64
-	if err := config.DB.Model(&models.Question{}).Where("exam_id = ?", exam.ID).
+	if err := h.db.Model(&models.Question{}).Where("exam_id = ?", exam.ID).
 		Select("COALESCE(SUM(points), 0)").Scan(&maxScore).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load exam score"})
+		apiresponse.Error(c, http.StatusInternalServerError, "Failed to load exam score", err)
 		return
 	}
 	answers := make([]TeacherAppealAnswer, 0)
-	err := config.DB.Table("questions q").
+	err := h.db.Table("questions q").
 		Select(`
 			q.id AS question_id, q.sort_order, q.prompt,
 			q.option_a, q.option_b, q.option_c, q.option_d,
@@ -411,65 +419,68 @@ func TeacherGetAppeal(c *gin.Context) {
 		Order("q.sort_order ASC, q.id ASC").
 		Scan(&answers).Error
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load submission answers"})
+		apiresponse.Error(c, http.StatusInternalServerError, "Failed to load submission answers", err)
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"appeal": appeal, "student": student,
-		"exam": gin.H{"id": exam.ID, "title": exam.Title},
-		"submission": gin.H{
-			"id": attempt.ID, "score": attempt.Score, "max_score": maxScore,
-			"started_at": attempt.StartedAt, "submitted_at": attempt.SubmittedAt,
-		},
-		"answers": answers,
+	apiresponse.JSON(c, http.StatusOK, TeacherAppealDetailResponse{
+		ResponseMeta: ResponseMeta{Code: "APPEAL_DETAIL_RETRIEVED"},
+		Appeal:       appeal, Student: student, Exam: ExamSummaryDTO{ID: exam.ID, Title: exam.Title},
+		Submission: SubmissionSummaryDTO{ID: attempt.ID, Score: attempt.Score, MaxScore: maxScore,
+			StartedAt: attempt.StartedAt, SubmittedAt: attempt.SubmittedAt}, Answers: answers,
 	})
 }
 
 type AppealReplyInput struct {
-	Response string `json:"response"`
+	Response string `json:"response" binding:"omitempty,max=2000"`
 }
 
 // TeacherReplyAppeal allows a teacher to respond to an appeal.
-func TeacherReplyAppeal(c *gin.Context) {
+func (h *TeacherHandler) TeacherReplyAppeal(c *gin.Context) {
 	var input AppealReplyInput
 	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		apiresponse.Validation(c, err)
 		return
 	}
 	response := strings.TrimSpace(input.Response)
 	if response == "" || utf8.RuneCountInString(response) > 2000 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "response must contain between 1 and 2000 characters"})
+		apiresponse.Error(c, http.StatusBadRequest, "response must contain between 1 and 2000 characters")
 		return
 	}
-	updateAppealStatus(c, models.AppealStatusReplied, &response)
+	h.updateAppealStatus(c, models.AppealStatusReplied, &response)
 }
 
 // TeacherRejectAppeal marks an appeal as rejected, with an optional teacher response note.
-func TeacherRejectAppeal(c *gin.Context) {
+func (h *TeacherHandler) TeacherRejectAppeal(c *gin.Context) {
 	var input AppealReplyInput
-	_ = c.ShouldBindJSON(&input)
+	if err := c.ShouldBindJSON(&input); err != nil && !errors.Is(err, io.EOF) {
+		apiresponse.Validation(c, err)
+		return
+	}
 	var resp *string
 	trimmed := strings.TrimSpace(input.Response)
 	if trimmed != "" {
 		resp = &trimmed
 	}
-	updateAppealStatus(c, models.AppealStatusRejected, resp)
+	h.updateAppealStatus(c, models.AppealStatusRejected, resp)
 }
 
 // TeacherResolveAppeal marks an appeal as resolved, with an optional teacher response note.
-func TeacherResolveAppeal(c *gin.Context) {
+func (h *TeacherHandler) TeacherResolveAppeal(c *gin.Context) {
 	var input AppealReplyInput
-	_ = c.ShouldBindJSON(&input)
+	if err := c.ShouldBindJSON(&input); err != nil && !errors.Is(err, io.EOF) {
+		apiresponse.Validation(c, err)
+		return
+	}
 	var resp *string
 	trimmed := strings.TrimSpace(input.Response)
 	if trimmed != "" {
 		resp = &trimmed
 	}
-	updateAppealStatus(c, models.AppealStatusResolved, resp)
+	h.updateAppealStatus(c, models.AppealStatusResolved, resp)
 }
 
-func updateAppealStatus(c *gin.Context, status string, response *string) {
+func (h *TeacherHandler) updateAppealStatus(c *gin.Context, status string, response *string) {
 	teacherID, _ := c.Get("user_id")
 	appealID, ok := parseUintParam(c, "appealId")
 	if !ok {
@@ -477,7 +488,7 @@ func updateAppealStatus(c *gin.Context, status string, response *string) {
 	}
 
 	var appeal models.Appeal
-	err := config.DB.Transaction(func(tx *gorm.DB) error {
+	err := h.db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
 			Where(`
 				id = ? AND teacher_id = ?
@@ -500,20 +511,20 @@ func updateAppealStatus(c *gin.Context, status string, response *string) {
 		return tx.Model(&appeal).Updates(updates).Error
 	})
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Appeal not found"})
+		apiresponse.Error(c, http.StatusNotFound, "Appeal not found")
 		return
 	}
 	if err != nil {
 		if errors.Is(err, errAppealClosed) {
-			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+			apiresponse.Error(c, http.StatusConflict, err.Error())
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update appeal"})
+		apiresponse.Error(c, http.StatusInternalServerError, "Failed to update appeal", err)
 		return
 	}
-	if err := config.DB.First(&appeal, appeal.ID).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load updated appeal"})
+	if err := h.db.First(&appeal, appeal.ID).Error; err != nil {
+		apiresponse.Error(c, http.StatusInternalServerError, "Failed to load updated appeal", err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"appeal": appeal})
+	apiresponse.JSON(c, http.StatusOK, AppealResponse{ResponseMeta: ResponseMeta{Code: "APPEAL_UPDATED"}, Appeal: appeal})
 }

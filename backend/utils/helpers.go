@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -28,16 +29,29 @@ func GetJWTSecret() string {
 	return defaultJWTSecret
 }
 
+func GetJWTExpiry() time.Duration {
+	hours := 24
+	if value, ok := os.LookupEnv("JWT_EXPIRY_HOURS"); ok {
+		if parsed, err := strconv.Atoi(value); err == nil && parsed > 0 {
+			hours = parsed
+		}
+	}
+	return time.Duration(hours) * time.Hour
+}
+
 // GenerateJWT creates a signed JWT for the given user.
 func GenerateJWT(userID uint, email, role string) (string, error) {
-	secret := GetJWTSecret()
+	return GenerateJWTWithConfig(userID, email, role, GetJWTSecret(), GetJWTExpiry())
+}
+
+func GenerateJWTWithConfig(userID uint, email, role, secret string, expiry time.Duration) (string, error) {
 
 	claims := Claims{
 		UserID: userID,
 		Email:  email,
 		Role:   role,
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(expiry)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 		},
 	}

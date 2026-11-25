@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strings"
 
+	"exam-system-mvp/apiresponse"
 	"exam-system-mvp/utils"
 
 	"github.com/gin-gonic/gin"
@@ -15,22 +16,26 @@ type Claims = utils.Claims
 
 // AuthRequired validates JWT and injects user info into context.
 func AuthRequired() gin.HandlerFunc {
+	return AuthRequiredWithSecret(utils.GetJWTSecret())
+}
+
+func AuthRequiredWithSecret(secret string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Authorization header required"})
+			apiresponse.Error(c, http.StatusUnauthorized, "Authorization header required")
+			c.Abort()
 			return
 		}
 
 		parts := strings.SplitN(authHeader, " ", 2)
 		if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid Authorization header format"})
+			apiresponse.Error(c, http.StatusUnauthorized, "Invalid Authorization header format")
+			c.Abort()
 			return
 		}
 
 		tokenStr := parts[1]
-		secret := utils.GetJWTSecret()
-
 		claims := &Claims{}
 		token, err := jwt.ParseWithClaims(tokenStr, claims, func(t *jwt.Token) (interface{}, error) {
 			if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
@@ -40,7 +45,8 @@ func AuthRequired() gin.HandlerFunc {
 		})
 
 		if err != nil || !token.Valid {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid or expired token"})
+			apiresponse.Error(c, http.StatusUnauthorized, "Invalid or expired token", err)
+			c.Abort()
 			return
 		}
 
@@ -62,7 +68,8 @@ func RequireRole(roles ...string) gin.HandlerFunc {
 		role, _ := c.Get("role")
 		roleStr, _ := role.(string)
 		if _, ok := allowed[roleStr]; !ok {
-			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "Access denied: insufficient role"})
+			apiresponse.Error(c, http.StatusForbidden, "Access denied: insufficient role")
+			c.Abort()
 			return
 		}
 		c.Next()
