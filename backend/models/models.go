@@ -16,46 +16,44 @@ const (
 	AppealStatusResolved = "RESOLVED"
 )
 
-// ─── User ────────────────────────────────────────────────────────────────────
-
 type User struct {
 	ID           uint           `gorm:"primaryKey;autoIncrement" json:"id"`
 	Email        string         `gorm:"uniqueIndex;not null;size:255" json:"email"`
 	PasswordHash string         `gorm:"not null" json:"-"`
 	FullName     string         `gorm:"not null;size:255" json:"full_name"`
 	Role         string         `gorm:"not null;default:'student';size:20;check:chk_users_role,role IN ('teacher','student')" json:"role"`
+	AvatarURL    string         `gorm:"type:text" json:"avatar_url"`
+	Bio          string         `gorm:"type:text" json:"bio"`
+	Department   string         `gorm:"size:255" json:"department"`
+	StudentCode  string         `gorm:"size:50;index" json:"student_code"`
 	CreatedAt    time.Time      `json:"created_at"`
 	UpdatedAt    time.Time      `json:"updated_at"`
 	DeletedAt    gorm.DeletedAt `gorm:"index" json:"-"`
 
-	// Associations
 	Exams        []Exam        `gorm:"foreignKey:TeacherID" json:"-"`
 	ExamAttempts []ExamAttempt `gorm:"foreignKey:UserID" json:"-"`
 }
 
-// ─── Exam ────────────────────────────────────────────────────────────────────
-
 type Exam struct {
 	ID          uint           `gorm:"primaryKey;autoIncrement" json:"id"`
 	TeacherID   uint           `gorm:"not null;index" json:"teacher_id"`
+	ClassroomID *uint          `gorm:"index" json:"classroom_id,omitempty"`
 	ExamCode    string         `gorm:"uniqueIndex;size:20" json:"exam_code"`
 	Title       string         `gorm:"not null;size:500" json:"title"`
-	Duration    int            `gorm:"not null" json:"duration"` // minutes
+	Description string         `gorm:"type:text" json:"description"`
+	Duration    int            `gorm:"not null" json:"duration"`
 	StartTime   time.Time      `json:"start_time"`
 	EndTime     time.Time      `json:"end_time"`
 	PublishedAt *time.Time     `json:"published_at"`
-	Status      string         `gorm:"not null;default:'draft';size:20" json:"status"` // 'draft' | 'published'
+	Status      string         `gorm:"not null;default:'draft';size:20" json:"status"`
 	CreatedAt   time.Time      `json:"created_at"`
 	UpdatedAt   time.Time      `json:"updated_at"`
 	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"`
 
-	// Associations
 	Teacher   User       `gorm:"foreignKey:TeacherID" json:"-"`
 	Questions []Question `gorm:"foreignKey:ExamID;constraint:OnDelete:CASCADE" json:"questions,omitempty"`
 	Appeals   []Appeal   `gorm:"foreignKey:ExamID" json:"-"`
 }
-
-// ─── Question ────────────────────────────────────────────────────────────────
 
 type Question struct {
 	ID            uint      `gorm:"primaryKey;autoIncrement" json:"id"`
@@ -66,13 +64,12 @@ type Question struct {
 	OptionB       string    `gorm:"not null;type:text" json:"option_b"`
 	OptionC       string    `gorm:"not null;type:text" json:"option_c"`
 	OptionD       string    `gorm:"not null;type:text" json:"option_d"`
-	CorrectOption string    `gorm:"not null;size:1" json:"correct_option"` // 'A'|'B'|'C'|'D'
+	CorrectOption string    `gorm:"not null;size:1" json:"correct_option"`
 	Points        float64   `gorm:"not null;default:1.0;type:decimal(5,2)" json:"points"`
 	CreatedAt     time.Time `json:"created_at"`
 	UpdatedAt     time.Time `json:"updated_at"`
 }
 
-// QuestionSafe is returned to students — without correct_option
 type QuestionSafe struct {
 	ID        uint    `json:"id"`
 	ExamID    uint    `json:"exam_id"`
@@ -99,28 +96,25 @@ func ToQuestionSafe(q Question) QuestionSafe {
 	}
 }
 
-// ─── ExamAttempt ─────────────────────────────────────────────────────────────
-
 type ExamAttempt struct {
-	ID           uint       `gorm:"primaryKey;autoIncrement" json:"id"`
-	ExamID       uint       `gorm:"not null;index" json:"exam_id"`
-	UserID       uint       `gorm:"not null;index" json:"user_id"`
-	Status       string     `gorm:"not null;default:'in_progress';size:20" json:"status"` // 'in_progress' | 'completed'
-	Score        float64    `gorm:"not null;default:0;type:decimal(8,2)" json:"score"`
-	CorrectCount int        `gorm:"not null;default:0" json:"correct_count"`
-	WrongCount   int        `gorm:"not null;default:0" json:"wrong_count"`
-	StartedAt    time.Time  `gorm:"not null" json:"started_at"`
-	LastSavedAt  *time.Time `json:"last_saved_at"`
-	SubmittedAt  *time.Time `json:"submitted_at"`
+	ID             uint       `gorm:"primaryKey;autoIncrement" json:"id"`
+	ExamID         uint       `gorm:"not null;index" json:"exam_id"`
+	UserID         uint       `gorm:"not null;index" json:"user_id"`
+	Status         string     `gorm:"not null;default:'in_progress';size:20" json:"status"`
+	Score          float64    `gorm:"not null;default:0;type:decimal(8,2)" json:"score"`
+	TeacherNote    string     `gorm:"type:text" json:"teacher_note"`
+	ViolationCount int        `gorm:"not null;default:0" json:"violation_count"`
+	CorrectCount   int        `gorm:"not null;default:0" json:"correct_count"`
+	WrongCount     int        `gorm:"not null;default:0" json:"wrong_count"`
+	StartedAt      time.Time  `gorm:"not null" json:"started_at"`
+	LastSavedAt    *time.Time `json:"last_saved_at"`
+	SubmittedAt    *time.Time `json:"submitted_at"`
 
-	// Associations
 	Exam           Exam            `gorm:"foreignKey:ExamID" json:"-"`
 	User           User            `gorm:"foreignKey:UserID" json:"-"`
 	AttemptAnswers []AttemptAnswer `gorm:"foreignKey:AttemptID;constraint:OnDelete:CASCADE" json:"-"`
 	Appeals        []Appeal        `gorm:"foreignKey:SubmissionID" json:"-"`
 }
-
-// ─── Appeal ──────────────────────────────────────────────────────────────────
 
 type Appeal struct {
 	ID              uint       `gorm:"primaryKey;autoIncrement" json:"id"`
@@ -142,17 +136,62 @@ type Appeal struct {
 	Teacher    User        `gorm:"foreignKey:TeacherID" json:"-"`
 }
 
-// ─── AttemptAnswer ───────────────────────────────────────────────────────────
-
 type AttemptAnswer struct {
 	ID            uint      `gorm:"primaryKey;autoIncrement" json:"id"`
 	AttemptID     uint      `gorm:"not null;index" json:"attempt_id"`
 	QuestionID    uint      `gorm:"not null;index" json:"question_id"`
-	ChosenOption  *string   `gorm:"size:1" json:"chosen_option"` // nullable
+	ChosenOption  *string   `gorm:"size:1" json:"chosen_option"`
 	IsCorrect     bool      `gorm:"not null;default:false" json:"is_correct"`
 	PointsAwarded float64   `gorm:"not null;default:0;type:decimal(5,2)" json:"points_awarded"`
 	UpdatedAt     time.Time `json:"updated_at"`
 
-	// Associations
 	Question Question `gorm:"foreignKey:QuestionID" json:"-"`
+}
+
+type AuditLog struct {
+	ID        uint      `gorm:"primaryKey;autoIncrement" json:"id"`
+	ActorID   uint      `gorm:"not null;index" json:"actor_id"`
+	Action    string    `gorm:"not null;size:100;index" json:"action"`
+	TargetID  uint      `gorm:"not null;index" json:"target_id"`
+	Details   string    `gorm:"type:text" json:"details"`
+	CreatedAt time.Time `gorm:"not null;index" json:"created_at"`
+
+	Actor User `gorm:"foreignKey:ActorID" json:"actor,omitempty"`
+}
+
+type Notification struct {
+	ID        uint      `gorm:"primaryKey;autoIncrement" json:"id"`
+	UserID    uint      `gorm:"not null;index" json:"user_id"`
+	Title     string    `gorm:"not null;size:255" json:"title"`
+	Message   string    `gorm:"not null;type:text" json:"message"`
+	TargetURL string    `gorm:"size:500" json:"target_url"`
+	IsRead    bool      `gorm:"not null;default:false;index" json:"is_read"`
+	CreatedAt time.Time `gorm:"not null;index" json:"created_at"`
+
+	User User `gorm:"foreignKey:UserID" json:"-"`
+}
+
+type Classroom struct {
+	ID          uint           `gorm:"primaryKey;autoIncrement" json:"id"`
+	Name        string         `gorm:"not null;size:255" json:"name"`
+	Code        string         `gorm:"uniqueIndex;not null;size:20" json:"code"`
+	Description string         `gorm:"type:text" json:"description"`
+	TeacherID   uint           `gorm:"not null;index" json:"teacher_id"`
+	CreatedAt   time.Time      `json:"created_at"`
+	UpdatedAt   time.Time      `json:"updated_at"`
+	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"`
+
+	Teacher User              `gorm:"foreignKey:TeacherID" json:"teacher,omitempty"`
+	Members []ClassroomMember `gorm:"foreignKey:ClassroomID;constraint:OnDelete:CASCADE" json:"members,omitempty"`
+	Exams   []Exam            `gorm:"foreignKey:ClassroomID" json:"exams,omitempty"`
+}
+
+type ClassroomMember struct {
+	ID          uint      `gorm:"primaryKey;autoIncrement" json:"id"`
+	ClassroomID uint      `gorm:"not null;index" json:"classroom_id"`
+	StudentID   uint      `gorm:"not null;index" json:"student_id"`
+	JoinedAt    time.Time `gorm:"not null" json:"joined_at"`
+
+	Classroom Classroom `gorm:"foreignKey:ClassroomID" json:"-"`
+	Student   User      `gorm:"foreignKey:StudentID" json:"student,omitempty"`
 }

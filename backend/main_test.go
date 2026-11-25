@@ -2,6 +2,9 @@ package main
 
 import (
 	"bytes"
+	"context"
+	"database/sql"
+	"database/sql/driver"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -12,25 +15,194 @@ import (
 	"time"
 
 	"exam-system-mvp/config"
+	"exam-system-mvp/middleware"
 	"exam-system-mvp/models"
 	"exam-system-mvp/router"
 	"exam-system-mvp/utils"
 
 	"github.com/gin-gonic/gin"
+	"github.com/mattn/go-sqlite3"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
 
-// ─── Test helpers ─────────────────────────────────────────────────────────────
+// SQLite returns expression results (such as COALESCE(e.published_at, ...))
+// with an empty decltype, causing go-sqlite3 to yield raw strings instead of
+// time.Time. This driver wrapper detects timestamp/datetime columns by name
+// and parses them so that sql.Scan into *time.Time succeeds seamlessly in tests.
+
+func init() {
+	sql.Register("sqlite3_test", &testDriver{parent: &sqlite3.SQLiteDriver{}})
+}
+
+type testDriver struct {
+	parent driver.Driver
+}
+
+func (d *testDriver) Open(name string) (driver.Conn, error) {
+	conn, err := d.parent.Open(name)
+	if err != nil {
+		return nil, err
+	}
+	return &testConn{Conn: conn}, nil
+}
+
+type testConn struct {
+	driver.Conn
+}
+
+func (c *testConn) PrepareContext(ctx context.Context, query string) (driver.Stmt, error) {
+	if pc, ok := c.Conn.(driver.ConnPrepareContext); ok {
+		stmt, err := pc.PrepareContext(ctx, query)
+		if err != nil {
+			return nil, err
+		}
+		return &testStmt{Stmt: stmt}, nil
+	}
+	stmt, err := c.Conn.Prepare(query)
+	if err != nil {
+		return nil, err
+	}
+	return &testStmt{Stmt: stmt}, nil
+}
+
+func (c *testConn) Prepare(query string) (driver.Stmt, error) {
+	return c.PrepareContext(context.Background(), query)
+}
+
+func (c *testConn) Exec(query string, args []driver.Value) (driver.Result, error) {
+	if e, ok := c.Conn.(driver.Execer); ok {
+		return e.Exec(query, args)
+	}
+	return nil, driver.ErrSkip
+}
+
+func (c *testConn) ExecContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Result, error) {
+	if ec, ok := c.Conn.(driver.ExecerContext); ok {
+		return ec.ExecContext(ctx, query, args)
+	}
+	dargs := make([]driver.Value, len(args))
+	for i, a := range args {
+		dargs[i] = a.Value
+	}
+	return c.Exec(query, dargs)
+}
+
+func (c *testConn) Query(query string, args []driver.Value) (driver.Rows, error) {
+	if q, ok := c.Conn.(driver.Queryer); ok {
+		rows, err := q.Query(query, args)
+		if err != nil {
+			return nil, err
+		}
+		return &testRows{Rows: rows, cols: rows.Columns()}, nil
+	}
+	return nil, driver.ErrSkip
+}
+
+func (c *testConn) QueryContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
+	if qc, ok := c.Conn.(driver.QueryerContext); ok {
+		rows, err := qc.QueryContext(ctx, query, args)
+		if err != nil {
+			return nil, err
+		}
+		return &testRows{Rows: rows, cols: rows.Columns()}, nil
+	}
+	dargs := make([]driver.Value, len(args))
+	for i, a := range args {
+		dargs[i] = a.Value
+	}
+	return c.Query(query, dargs)
+}
+
+func (c *testConn) BeginTx(ctx context.Context, opts driver.TxOptions) (driver.Tx, error) {
+	if bt, ok := c.Conn.(driver.ConnBeginTx); ok {
+		return bt.BeginTx(ctx, opts)
+	}
+	return c.Conn.Begin()
+}
+
+func (c *testConn) Ping(ctx context.Context) error {
+	if p, ok := c.Conn.(driver.Pinger); ok {
+		return p.Ping(ctx)
+	}
+	return nil
+}
+
+type testStmt struct {
+	driver.Stmt
+}
+
+func (s *testStmt) ExecContext(ctx context.Context, args []driver.NamedValue) (driver.Result, error) {
+	if ec, ok := s.Stmt.(driver.StmtExecContext); ok {
+		return ec.ExecContext(ctx, args)
+	}
+	dargs := make([]driver.Value, len(args))
+	for i, a := range args {
+		dargs[i] = a.Value
+	}
+	return s.Stmt.Exec(dargs)
+}
+
+func (s *testStmt) QueryContext(ctx context.Context, args []driver.NamedValue) (driver.Rows, error) {
+	if qc, ok := s.Stmt.(driver.StmtQueryContext); ok {
+		rows, err := qc.QueryContext(ctx, args)
+		if err != nil {
+			return nil, err
+		}
+		return &testRows{Rows: rows, cols: rows.Columns()}, nil
+	}
+	dargs := make([]driver.Value, len(args))
+	for i, a := range args {
+		dargs[i] = a.Value
+	}
+	rows, err := s.Stmt.Query(dargs)
+	if err != nil {
+		return nil, err
+	}
+	return &testRows{Rows: rows, cols: rows.Columns()}, nil
+}
+
+type testRows struct {
+	driver.Rows
+	cols []string
+}
+
+func (r *testRows) Next(dest []driver.Value) error {
+	err := r.Rows.Next(dest)
+	if err != nil {
+		return err
+	}
+	for i, col := range r.cols {
+		if strings.HasSuffix(col, "_at") || strings.HasSuffix(col, "_time") {
+			if s, ok := dest[i].(string); ok {
+				for _, format := range []string{
+					time.RFC3339Nano,
+					time.RFC3339,
+					"2006-01-02 15:04:05.999999999-07:00",
+					"2006-01-02 15:04:05.999999999",
+					"2006-01-02 15:04:05-07:00",
+					"2006-01-02 15:04:05",
+					"2006-01-02T15:04:05",
+				} {
+					if t, parseErr := time.Parse(format, s); parseErr == nil {
+						dest[i] = t
+						break
+					}
+				}
+			}
+		}
+	}
+	return nil
+}
 
 func setupTestServer(t *testing.T) *gin.Engine {
 	t.Helper()
 
 	// Use a unique SQLite file per test run (in-process, auto-cleaned)
 	dbPath := fmt.Sprintf("file:test_%d?mode=memory&cache=shared&_foreign_keys=on", time.Now().UnixNano())
-	db, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{
+	db, err := gorm.Open(sqlite.Dialector{DriverName: "sqlite3_test", DSN: dbPath}, &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Silent),
 	})
 	if err != nil {
@@ -38,16 +210,21 @@ func setupTestServer(t *testing.T) *gin.Engine {
 	}
 
 	config.DB = db
+	config.EnableSQLitePragmas(db)
 	os.Setenv("JWT_SECRET", "test_secret_key_2026")
 
 	// Migrate schema
 	if err := db.AutoMigrate(
 		&models.User{},
+		&models.Classroom{},
+		&models.ClassroomMember{},
 		&models.Exam{},
 		&models.Question{},
 		&models.ExamAttempt{},
 		&models.AttemptAnswer{},
 		&models.Appeal{},
+		&models.AuditLog{},
+		&models.Notification{},
 	); err != nil {
 		t.Fatalf("AutoMigrate failed: %v", err)
 	}
@@ -55,6 +232,7 @@ func setupTestServer(t *testing.T) *gin.Engine {
 	// SQLite unique index for (exam_id, user_id) and (attempt_id, question_id)
 	db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_ea_exam_user ON exam_attempts(exam_id, user_id)`)
 	db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_aa_attempt_question ON attempt_answers(attempt_id, question_id)`)
+	db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_classroom_members_class_student ON classroom_members(classroom_id, student_id)`)
 
 	models.SeedData(db)
 
@@ -118,7 +296,9 @@ func getFloat(m map[string]interface{}, keys ...string) float64 {
 	return f
 }
 
-// ─── Full integration test ────────────────────────────────────────────────────
+func getUint(m map[string]interface{}, keys ...string) uint {
+	return uint(getFloat(m, keys...))
+}
 
 // TestMVP_FullFlow runs all 6 use-cases sequentially in a single test to share
 // state (tokens, IDs) across the flow.
@@ -128,9 +308,8 @@ func TestMVP_FullFlow(t *testing.T) {
 	var teacherToken, studentToken, examCode string
 	var examID, q1ID, q2ID, attemptID float64
 
-	// ══════════════════════════════════════════════════════════════════════════
 	// UC01 – Register & Login
-	// ══════════════════════════════════════════════════════════════════════════
+
 	t.Run("UC01_Register_Student", func(t *testing.T) {
 		w := do(t, srv, "POST", "/api/auth/register", "", map[string]interface{}{
 			"full_name": "Học Sinh Test",
@@ -219,9 +398,8 @@ func TestMVP_FullFlow(t *testing.T) {
 		}
 	})
 
-	// ══════════════════════════════════════════════════════════════════════════
 	// UC02 – Teacher creates exam, adds questions, publishes
-	// ══════════════════════════════════════════════════════════════════════════
+
 	t.Run("UC02_Create_Exam", func(t *testing.T) {
 		now := time.Now()
 		w := do(t, srv, "POST", "/api/teacher/exams", teacherToken, map[string]interface{}{
@@ -331,9 +509,8 @@ func TestMVP_FullFlow(t *testing.T) {
 		}
 	})
 
-	// ══════════════════════════════════════════════════════════════════════════
 	// UC03 – Student looks up exam by code
-	// ══════════════════════════════════════════════════════════════════════════
+
 	t.Run("UC03_Lookup_Exam_By_Code", func(t *testing.T) {
 		// Student looks up created exam by code
 		w2 := do(t, srv, "GET", "/api/student/exams/lookup?code="+examCode, studentToken, nil)
@@ -356,9 +533,8 @@ func TestMVP_FullFlow(t *testing.T) {
 		}
 	})
 
-	// ══════════════════════════════════════════════════════════════════════════
 	// UC04 – Student starts exam, saves answer, resumes
-	// ══════════════════════════════════════════════════════════════════════════
+
 	t.Run("UC04_Start_Exam", func(t *testing.T) {
 		url := fmt.Sprintf("/api/student/exams/%.0f/start", examID)
 		w := do(t, srv, "POST", url, studentToken, map[string]bool{"confirmed": true})
@@ -437,9 +613,8 @@ func TestMVP_FullFlow(t *testing.T) {
 		}
 	})
 
-	// ══════════════════════════════════════════════════════════════════════════
 	// UC05 – Submit and auto-grade
-	// ══════════════════════════════════════════════════════════════════════════
+
 	t.Run("UC05_Submit_With_Answers", func(t *testing.T) {
 		url := fmt.Sprintf("/api/student/attempts/%.0f/submit", attemptID)
 		// Q1: A (correct, 1pt), Q2: A (wrong, correct=C, 0pt)
@@ -480,9 +655,8 @@ func TestMVP_FullFlow(t *testing.T) {
 		}
 	})
 
-	// ══════════════════════════════════════════════════════════════════════════
 	// UC06 – View results (student & teacher)
-	// ══════════════════════════════════════════════════════════════════════════
+
 	t.Run("UC06_Student_View_Result", func(t *testing.T) {
 		url := fmt.Sprintf("/api/student/attempts/%.0f/result", attemptID)
 		w := do(t, srv, "GET", url, studentToken, nil)
@@ -548,9 +722,7 @@ func TestMVP_FullFlow(t *testing.T) {
 	_ = getFloat
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
 // Individual focused tests
-// ══════════════════════════════════════════════════════════════════════════════
 
 func TestHealth(t *testing.T) {
 	srv := setupTestServer(t)
@@ -743,8 +915,6 @@ func TestStudent_GradingAccuracy(t *testing.T) {
 		t.Errorf("correct+wrong should equal total questions (4), got %.0f", totalCounted)
 	}
 }
-
-// ─── Security & business-rule focused tests ───────────────────────────────────
 
 func TestSecurity_SQLi_DeleteQuestion_InvalidID(t *testing.T) {
 	srv := setupTestServer(t)
@@ -1039,6 +1209,14 @@ func TestStudent_ConsentAndDeadlineAutograding(t *testing.T) {
 		t.Fatal("expired save response should report automatic submission")
 	}
 
+	w = do(t, srv, "POST", startURL, studentToken, nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("resume expired exam: want 200, got %d — %s", w.Code, w.Body)
+	}
+	if !parseJSON(t, w)["auto_submitted"].(bool) {
+		t.Fatal("expired resume response should report automatic submission")
+	}
+
 	var attempt models.ExamAttempt
 	if err := config.DB.First(&attempt, attemptID).Error; err != nil {
 		t.Fatalf("load auto-submitted attempt: %v", err)
@@ -1312,4 +1490,894 @@ func TestSeedDataEnsuresDemoUsersOnExistingDatabase(t *testing.T) {
 	if userCount != 5 || examCount != 1 || questionCount != 5 {
 		t.Fatalf("repeated seed duplicated data: users=%d exams=%d questions=%d", userCount, examCount, questionCount)
 	}
+}
+
+func TestTeacher_ExamCRUD_And_BulkQuestions(t *testing.T) {
+	srv := setupTestServer(t)
+
+	// Login teacher
+	w := do(t, srv, "POST", "/api/auth/login", "", map[string]interface{}{
+		"email": "teacher@test.com", "password": "123456",
+	})
+	teacherToken := getString(parseJSON(t, w), "token")
+	now := time.Now()
+
+	// 1. Create exam
+	w = do(t, srv, "POST", "/api/teacher/exams", teacherToken, map[string]interface{}{
+		"title": "CRUD Exam", "duration": 20,
+		"start_time": now.Add(-time.Hour).Format(time.RFC3339),
+		"end_time":   now.Add(2 * time.Hour).Format(time.RFC3339),
+	})
+	if w.Code != http.StatusCreated {
+		t.Fatalf("create exam: %d %s", w.Code, w.Body)
+	}
+	examID := uint(parseJSON(t, w)["exam"].(map[string]interface{})["id"].(float64))
+
+	// 2. Update exam (PUT)
+	newTitle := "Updated CRUD Exam"
+	newDesc := "Description for updated exam"
+	durMin := 35
+	w = do(t, srv, "PUT", fmt.Sprintf("/api/teacher/exams/%d", examID), teacherToken, map[string]interface{}{
+		"title":            newTitle,
+		"description":      newDesc,
+		"duration_minutes": durMin,
+	})
+	if w.Code != http.StatusOK {
+		t.Fatalf("update exam: %d %s", w.Code, w.Body)
+	}
+	upExam := parseJSON(t, w)["exam"].(map[string]interface{})
+	if upExam["title"].(string) != newTitle || upExam["description"].(string) != newDesc || int(upExam["duration"].(float64)) != 35 {
+		t.Fatalf("updated exam fields mismatch: %v", upExam)
+	}
+
+	// 3. Bulk import questions (POST /api/teacher/exams/:id/questions/bulk)
+	bulkQs := []map[string]interface{}{
+		{
+			"prompt": "Bulk Q1", "option_a": "A1", "option_b": "B1", "option_c": "C1", "option_d": "D1",
+			"correct_option": "A", "points": 2.0,
+		},
+		{
+			"prompt": "Bulk Q2", "option_a": "A2", "option_b": "B2", "option_c": "C2", "option_d": "D2",
+			"correct_option": "B", "points": 3.0,
+		},
+	}
+	w = do(t, srv, "POST", fmt.Sprintf("/api/teacher/exams/%d/questions/bulk", examID), teacherToken, map[string]interface{}{
+		"questions": bulkQs,
+	})
+	if w.Code != http.StatusCreated {
+		t.Fatalf("bulk add questions: %d %s", w.Code, w.Body)
+	}
+	createdQs := parseJSON(t, w)["questions"].([]interface{})
+	if len(createdQs) != 2 {
+		t.Fatalf("bulk add should create 2 questions, got %d", len(createdQs))
+	}
+	q1ID := uint(createdQs[0].(map[string]interface{})["id"].(float64))
+
+	// 4. Update single question (PUT /api/teacher/questions/:id)
+	w = do(t, srv, "PUT", fmt.Sprintf("/api/teacher/questions/%d", q1ID), teacherToken, map[string]interface{}{
+		"prompt": "Updated Bulk Q1 Prompt", "option_a": "New A", "option_b": "New B",
+		"option_c": "New C", "option_d": "New D", "correct_option": "C", "points": 2.5,
+	})
+	if w.Code != http.StatusOK {
+		t.Fatalf("update question: %d %s", w.Code, w.Body)
+	}
+	upQ := parseJSON(t, w)["question"].(map[string]interface{})
+	if upQ["prompt"].(string) != "Updated Bulk Q1 Prompt" || upQ["correct_option"].(string) != "C" || upQ["points"].(float64) != 2.5 {
+		t.Fatalf("updated question mismatch: %v", upQ)
+	}
+
+	// 5. Delete exam (DELETE /api/teacher/exams/:id)
+	w = do(t, srv, "DELETE", fmt.Sprintf("/api/teacher/exams/%d", examID), teacherToken, nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("delete exam: %d %s", w.Code, w.Body)
+	}
+	w = do(t, srv, "GET", fmt.Sprintf("/api/teacher/exams/%d", examID), teacherToken, nil)
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("deleted exam should return 404, got %d", w.Code)
+	}
+}
+
+func TestTeacher_ScoreUpdate_And_ResetAttempt(t *testing.T) {
+	srv := setupTestServer(t)
+
+	w := do(t, srv, "POST", "/api/auth/login", "", map[string]interface{}{
+		"email": "teacher@test.com", "password": "123456",
+	})
+	teacherToken := getString(parseJSON(t, w), "token")
+
+	w = do(t, srv, "POST", "/api/auth/login", "", map[string]interface{}{
+		"email": "student@test.com", "password": "123456",
+	})
+	studentToken := getString(parseJSON(t, w), "token")
+
+	var exam models.Exam
+	config.DB.Where("exam_code = ?", "IT2026").First(&exam)
+
+	// Student starts and submits exam
+	w = do(t, srv, "POST", fmt.Sprintf("/api/student/exams/%d/start", exam.ID), studentToken, map[string]bool{"confirmed": true})
+	attemptID := uint(parseJSON(t, w)["attempt"].(map[string]interface{})["id"].(float64))
+
+	w = do(t, srv, "POST", fmt.Sprintf("/api/student/attempts/%d/submit", attemptID), studentToken, map[string]interface{}{})
+	if w.Code != http.StatusOK {
+		t.Fatalf("submit: %d %s", w.Code, w.Body)
+	}
+
+	// Teacher updates score manually with note (PATCH /api/teacher/attempts/:id/score)
+	w = do(t, srv, "PATCH", fmt.Sprintf("/api/teacher/attempts/%d/score", attemptID), teacherToken, map[string]interface{}{
+		"score": 4.5,
+		"note":  "Cộng điểm thưởng câu khó",
+	})
+	if w.Code != http.StatusOK {
+		t.Fatalf("teacher update score: %d %s", w.Code, w.Body)
+	}
+	updatedAttempt := parseJSON(t, w)["attempt"].(map[string]interface{})
+	if updatedAttempt["score"].(float64) != 4.5 || updatedAttempt["teacher_note"].(string) != "Cộng điểm thưởng câu khó" {
+		t.Fatalf("score update mismatch: %v", updatedAttempt)
+	}
+
+	// Teacher resets attempt (DELETE /api/teacher/attempts/:id)
+	w = do(t, srv, "DELETE", fmt.Sprintf("/api/teacher/attempts/%d", attemptID), teacherToken, nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("reset attempt: %d %s", w.Code, w.Body)
+	}
+
+	// Student can now take exam again from scratch
+	w = do(t, srv, "POST", fmt.Sprintf("/api/student/exams/%d/start", exam.ID), studentToken, map[string]bool{"confirmed": true})
+	if w.Code != http.StatusOK {
+		t.Fatalf("retake exam after reset: want 200, got %d — %s", w.Code, w.Body)
+	}
+	newAttemptID := uint(parseJSON(t, w)["attempt"].(map[string]interface{})["id"].(float64))
+	if newAttemptID == 0 || newAttemptID == attemptID {
+		t.Fatalf("new attempt expected, got %d", newAttemptID)
+	}
+}
+
+func TestTeacher_StudentManagementCRUD(t *testing.T) {
+	srv := setupTestServer(t)
+
+	w := do(t, srv, "POST", "/api/auth/login", "", map[string]interface{}{
+		"email": "teacher@test.com", "password": "123456",
+	})
+	teacherToken := getString(parseJSON(t, w), "token")
+
+	// 1. List students (GET /api/teacher/students)
+	w = do(t, srv, "GET", "/api/teacher/students", teacherToken, nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("list students: %d %s", w.Code, w.Body)
+	}
+	students := parseJSON(t, w)["students"].([]interface{})
+	if len(students) < 3 {
+		t.Fatalf("expected at least 3 seeded students, got %d", len(students))
+	}
+
+	// 2. Create student (POST /api/teacher/students)
+	newEmail := "newstudent@univ.edu.vn"
+	w = do(t, srv, "POST", "/api/teacher/students", teacherToken, map[string]interface{}{
+		"full_name": "Sinh Viên Mới",
+		"email":     newEmail,
+		"password":  "studentpass123",
+	})
+	if w.Code != http.StatusCreated {
+		t.Fatalf("create student: %d %s", w.Code, w.Body)
+	}
+	studentID := uint(parseJSON(t, w)["student"].(map[string]interface{})["id"].(float64))
+
+	// Verify new student can login
+	w = do(t, srv, "POST", "/api/auth/login", "", map[string]interface{}{
+		"email": newEmail, "password": "studentpass123",
+	})
+	if w.Code != http.StatusOK {
+		t.Fatalf("login new student: %d %s", w.Code, w.Body)
+	}
+
+	// 3. Search students with ?q=
+	w = do(t, srv, "GET", "/api/teacher/students?q=newstudent", teacherToken, nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("search students: %d %s", w.Code, w.Body)
+	}
+	searchRes := parseJSON(t, w)["students"].([]interface{})
+	if len(searchRes) != 1 {
+		t.Fatalf("search should find 1 student, got %d", len(searchRes))
+	}
+
+	// 4. Update student (PUT /api/teacher/students/:id)
+	w = do(t, srv, "PUT", fmt.Sprintf("/api/teacher/students/%d", studentID), teacherToken, map[string]interface{}{
+		"full_name": "Sinh Viên Đã Sửa",
+		"password":  "newpass456789",
+	})
+	if w.Code != http.StatusOK {
+		t.Fatalf("update student: %d %s", w.Code, w.Body)
+	}
+
+	// Verify login with updated password
+	w = do(t, srv, "POST", "/api/auth/login", "", map[string]interface{}{
+		"email": newEmail, "password": "newpass456789",
+	})
+	if w.Code != http.StatusOK {
+		t.Fatalf("login with updated password: %d %s", w.Code, w.Body)
+	}
+
+	// 5. Delete student (DELETE /api/teacher/students/:id)
+	w = do(t, srv, "DELETE", fmt.Sprintf("/api/teacher/students/%d", studentID), teacherToken, nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("delete student: %d %s", w.Code, w.Body)
+	}
+
+	// Verify student cannot login anymore
+	w = do(t, srv, "POST", "/api/auth/login", "", map[string]interface{}{
+		"email": newEmail, "password": "newpass456789",
+	})
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("deleted student login should fail 401, got %d", w.Code)
+	}
+}
+
+func TestStudent_AvailableExams(t *testing.T) {
+	srv := setupTestServer(t)
+
+	w := do(t, srv, "POST", "/api/auth/login", "", map[string]interface{}{
+		"email": "student@test.com", "password": "123456",
+	})
+	studentToken := getString(parseJSON(t, w), "token")
+
+	// Get available exams (GET /api/student/exams/available)
+	w = do(t, srv, "GET", "/api/student/exams/available", studentToken, nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("available exams: %d %s", w.Code, w.Body)
+	}
+	exams := parseJSON(t, w)["exams"].([]interface{})
+	if len(exams) == 0 {
+		t.Fatal("expected at least 1 published exam in available list")
+	}
+	first := exams[0].(map[string]interface{})
+	if first["exam_code"].(string) != "IT2026" {
+		t.Errorf("expected IT2026, got %v", first["exam_code"])
+	}
+	if first["attempt_status"].(string) != "not_attempted" {
+		t.Errorf("expected not_attempted, got %v", first["attempt_status"])
+	}
+}
+
+func TestAntiCheat_QuestionShufflingAndViolationLimit(t *testing.T) {
+	srv := setupTestServer(t)
+
+	w := do(t, srv, "POST", "/api/auth/login", "", map[string]interface{}{
+		"email": "student@test.com", "password": "123456",
+	})
+	studentToken := getString(parseJSON(t, w), "token")
+
+	// 1. Start Exam 1 (IT2026)
+	w = do(t, srv, "POST", "/api/student/exams/1/start", studentToken, map[string]interface{}{
+		"confirmed": true,
+	})
+	if w.Code != http.StatusOK {
+		t.Fatalf("start exam: %d %s", w.Code, w.Body)
+	}
+	res1 := parseJSON(t, w)
+	attemptID := getUint(res1["attempt"].(map[string]interface{}), "id")
+	questions1 := res1["questions"].([]interface{})
+
+	// 2. Resume Exam (call /start again) -> questions order must be strictly deterministic (identical)
+	w = do(t, srv, "POST", "/api/student/exams/1/start", studentToken, map[string]interface{}{})
+	if w.Code != http.StatusOK {
+		t.Fatalf("resume exam: %d %s", w.Code, w.Body)
+	}
+	res2 := parseJSON(t, w)
+	questions2 := res2["questions"].([]interface{})
+	if len(questions1) != len(questions2) {
+		t.Fatalf("question length mismatch: %d vs %d", len(questions1), len(questions2))
+	}
+	for i := range questions1 {
+		q1ID := getUint(questions1[i].(map[string]interface{}), "id")
+		q2ID := getUint(questions2[i].(map[string]interface{}), "id")
+		if q1ID != q2ID {
+			t.Fatalf("deterministic shuffle mismatch at index %d: %d vs %d", i, q1ID, q2ID)
+		}
+	}
+
+	// 3. Tab-switch violations:
+	// Violation 1
+	w = do(t, srv, "POST", fmt.Sprintf("/api/student/attempts/%d/violation", attemptID), studentToken, map[string]interface{}{
+		"reason": "tab_switch",
+	})
+	if w.Code != http.StatusOK {
+		t.Fatalf("violation 1 failed: %d %s", w.Code, w.Body)
+	}
+	vRes1 := parseJSON(t, w)
+	if getUint(vRes1, "violation_count") != 1 {
+		t.Errorf("expected violation_count 1, got %v", vRes1["violation_count"])
+	}
+	if vRes1["auto_submitted"].(bool) != false {
+		t.Errorf("violation 1 should not auto_submit")
+	}
+
+	// Violation 2
+	w = do(t, srv, "POST", fmt.Sprintf("/api/student/attempts/%d/violation", attemptID), studentToken, map[string]interface{}{
+		"reason": "window_blur",
+	})
+	if w.Code != http.StatusOK {
+		t.Fatalf("violation 2 failed: %d %s", w.Code, w.Body)
+	}
+	vRes2 := parseJSON(t, w)
+	if getUint(vRes2, "violation_count") != 2 {
+		t.Errorf("expected violation_count 2, got %v", vRes2["violation_count"])
+	}
+	if vRes2["auto_submitted"].(bool) != false {
+		t.Errorf("violation 2 should not auto_submit")
+	}
+
+	// Violation 3 -> must auto_submit and set status to completed!
+	w = do(t, srv, "POST", fmt.Sprintf("/api/student/attempts/%d/violation", attemptID), studentToken, map[string]interface{}{
+		"reason": "tab_switch",
+	})
+	if w.Code != http.StatusOK {
+		t.Fatalf("violation 3 failed: %d %s", w.Code, w.Body)
+	}
+	vRes3 := parseJSON(t, w)
+	if getUint(vRes3, "violation_count") != 3 {
+		t.Errorf("expected violation_count 3, got %v", vRes3["violation_count"])
+	}
+	if vRes3["auto_submitted"].(bool) != true {
+		t.Errorf("violation 3 should trigger auto_submitted = true")
+	}
+	attObj := vRes3["attempt"].(map[string]interface{})
+	if attObj["status"].(string) != "completed" {
+		t.Errorf("expected status completed, got %v", attObj["status"])
+	}
+
+	// Violation 4 on completed attempt -> should fail 400
+	w = do(t, srv, "POST", fmt.Sprintf("/api/student/attempts/%d/violation", attemptID), studentToken, map[string]interface{}{})
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("violation on completed attempt should return 400, got %d", w.Code)
+	}
+}
+
+func TestTeacher_AuditLogsAndCSVExport(t *testing.T) {
+	srv := setupTestServer(t)
+
+	w := do(t, srv, "POST", "/api/auth/login", "", map[string]interface{}{
+		"email": "teacher@test.com", "password": "123456",
+	})
+	teacherToken := getString(parseJSON(t, w), "token")
+
+	w = do(t, srv, "POST", "/api/auth/login", "", map[string]interface{}{
+		"email": "student@test.com", "password": "123456",
+	})
+	studentToken := getString(parseJSON(t, w), "token")
+
+	// Student starts and submits
+	w = do(t, srv, "POST", "/api/student/exams/1/start", studentToken, map[string]interface{}{"confirmed": true})
+	attID := getUint(parseJSON(t, w)["attempt"].(map[string]interface{}), "id")
+	w = do(t, srv, "POST", fmt.Sprintf("/api/student/attempts/%d/submit", attID), studentToken, nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("submit: %d %s", w.Code, w.Body)
+	}
+
+	// Teacher modifies score -> generates AuditLog
+	w = do(t, srv, "PATCH", fmt.Sprintf("/api/teacher/attempts/%d/score", attID), teacherToken, map[string]interface{}{
+		"score": 9.5,
+		"note":  "Audit log test score change",
+	})
+	if w.Code != http.StatusOK {
+		t.Fatalf("update score: %d %s", w.Code, w.Body)
+	}
+
+	// Teacher checks Audit Logs (GET /api/teacher/audit-logs)
+	w = do(t, srv, "GET", "/api/teacher/audit-logs", teacherToken, nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("get audit logs: %d %s", w.Code, w.Body)
+	}
+	logs := parseJSON(t, w)["data"].([]interface{})
+	if len(logs) == 0 {
+		t.Fatal("expected at least 1 audit log record")
+	}
+	firstLog := logs[0].(map[string]interface{})
+	if firstLog["action"].(string) != "UPDATE_SCORE" {
+		t.Errorf("expected action UPDATE_SCORE, got %v", firstLog["action"])
+	}
+
+	// Teacher exports CSV (GET /api/teacher/exams/1/results/export)
+	w = do(t, srv, "GET", "/api/teacher/exams/1/results/export", teacherToken, nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("export results csv: %d %s", w.Code, w.Body)
+	}
+	contentType := w.Header().Get("Content-Type")
+	if !strings.Contains(contentType, "text/csv") {
+		t.Errorf("expected text/csv content type, got %s", contentType)
+	}
+	contentDisp := w.Header().Get("Content-Disposition")
+	if !strings.Contains(contentDisp, "attachment") || !strings.Contains(contentDisp, ".csv") {
+		t.Errorf("expected attachment .csv header, got %s", contentDisp)
+	}
+
+	bodyBytes := w.Body.Bytes()
+	// Check UTF-8 BOM bytes (0xEF, 0xBB, 0xBF)
+	if len(bodyBytes) < 3 || bodyBytes[0] != 0xEF || bodyBytes[1] != 0xBB || bodyBytes[2] != 0xBF {
+		t.Errorf("expected UTF-8 BOM at beginning of CSV body")
+	}
+
+	bodyStr := string(bodyBytes)
+	if !strings.Contains(bodyStr, "Họ tên") || !strings.Contains(bodyStr, "Email") || !strings.Contains(bodyStr, "Số lần vi phạm") {
+		t.Errorf("expected CSV header columns in body, got:\n%s", bodyStr)
+	}
+	if !strings.Contains(bodyStr, "student@test.com") {
+		t.Errorf("expected student record in CSV body, got:\n%s", bodyStr)
+	}
+}
+
+func TestRateLimiter_Enforcement(t *testing.T) {
+	// Custom router with rate limiter active (not bypassed)
+	r := gin.New()
+	// Limit 2 requests per minute
+	r.GET("/limited", middleware.IPRateLimit(2, time.Minute), func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+	})
+
+	// Set release mode to test actual enforcement
+	gin.SetMode(gin.ReleaseMode)
+	defer gin.SetMode(gin.TestMode)
+
+	// Req 1 -> 200
+	req1, _ := http.NewRequest("GET", "/limited", nil)
+	req1.RemoteAddr = "192.0.2.10:12345"
+	w1 := httptest.NewRecorder()
+	r.ServeHTTP(w1, req1)
+	if w1.Code != http.StatusOK {
+		t.Errorf("req 1 expected 200, got %d", w1.Code)
+	}
+
+	// Req 2 -> 200
+	req2, _ := http.NewRequest("GET", "/limited", nil)
+	req2.RemoteAddr = "192.0.2.10:12345"
+	w2 := httptest.NewRecorder()
+	r.ServeHTTP(w2, req2)
+	if w2.Code != http.StatusOK {
+		t.Errorf("req 2 expected 200, got %d", w2.Code)
+	}
+
+	// Req 3 -> 429 Too Many Requests
+	req3, _ := http.NewRequest("GET", "/limited", nil)
+	req3.RemoteAddr = "192.0.2.10:12345"
+	w3 := httptest.NewRecorder()
+	r.ServeHTTP(w3, req3)
+	if w3.Code != http.StatusTooManyRequests {
+		t.Errorf("req 3 expected 429 Too Many Requests, got %d", w3.Code)
+	}
+
+	// Another IP should still be allowed -> 200
+	reqOther, _ := http.NewRequest("GET", "/limited", nil)
+	reqOther.RemoteAddr = "192.0.2.20:12345"
+	wOther := httptest.NewRecorder()
+	r.ServeHTTP(wOther, reqOther)
+	if wOther.Code != http.StatusOK {
+		t.Errorf("other IP expected 200, got %d", wOther.Code)
+	}
+}
+
+func loginUser(t *testing.T, srv *gin.Engine, email, password string) string {
+	t.Helper()
+	w := do(t, srv, "POST", "/api/auth/login", "", map[string]interface{}{
+		"email": email, "password": password,
+	})
+	if w.Code != http.StatusOK {
+		t.Fatalf("login failed for %s: %d %s", email, w.Code, w.Body.String())
+	}
+	return getString(parseJSON(t, w), "token")
+}
+
+func TestNotifications_FullWorkflow(t *testing.T) {
+	srv := setupTestServer(t)
+
+	teacherToken := loginUser(t, srv, "teacher@test.com", "123456")
+	studentToken := loginUser(t, srv, "student@test.com", "123456")
+
+	// 1. Initial notifications should be empty
+	w := do(t, srv, "GET", "/api/notifications", studentToken, nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("get notifications failed: %d", w.Code)
+	}
+	var res struct {
+		Notifications []models.Notification `json:"notifications"`
+		UnreadCount   int64                 `json:"unread_count"`
+	}
+	json.Unmarshal(w.Body.Bytes(), &res)
+	if res.UnreadCount != 0 {
+		t.Errorf("expected 0 unread notifications, got %d", res.UnreadCount)
+	}
+
+	// 2. Student takes exam and submits
+	do(t, srv, "POST", "/api/student/exams/1/start", studentToken, gin.H{"confirmed": true})
+	do(t, srv, "POST", "/api/student/attempts/1/submit", studentToken, gin.H{})
+
+	// 3. Student files an appeal -> Teacher should receive a notification
+	wAppeal := do(t, srv, "POST", "/api/student/appeals", studentToken, gin.H{
+		"submissionId": 1,
+		"title":        "Cần kiểm tra lại câu 1",
+		"content":      "Em chọn đúng theo tài liệu",
+	})
+	if wAppeal.Code != http.StatusCreated {
+		t.Fatalf("create appeal failed: %d %s", wAppeal.Code, wAppeal.Body.String())
+	}
+
+	// Verify teacher received notification
+	wTeacherNotif := do(t, srv, "GET", "/api/notifications", teacherToken, nil)
+	var teacherRes struct {
+		Notifications []models.Notification `json:"notifications"`
+		UnreadCount   int64                 `json:"unread_count"`
+	}
+	json.Unmarshal(wTeacherNotif.Body.Bytes(), &teacherRes)
+	if teacherRes.UnreadCount != 1 || len(teacherRes.Notifications) != 1 {
+		t.Fatalf("expected 1 unread notification for teacher, got %d (len=%d)", teacherRes.UnreadCount, len(teacherRes.Notifications))
+	}
+	if !strings.Contains(teacherRes.Notifications[0].Title, "Khiếu nại") {
+		t.Errorf("expected notification title about appeal, got: %s", teacherRes.Notifications[0].Title)
+	}
+
+	// 4. Teacher replies to appeal -> Student should receive notification
+	do(t, srv, "PATCH", "/api/teacher/appeals/1/reply", teacherToken, gin.H{
+		"response": "Thầy đã xem lại bài làm của em.",
+	})
+
+	// 5. Teacher updates student score -> Student should receive another notification
+	do(t, srv, "PATCH", "/api/teacher/attempts/1/score", teacherToken, gin.H{
+		"score": 9.5,
+		"note":  "Cộng thêm điểm phúc khảo",
+	})
+
+	// Verify student received 2 notifications
+	wStudentNotif := do(t, srv, "GET", "/api/notifications", studentToken, nil)
+	var studentRes struct {
+		Notifications []models.Notification `json:"notifications"`
+		UnreadCount   int64                 `json:"unread_count"`
+	}
+	json.Unmarshal(wStudentNotif.Body.Bytes(), &studentRes)
+	if studentRes.UnreadCount != 2 || len(studentRes.Notifications) != 2 {
+		t.Fatalf("expected 2 unread notifications for student, got %d (len=%d)", studentRes.UnreadCount, len(studentRes.Notifications))
+	}
+
+	// 6. Student marks 1 notification as read
+	firstNotifID := studentRes.Notifications[0].ID
+	wRead := do(t, srv, "PATCH", fmt.Sprintf("/api/notifications/%d/read", firstNotifID), studentToken, nil)
+	if wRead.Code != http.StatusOK {
+		t.Fatalf("mark read failed: %d", wRead.Code)
+	}
+
+	// Verify unread count is now 1
+	wCheck := do(t, srv, "GET", "/api/notifications", studentToken, nil)
+	json.Unmarshal(wCheck.Body.Bytes(), &studentRes)
+	if studentRes.UnreadCount != 1 {
+		t.Errorf("expected 1 unread notification after marking one, got %d", studentRes.UnreadCount)
+	}
+
+	// 7. Student marks all as read
+	wReadAll := do(t, srv, "PATCH", "/api/notifications/read-all", studentToken, nil)
+	if wReadAll.Code != http.StatusOK {
+		t.Fatalf("mark read-all failed: %d", wReadAll.Code)
+	}
+
+	// Verify unread count is now 0
+	wCheckAll := do(t, srv, "GET", "/api/notifications", studentToken, nil)
+	json.Unmarshal(wCheckAll.Body.Bytes(), &studentRes)
+	if studentRes.UnreadCount != 0 {
+		t.Errorf("expected 0 unread notifications after read-all, got %d", studentRes.UnreadCount)
+	}
+}
+
+func TestSecurityMiddleware_HeadersAndBodyLimit(t *testing.T) {
+	srv := setupTestServer(t)
+
+	// Check Security Headers
+	w := do(t, srv, "GET", "/health", "", nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("health check failed: %d", w.Code)
+	}
+
+	if w.Header().Get("X-Content-Type-Options") != "nosniff" {
+		t.Errorf("expected X-Content-Type-Options: nosniff, got %s", w.Header().Get("X-Content-Type-Options"))
+	}
+	if w.Header().Get("X-Frame-Options") != "DENY" {
+		t.Errorf("expected X-Frame-Options: DENY, got %s", w.Header().Get("X-Frame-Options"))
+	}
+	if w.Header().Get("Referrer-Policy") != "strict-origin-when-cross-origin" {
+		t.Errorf("expected Referrer-Policy: strict-origin-when-cross-origin, got %s", w.Header().Get("Referrer-Policy"))
+	}
+
+	// Test 2MB body size limit rejection
+	// Generate payload > 2MB
+	largePayload := make([]byte, 2*1024*1024+1024)
+	req := httptest.NewRequest("POST", "/api/auth/login", bytes.NewReader(largePayload))
+	req.Header.Set("Content-Type", "application/json")
+	wLarge := httptest.NewRecorder()
+	srv.ServeHTTP(wLarge, req)
+	if wLarge.Code != http.StatusBadRequest && wLarge.Code != http.StatusRequestEntityTooLarge {
+		t.Errorf("expected request exceeding 2MB to be rejected with 400 or 413, got %d", wLarge.Code)
+	}
+}
+
+func TestUserProfileAndDirectory(t *testing.T) {
+	srv := setupTestServer(t)
+	studentToken := loginUser(t, srv, "student@test.com", "123456")
+
+	// 1. Get initial profile
+	wGet := do(t, srv, "GET", "/api/profile", studentToken, nil)
+	if wGet.Code != http.StatusOK {
+		t.Fatalf("get profile failed: %d %s", wGet.Code, wGet.Body.String())
+	}
+
+	// 2. Update profile
+	avatar := "https://example.com/avatar.png"
+	bio := "Sinh viên Khoa CNTT"
+	dept := "Khoa Công nghệ Thông tin"
+	code := "SV202601"
+	wPut := do(t, srv, "PUT", "/api/profile", studentToken, gin.H{
+		"avatar_url":   avatar,
+		"bio":          bio,
+		"department":   dept,
+		"student_code": code,
+	})
+	if wPut.Code != http.StatusOK {
+		t.Fatalf("update profile failed: %d %s", wPut.Code, wPut.Body.String())
+	}
+
+	// 3. Verify updated profile
+	wCheck := do(t, srv, "GET", "/api/profile", studentToken, nil)
+	var checkRes struct {
+		User struct {
+			AvatarURL   string `json:"avatar_url"`
+			Bio         string `json:"bio"`
+			Department  string `json:"department"`
+			StudentCode string `json:"student_code"`
+		} `json:"user"`
+	}
+	json.Unmarshal(wCheck.Body.Bytes(), &checkRes)
+	if checkRes.User.Bio != bio || checkRes.User.StudentCode != code {
+		t.Errorf("profile fields not updated properly: %+v", checkRes.User)
+	}
+
+	// 4. Directory search
+	wDir := do(t, srv, "GET", "/api/users/directory?q=SV202601", studentToken, nil)
+	if wDir.Code != http.StatusOK {
+		t.Fatalf("directory search failed: %d %s", wDir.Code, wDir.Body.String())
+	}
+	var dirRes struct {
+		Users []struct {
+			ID          uint   `json:"id"`
+			FullName    string `json:"full_name"`
+			StudentCode string `json:"student_code"`
+		} `json:"users"`
+	}
+	json.Unmarshal(wDir.Body.Bytes(), &dirRes)
+	if len(dirRes.Users) == 0 || dirRes.Users[0].StudentCode != code {
+		t.Errorf("directory search did not find user by student_code: %+v", dirRes.Users)
+	}
+}
+
+func TestTeacher_UserRoleManagement(t *testing.T) {
+	srv := setupTestServer(t)
+	teacherToken := loginUser(t, srv, "teacher@test.com", "123456")
+
+	// Student ID 2 (student@test.com)
+	wPromote := do(t, srv, "PATCH", "/api/teacher/users/2/role", teacherToken, gin.H{
+		"role": "teacher",
+	})
+	if wPromote.Code != http.StatusOK {
+		t.Fatalf("promote user failed: %d %s", wPromote.Code, wPromote.Body.String())
+	}
+
+	// Revert back to student
+	wDemote := do(t, srv, "PATCH", "/api/teacher/users/2/role", teacherToken, gin.H{
+		"role": "student",
+	})
+	if wDemote.Code != http.StatusOK {
+		t.Fatalf("demote user failed: %d %s", wDemote.Code, wDemote.Body.String())
+	}
+
+	// Cannot change own role
+	wSelf := do(t, srv, "PATCH", "/api/teacher/users/1/role", teacherToken, gin.H{
+		"role": "student",
+	})
+	if wSelf.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 when changing own role, got %d", wSelf.Code)
+	}
+}
+
+func TestClassroom_FullWorkflow(t *testing.T) {
+	srv := setupTestServer(t)
+	teacherToken := loginUser(t, srv, "teacher@test.com", "123456")
+	studentToken := loginUser(t, srv, "student@test.com", "123456")
+
+	// 1. Teacher creates a classroom
+	wCreate := do(t, srv, "POST", "/api/teacher/classes", teacherToken, gin.H{
+		"name":        "Lớp Lập trình Web Nâng cao",
+		"description": "Lớp học thực hành phát triển ứng dụng Go + React",
+	})
+	if wCreate.Code != http.StatusCreated {
+		t.Fatalf("create class failed: %d %s", wCreate.Code, wCreate.Body.String())
+	}
+
+	var createRes struct {
+		Class struct {
+			ID   uint   `json:"id"`
+			Code string `json:"code"`
+			Name string `json:"name"`
+		} `json:"class"`
+	}
+	json.Unmarshal(wCreate.Body.Bytes(), &createRes)
+	classID := createRes.Class.ID
+	classCode := createRes.Class.Code
+	if classID == 0 || classCode == "" {
+		t.Fatalf("invalid class created: %+v", createRes.Class)
+	}
+
+	// 2. Teacher updates classroom
+	wUpdate := do(t, srv, "PUT", fmt.Sprintf("/api/teacher/classes/%d", classID), teacherToken, gin.H{
+		"description": "Mô tả đã cập nhật",
+	})
+	if wUpdate.Code != http.StatusOK {
+		t.Fatalf("update class failed: %d", wUpdate.Code)
+	}
+
+	// 3. Student joins classroom using class code
+	wJoin := do(t, srv, "POST", "/api/student/classes/join", studentToken, gin.H{
+		"code": classCode,
+	})
+	if wJoin.Code != http.StatusOK {
+		t.Fatalf("student join class failed: %d %s", wJoin.Code, wJoin.Body.String())
+	}
+
+	// 4. Joining again should return 409
+	wJoinAgain := do(t, srv, "POST", "/api/student/classes/join", studentToken, gin.H{
+		"code": classCode,
+	})
+	if wJoinAgain.Code != http.StatusConflict {
+		t.Errorf("expected 409 on joining again, got %d", wJoinAgain.Code)
+	}
+
+	// 5. List classes for teacher and student
+	wTeacherList := do(t, srv, "GET", "/api/classes", teacherToken, nil)
+	if wTeacherList.Code != http.StatusOK {
+		t.Fatalf("teacher list classes failed: %d", wTeacherList.Code)
+	}
+
+	wStudentList := do(t, srv, "GET", "/api/classes", studentToken, nil)
+	if wStudentList.Code != http.StatusOK {
+		t.Fatalf("student list classes failed: %d", wStudentList.Code)
+	}
+
+	// 6. Get class detail
+	wDetail := do(t, srv, "GET", fmt.Sprintf("/api/classes/%d", classID), studentToken, nil)
+	if wDetail.Code != http.StatusOK {
+		t.Fatalf("get class detail failed: %d %s", wDetail.Code, wDetail.Body.String())
+	}
+
+	// 7. Teacher removes member
+	wRemove := do(t, srv, "DELETE", fmt.Sprintf("/api/teacher/classes/%d/members/2", classID), teacherToken, nil)
+	if wRemove.Code != http.StatusOK {
+		t.Fatalf("remove member failed: %d", wRemove.Code)
+	}
+
+	// 8. Teacher re-adds member by email
+	studentEmail := "student@test.com"
+	wAdd := do(t, srv, "POST", fmt.Sprintf("/api/teacher/classes/%d/members", classID), teacherToken, gin.H{
+		"email": studentEmail,
+	})
+	if wAdd.Code != http.StatusCreated {
+		t.Fatalf("add member by email failed: %d %s", wAdd.Code, wAdd.Body.String())
+	}
+
+	// 9. Teacher deletes class
+	wDelete := do(t, srv, "DELETE", fmt.Sprintf("/api/teacher/classes/%d", classID), teacherToken, nil)
+	if wDelete.Code != http.StatusOK {
+		t.Fatalf("delete class failed: %d", wDelete.Code)
+	}
+}
+
+func TestTeacher_ClassGradebook(t *testing.T) {
+	srv := setupTestServer(t)
+	teacherToken := loginUser(t, srv, "teacher@test.com", "123456")
+	studentToken := loginUser(t, srv, "student@test.com", "123456")
+
+	// 1. Teacher creates classroom
+	wCreate := do(t, srv, "POST", "/api/teacher/classes", teacherToken, gin.H{
+		"name":        "Lớp Khảo thí An toàn thông tin",
+		"description": "Lớp thực hành bảo mật hệ thống",
+	})
+	if wCreate.Code != http.StatusCreated {
+		t.Fatalf("create class failed: %d %s", wCreate.Code, wCreate.Body.String())
+	}
+	var createRes struct {
+		Class struct {
+			ID   uint   `json:"id"`
+			Code string `json:"code"`
+		} `json:"class"`
+	}
+	json.Unmarshal(wCreate.Body.Bytes(), &createRes)
+	classID := createRes.Class.ID
+
+	// 2. Student joins classroom
+	wJoin := do(t, srv, "POST", "/api/student/classes/join", studentToken, gin.H{
+		"code": createRes.Class.Code,
+	})
+	if wJoin.Code != http.StatusOK {
+		t.Fatalf("student join class failed: %d", wJoin.Code)
+	}
+
+	// 3. Link seeded exam to this classroom
+	var exam models.Exam
+	config.DB.Where("exam_code = ?", "IT2026").First(&exam)
+	config.DB.Model(&exam).Update("classroom_id", classID)
+
+	// 4. Student takes and completes exam
+	wStart := do(t, srv, "POST", fmt.Sprintf("/api/student/exams/%d/start", exam.ID), studentToken, map[string]bool{"confirmed": true})
+	if wStart.Code == http.StatusOK {
+		attemptID := uint(parseJSON(t, wStart)["attempt"].(map[string]interface{})["id"].(float64))
+		do(t, srv, "POST", fmt.Sprintf("/api/student/attempts/%d/submit", attemptID), studentToken, map[string]interface{}{})
+	}
+
+	// 5. Teacher fetches Gradebook
+	wGradebook := do(t, srv, "GET", fmt.Sprintf("/api/teacher/classes/%d/gradebook", classID), teacherToken, nil)
+	if wGradebook.Code != http.StatusOK {
+		t.Fatalf("get gradebook failed: %d %s", wGradebook.Code, wGradebook.Body.String())
+	}
+
+	var gradebookRes struct {
+		ClassID   uint   `json:"class_id"`
+		ClassName string `json:"class_name"`
+		ClassCode string `json:"class_code"`
+		Exams     []struct {
+			ID       uint   `json:"id"`
+			ExamCode string `json:"exam_code"`
+			Title    string `json:"title"`
+		} `json:"exams"`
+		Students []struct {
+			StudentID    uint    `json:"student_id"`
+			FullName     string  `json:"full_name"`
+			Email        string  `json:"email"`
+			AverageScore float64 `json:"average_score"`
+			AcademicRank string  `json:"academic_rank"`
+		} `json:"students"`
+		Summary struct {
+			TotalStudents int     `json:"total_students"`
+			TotalExams    int     `json:"total_exams"`
+			ClassAverage  float64 `json:"class_average"`
+		} `json:"summary"`
+	}
+	json.Unmarshal(wGradebook.Body.Bytes(), &gradebookRes)
+
+	if gradebookRes.ClassID != classID {
+		t.Errorf("expected class_id %d, got %d", classID, gradebookRes.ClassID)
+	}
+	if len(gradebookRes.Students) == 0 {
+		t.Errorf("expected at least 1 student in gradebook, got 0")
+	}
+	if len(gradebookRes.Exams) == 0 {
+		t.Errorf("expected at least 1 exam linked to class, got 0")
+	}
+
+	// 6. Security & Authorization check:
+	// - Student cannot access teacher gradebook (403 Forbidden)
+	wStudentAccess := do(t, srv, "GET", fmt.Sprintf("/api/teacher/classes/%d/gradebook", classID), studentToken, nil)
+	if wStudentAccess.Code != http.StatusForbidden {
+		t.Errorf("expected 403 when student accesses teacher gradebook, got %d", wStudentAccess.Code)
+	}
+
+	// - Another teacher cannot access gradebook of a classroom they do not own (404/403)
+	otherHash, _ := bcrypt.GenerateFromPassword([]byte("123456"), bcrypt.DefaultCost)
+	otherTeacherUser := models.User{
+		Email:        "other_teacher@test.com",
+		PasswordHash: string(otherHash),
+		FullName:     "Giảng viên Khác",
+		Role:         "teacher",
+	}
+	config.DB.Where("email = ?", otherTeacherUser.Email).FirstOrCreate(&otherTeacherUser)
+	otherTeacherToken := loginUser(t, srv, "other_teacher@test.com", "123456")
+
+	wOtherTeacher := do(t, srv, "GET", fmt.Sprintf("/api/teacher/classes/%d/gradebook", classID), otherTeacherToken, nil)
+	if wOtherTeacher.Code != http.StatusNotFound {
+		t.Errorf("expected 404/403 when non-owner teacher accesses gradebook, got %d", wOtherTeacher.Code)
+	}
+
+	// Clean up
+	config.DB.Model(&exam).Update("classroom_id", nil)
+	config.DB.Delete(&models.Classroom{}, classID)
 }

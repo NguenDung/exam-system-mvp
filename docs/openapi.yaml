@@ -1,0 +1,321 @@
+openapi: 3.0.3
+info:
+  title: Online Exam System API
+  description: Hệ thống thi trắc nghiệm trực tuyến đại học (Clean Layered Architecture in Golang).
+  version: 1.0.0
+servers:
+  - url: http://localhost:8081
+    description: Local Development Server
+
+paths:
+  /health:
+    get:
+      summary: Health check service
+      responses:
+        '200':
+          description: Service is healthy
+
+  /api/auth/register:
+    post:
+      summary: Đăng ký tài khoản sinh viên mới
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: Đăng ký thành công
+        '409':
+          description: Email đã tồn tại
+
+  /api/auth/login:
+    post:
+      summary: Đăng nhập hệ thống (Giáo viên / Sinh viên)
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Đăng nhập thành công, trả về JWT token
+        '401':
+          description: Sai email hoặc mật khẩu
+
+  /api/teacher/exams:
+    get:
+      summary: Danh sách đề thi của giáo viên
+      tags: [Teacher Exams]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Danh sách đề thi
+    post:
+      summary: Tạo đề thi mới
+      tags: [Teacher Exams]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateExamRequest'
+      responses:
+        '201':
+          description: Tạo đề thi thành công
+
+  /api/teacher/exams/{id}/publish:
+    patch:
+      summary: Công bố đề thi để sinh viên có thể thấy và làm bài
+      tags: [Teacher Exams]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Xuất bản đề thi thành công
+
+  /api/student/exams/available:
+    get:
+      summary: Danh sách đề thi sinh viên được phép tham gia
+      tags: [Student Exam]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Danh sách đề thi mở
+
+  /api/student/exams/lookup:
+    get:
+      summary: Tra cứu đề thi qua Exam Code
+      tags: [Student Exam]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: code
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Thông tin đề thi
+
+  /api/student/exams/{id}/start:
+    post:
+      summary: Bắt đầu làm bài thi (xác nhận tham gia, xáo đề)
+      tags: [Student Exam]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                confirmed:
+                  type: boolean
+                  example: true
+      responses:
+        '200':
+          description: Trả về câu hỏi xáo trộn và thời gian còn lại
+        '428':
+          description: Yêu cầu xác nhận tham gia trước khi thi
+
+  /api/student/attempts/{attempt_id}/save:
+    post:
+      summary: Tự động lưu đáp án câu hỏi (Atomic UPSERT)
+      tags: [Student Exam]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: attempt_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SaveAnswersRequest'
+      responses:
+        '200':
+          description: Lưu thành công
+        '409':
+          description: Hết giờ thi, tự động nộp bài
+
+  /api/student/attempts/{attempt_id}/submit:
+    post:
+      summary: Nộp bài thi chính thức
+      tags: [Student Exam]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: attempt_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                answers:
+                  type: array
+                  items:
+                    type: object
+      responses:
+        '200':
+          description: Nộp bài thành công và tự động tính điểm
+        '400':
+          description: Đã nộp bài trước đó
+
+  /api/student/attempts/{attempt_id}/violation:
+    post:
+      summary: Ghi nhận vi phạm chống gian lận (chuyển tab, mất tiêu điểm)
+      tags: [Anti Cheat]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: attempt_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  example: tab_switch_detected
+      responses:
+        '200':
+          description: Ghi nhận vi phạm, tự động nộp bài nếu vượt quá 3 lần
+
+  /api/student/appeals:
+    post:
+      summary: Gửi đơn phúc khảo điểm thi
+      tags: [Appeals]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAppealRequest'
+      responses:
+        '201':
+          description: Tạo khiếu nại thành công
+        '400':
+          description: Nội dung khiếu nại quá ngắn hoặc quá dài (10 - 1000 ký tự)
+        '409':
+          description: Đã có khiếu nại đang chờ xử lý
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          example: student@test.com
+        password:
+          type: string
+          example: password123
+
+    RegisterRequest:
+      type: object
+      required: [email, password, full_name]
+      properties:
+        email:
+          type: string
+          example: student_new@test.com
+        password:
+          type: string
+          example: password123
+        full_name:
+          type: string
+          example: Nguyễn Văn A
+        student_code:
+          type: string
+          example: SV202601
+
+    CreateExamRequest:
+      type: object
+      required: [title, duration, start_time, end_time]
+      properties:
+        title:
+          type: string
+          example: Kiểm tra giữa kỳ Kiến trúc phần mềm
+        description:
+          type: string
+          example: Thi trắc nghiệm 40 câu
+        duration:
+          type: integer
+          example: 45
+        start_time:
+          type: string
+          format: date-time
+        end_time:
+          type: string
+          format: date-time
+
+    SaveAnswersRequest:
+      type: object
+      properties:
+        question_id:
+          type: integer
+          example: 1
+        chosen_option:
+          type: string
+          enum: [A, B, C, D]
+          example: A
+
+    CreateAppealRequest:
+      type: object
+      required: [submissionId, content]
+      properties:
+        submissionId:
+          type: integer
+          example: 1
+        title:
+          type: string
+          example: Phúc khảo câu 1
+        content:
+          type: string
+          example: Em xin phép khiếu nại đáp án câu 1 vì sách giáo trình trang 45 ghi nhận phương án A là đúng.

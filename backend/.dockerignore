@@ -1,0 +1,9 @@
+.git
+.env
+*.log
+exam_mvp.db
+exam_mvp.db-*
+bin/
+tmp/
+.vscode/
+.idea/

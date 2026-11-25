@@ -1,0 +1,770 @@
+{
+	"info": {
+		"_postman_id": "e81d77a2-9fa3-4df4-82ab-b1b702ec9988",
+		"name": "Exam System MVP - Enterprise REST API",
+		"description": "Bộ sưu tập Postman chuẩn công nghiệp cho Hệ thống thi trắc nghiệm trực tuyến (Exam System MVP).\nHỗ trợ tự động trích xuất Bearer JWT token sau khi đăng nhập.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:8081",
+			"type": "string"
+		},
+		{
+			"key": "teacherToken",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "studentToken",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "examId",
+			"value": "1",
+			"type": "string"
+		},
+		{
+			"key": "attemptId",
+			"value": "1",
+			"type": "string"
+		},
+		{
+			"key": "classId",
+			"value": "1",
+			"type": "string"
+		}
+	],
+	"item": [
+		{
+			"name": "0. Health Check",
+			"item": [
+				{
+					"name": "Health Check",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/health",
+							"host": ["{{baseUrl}}"],
+							"path": ["health"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "1. Authentication",
+			"item": [
+				{
+					"name": "Login - Teacher",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"var jsonData = pm.response.json();",
+									"if (jsonData.token) {",
+									"    pm.collectionVariables.set('teacherToken', jsonData.token);",
+									"    console.log('Teacher Token saved automatically');",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"teacher@test.com\",\n  \"password\": \"password123\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/auth/login",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "auth", "login"]
+						}
+					}
+				},
+				{
+					"name": "Login - Student",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"var jsonData = pm.response.json();",
+									"if (jsonData.token) {",
+									"    pm.collectionVariables.set('studentToken', jsonData.token);",
+									"    console.log('Student Token saved automatically');",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"student@test.com\",\n  \"password\": \"password123\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/auth/login",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "auth", "login"]
+						}
+					}
+				},
+				{
+					"name": "Register New Student",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"student_new@test.com\",\n  \"password\": \"password123\",\n  \"full_name\": \"Nguyễn Văn Mới\",\n  \"student_code\": \"SV202699\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/auth/register",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "auth", "register"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "2. Teacher - Exam Management",
+			"item": [
+				{
+					"name": "List Teacher Exams",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{teacherToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/teacher/exams",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "teacher", "exams"]
+						}
+					}
+				},
+				{
+					"name": "Create Exam",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{teacherToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"title\": \"Kiểm tra giữa kỳ Kiến trúc phần mềm\",\n  \"description\": \"Đề thi trắc nghiệm 45 phút\",\n  \"duration\": 45,\n  \"start_time\": \"2026-11-01T08:00:00Z\",\n  \"end_time\": \"2026-11-01T10:00:00Z\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/teacher/exams",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "teacher", "exams"]
+						}
+					}
+				},
+				{
+					"name": "Add Single Question",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{teacherToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"prompt\": \"Mô hình phân tầng nào tách biệt truy xuất dữ liệu với nghiệp vụ?\",\n  \"option_a\": \"Repository Pattern\",\n  \"option_b\": \"Singleton Pattern\",\n  \"option_c\": \"Factory Pattern\",\n  \"option_d\": \"Observer Pattern\",\n  \"correct_option\": \"A\",\n  \"points\": 2.0,\n  \"sort_order\": 1\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/teacher/exams/{{examId}}/questions",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "teacher", "exams", "{{examId}}", "questions"]
+						}
+					}
+				},
+				{
+					"name": "Publish Exam",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{teacherToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PATCH",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/teacher/exams/{{examId}}/publish",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "teacher", "exams", "{{examId}}", "publish"]
+						}
+					}
+				},
+				{
+					"name": "Get Exam Results & Statistics",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{teacherToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/teacher/exams/{{examId}}/results",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "teacher", "exams", "{{examId}}", "results"]
+						}
+					}
+				},
+				{
+					"name": "Export Results to CSV",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{teacherToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/teacher/exams/{{examId}}/results/export",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "teacher", "exams", "{{examId}}", "results", "export"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "3. Student - Exam Taking Flow",
+			"item": [
+				{
+					"name": "Get Available Exams",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{studentToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/student/exams/available",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "student", "exams", "available"]
+						}
+					}
+				},
+				{
+					"name": "Lookup Exam by Code",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{studentToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/student/exams/lookup?code=IT2026",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "student", "exams", "lookup"],
+							"query": [
+								{
+									"key": "code",
+									"value": "IT2026"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Start Exam (Confirm Participation)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"var jsonData = pm.response.json();",
+									"if (jsonData.attempt && jsonData.attempt.id) {",
+									"    pm.collectionVariables.set('attemptId', jsonData.attempt.id);",
+									"    console.log('Attempt ID saved:', jsonData.attempt.id);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{studentToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"confirmed\": true\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/student/exams/{{examId}}/start",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "student", "exams", "{{examId}}", "start"]
+						}
+					}
+				},
+				{
+					"name": "Save Answer (Auto-save / Atomic)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{studentToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"question_id\": 1,\n  \"chosen_option\": \"A\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/student/attempts/{{attemptId}}/save",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "student", "attempts", "{{attemptId}}", "save"]
+						}
+					}
+				},
+				{
+					"name": "Report Violation (Tab-switch / Anti-cheat)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{studentToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"reason\": \"tab_switch_detected\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/student/attempts/{{attemptId}}/violation",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "student", "attempts", "{{attemptId}}", "violation"]
+						}
+					}
+				},
+				{
+					"name": "Submit Exam",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{studentToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"answers\": [\n    {\n      \"question_id\": 1,\n      \"chosen_option\": \"A\"\n    }\n  ]\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/student/attempts/{{attemptId}}/submit",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "student", "attempts", "{{attemptId}}", "submit"]
+						}
+					}
+				},
+				{
+					"name": "Get Exam Result",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{studentToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/student/attempts/{{attemptId}}/result",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "student", "attempts", "{{attemptId}}", "result"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "4. History & Appeals Workflow",
+			"item": [
+				{
+					"name": "Student - Get Exam History",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{studentToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/student/history?page=1&page_size=10",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "student", "history"],
+							"query": [
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "page_size",
+									"value": "10"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Student - Submit Appeal",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{studentToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"submissionId\": 1,\n  \"title\": \"Phúc khảo câu số 1\",\n  \"content\": \"Em nhận thấy đáp án câu 1 của em hoàn toàn đúng theo tài liệu chuẩn của môn học.\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/student/appeals",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "student", "appeals"]
+						}
+					}
+				},
+				{
+					"name": "Teacher - List Exam Appeals",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{teacherToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/teacher/exams/{{examId}}/appeals?status=PENDING",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "teacher", "exams", "{{examId}}", "appeals"],
+							"query": [
+								{
+									"key": "status",
+									"value": "PENDING"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Teacher - Reply Appeal",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{teacherToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"response\": \"Thầy đã kiểm tra lại đề bài và chấp nhận nội dung phúc khảo của em.\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/teacher/appeals/1/reply",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "teacher", "appeals", "1", "reply"]
+						}
+					}
+				},
+				{
+					"name": "Teacher - Resolve Appeal",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{teacherToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PATCH",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/teacher/appeals/1/resolve",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "teacher", "appeals", "1", "resolve"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "5. Common - Profile, Notifications & Schedule",
+			"item": [
+				{
+					"name": "Get Profile",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{studentToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/profile",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "profile"]
+						}
+					}
+				},
+				{
+					"name": "Get Notifications",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{studentToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/notifications",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "notifications"]
+						}
+					}
+				},
+				{
+					"name": "Mark All Notifications As Read",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{studentToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PATCH",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/notifications/read-all",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "notifications", "read-all"]
+						}
+					}
+				},
+				{
+					"name": "Get Exam Schedule",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{studentToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/exams/schedule",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "exams", "schedule"]
+						}
+					}
+				}
+			]
+		}
+	]
+}
