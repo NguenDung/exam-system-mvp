@@ -2155,8 +2155,9 @@ func TestUserProfileAndDirectory(t *testing.T) {
 func TestTeacher_UserRoleManagement(t *testing.T) {
 	srv := setupTestServer(t)
 	teacherToken := loginUser(t, srv, "teacher@test.com", "123456")
+	studentToken := loginUser(t, srv, "student@test.com", "123456")
 
-	// Student ID 2 (student@test.com)
+	// Student ID 2 (student@test.com) promoted to teacher
 	wPromote := do(t, srv, "PATCH", "/api/teacher/users/2/role", teacherToken, gin.H{
 		"role": "teacher",
 	})
@@ -2164,12 +2165,32 @@ func TestTeacher_UserRoleManagement(t *testing.T) {
 		t.Fatalf("promote user failed: %d %s", wPromote.Code, wPromote.Body.String())
 	}
 
-	// Revert back to student
+	// Existing token of promoted user immediately gains teacher access
+	wPromotedAccess := do(t, srv, "GET", "/api/teacher/exams", studentToken, nil)
+	if wPromotedAccess.Code != http.StatusOK {
+		t.Fatalf("expected promoted user's existing JWT to access teacher route (200), got %d", wPromotedAccess.Code)
+	}
+
+	// Promoted teacher cannot demote the primary teacher (ID 1)
+	wDemotePrimary := do(t, srv, "PATCH", "/api/teacher/users/1/role", studentToken, gin.H{
+		"role": "student",
+	})
+	if wDemotePrimary.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 when demoting primary teacher, got %d %s", wDemotePrimary.Code, wDemotePrimary.Body.String())
+	}
+
+	// Revert ID 2 back to student
 	wDemote := do(t, srv, "PATCH", "/api/teacher/users/2/role", teacherToken, gin.H{
 		"role": "student",
 	})
 	if wDemote.Code != http.StatusOK {
 		t.Fatalf("demote user failed: %d %s", wDemote.Code, wDemote.Body.String())
+	}
+
+	// Existing token of demoted user immediately loses teacher access
+	wDemotedAccess := do(t, srv, "GET", "/api/teacher/exams", studentToken, nil)
+	if wDemotedAccess.Code != http.StatusForbidden {
+		t.Fatalf("expected demoted user's existing JWT to be rejected (403), got %d", wDemotedAccess.Code)
 	}
 
 	// Cannot change own role

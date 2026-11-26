@@ -22,7 +22,9 @@ func NewUserHandler(svc service.UserService) *UserHandler {
 
 func getDefaultUserHandler() *UserHandler {
 	userRepo := repository.NewUserRepository(config.DB)
-	svc := service.NewUserService(userRepo)
+	notifRepo := repository.NewNotificationRepository(config.DB)
+	notifSvc := service.NewNotificationService(notifRepo)
+	svc := service.NewUserService(userRepo, notifSvc)
 	return NewUserHandler(svc)
 }
 
@@ -150,7 +152,9 @@ func (h *UserHandler) GetDirectory(c *gin.Context) {
 // @Param request body dto.UpdateUserRoleRequest true "Vai trò mới"
 // @Success 200 {object} dto.UserProfileEnvelope
 // @Failure 400 {object} dto.ErrorResponse
+// @Failure 403 {object} dto.ErrorResponse
 // @Failure 404 {object} dto.ErrorResponse
+// @Failure 409 {object} dto.ErrorResponse
 // @Router /api/teacher/users/{id}/role [patch]
 func (h *UserHandler) TeacherUpdateUserRole(c *gin.Context) {
 	teacherIDVal, _ := c.Get("user_id")
@@ -172,6 +176,10 @@ func (h *UserHandler) TeacherUpdateUserRole(c *gin.Context) {
 		switch {
 		case errors.Is(err, service.ErrCannotChangeOwnRole), errors.Is(err, service.ErrInvalidRole):
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		case errors.Is(err, service.ErrCannotDemotePrimaryTeacher):
+			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		case errors.Is(err, service.ErrTeacherHasOwnedResources):
+			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 		case errors.Is(err, service.ErrUserNotFound):
 			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		default:

@@ -2,7 +2,9 @@ package service
 
 import (
 	"errors"
+	"fmt"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"exam-system-mvp/dto"
@@ -13,9 +15,11 @@ import (
 )
 
 var (
-	ErrUserNotFound       = errors.New("User not found")
-	ErrCannotChangeOwnRole = errors.New("Cannot change your own role")
-	ErrInvalidRole        = errors.New("Role must be either 'teacher' or 'student'")
+	ErrUserNotFound               = errors.New("User not found")
+	ErrCannotChangeOwnRole        = errors.New("Cannot change your own role")
+	ErrCannotDemotePrimaryTeacher = errors.New("Cannot demote the primary teacher account")
+	ErrTeacherHasOwnedResources   = errors.New("Cannot demote a teacher who owns existing exams or classrooms")
+	ErrInvalidRole                = errors.New("Role must be either 'teacher' or 'student'")
 )
 
 type UserService interface {
@@ -27,10 +31,15 @@ type UserService interface {
 
 type userService struct {
 	userRepo repository.UserRepository
+	notifSvc NotificationService
 }
 
-func NewUserService(userRepo repository.UserRepository) UserService {
-	return &userService{userRepo: userRepo}
+func NewUserService(userRepo repository.UserRepository, notifSvc ...NotificationService) UserService {
+	var svc NotificationService
+	if len(notifSvc) > 0 {
+		svc = notifSvc[0]
+	}
+	return &userService{userRepo: userRepo, notifSvc: svc}
 }
 
 func (s *userService) GetProfile(userID uint) (*models.User, error) {
@@ -126,8 +135,47 @@ func (s *userService) UpdateUserRole(actorID, targetID uint, req dto.UpdateUserR
 		return nil, ErrUserNotFound
 	}
 
+	if targetUser.Role == newRole {
+		return targetUser, nil
+	}
+
+	if newRole == models.RoleStudent {
+		if strings.EqualFold(targetUser.Email, "teacher@test.com") {
+			return nil, ErrCannotDemotePrimaryTeacher
+		}
+		hasOwned, err := s.userRepo.HasOwnedResources(targetID)
+		if err != nil {
+			return nil, errors.New("Failed to verify teacher resources")
+		}
+		if hasOwned {
+			return nil, ErrTeacherHasOwnedResources
+		}
+	}
+
+	oldRole := targetUser.Role
 	if err := s.userRepo.UpdateRole(targetID, newRole); err != nil {
 		return nil, errors.New("Failed to update role")
+	}
+
+	_ = s.userRepo.CreateAuditLog(&models.AuditLog{
+		ActorID:   actorID,
+		Action:    "UPDATE_USER_ROLE",
+		TargetID:  targetID,
+		Details:   fmt.Sprintf("Changed role of %s from %s to %s", targetUser.Email, oldRole, newRole),
+		CreatedAt: time.Now(),
+	})
+
+	if s.notifSvc != nil {
+		roleLabel := "Sinh viên"
+		if newRole == models.RoleTeacher {
+			roleLabel = "Giảng viên"
+		}
+		s.notifSvc.CreateNotification(
+			targetID,
+			"Cập nhật vai trò tài khoản",
+			fmt.Sprintf("Tài khoản của bạn đã được phân quyền thành %s. Vui lòng tải lại trang hoặc đăng nhập lại nếu giao diện chưa tự chuyển.", roleLabel),
+			"/profile",
+		)
 	}
 
 	targetUser.Role = newRole

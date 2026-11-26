@@ -4,6 +4,8 @@ import (
 	"net/http"
 	"strings"
 
+	"exam-system-mvp/config"
+	"exam-system-mvp/models"
 	"exam-system-mvp/utils"
 
 	"github.com/gin-gonic/gin"
@@ -13,7 +15,7 @@ import (
 // Claims is an alias kept for backward compatibility with existing imports.
 type Claims = utils.Claims
 
-// AuthRequired validates JWT and injects user info into context.
+// AuthRequired validates JWT and injects live user info into context.
 func AuthRequired() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
@@ -44,9 +46,21 @@ func AuthRequired() gin.HandlerFunc {
 			return
 		}
 
+		role := claims.Role
+		email := claims.Email
+		if config.DB != nil {
+			var user models.User
+			if err := config.DB.Select("id, email, role").Where("id = ?", claims.UserID).First(&user).Error; err != nil {
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "User account not found or deactivated"})
+				return
+			}
+			role = user.Role
+			email = user.Email
+		}
+
 		c.Set("user_id", claims.UserID)
-		c.Set("email", claims.Email)
-		c.Set("role", claims.Role)
+		c.Set("email", email)
+		c.Set("role", role)
 		c.Next()
 	}
 }

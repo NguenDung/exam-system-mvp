@@ -12,11 +12,14 @@ export default function DirectoryPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState('');
   const [updatingId, setUpdatingId] = useState(null);
+  const [confirmRoleChange, setConfirmRoleChange] = useState(null);
 
-  const fetchDirectory = useCallback(async () => {
+  const fetchDirectory = useCallback(async (silent = false) => {
     try {
-      setLoading(true);
-      setError('');
+      if (!silent) {
+        setLoading(true);
+        setError('');
+      }
       const params = {};
       if (searchQuery.trim()) params.q = searchQuery.trim();
       if (roleFilter) params.role = roleFilter;
@@ -26,7 +29,9 @@ export default function DirectoryPage() {
     } catch (err) {
       setError(err.response?.data?.error || 'Không thể tải danh bạ người dùng');
     } finally {
-      setLoading(false);
+      if (!silent) {
+        setLoading(false);
+      }
     }
   }, [searchQuery, roleFilter]);
 
@@ -37,25 +42,30 @@ export default function DirectoryPage() {
     return () => clearTimeout(timer);
   }, [fetchDirectory]);
 
-  const handleRoleChange = async (targetUser, newRole) => {
+  const requestRoleChange = (targetUser, newRole) => {
     if (targetUser.id === currentUser?.id) {
       setError('Bạn không thể tự thay đổi vai trò của chính mình');
       return;
     }
-    if (!window.confirm(`Xác nhận chuyển vai trò của ${targetUser.full_name} thành "${newRole === 'teacher' ? 'Giảng viên' : 'Sinh viên'}"?`)) {
-      return;
-    }
+    setError('');
+    setSuccess('');
+    setConfirmRoleChange({ user: targetUser, newRole });
+  };
+
+  const handleConfirmRoleChange = async () => {
+    if (!confirmRoleChange) return;
+    const { user: targetUser, newRole } = confirmRoleChange;
 
     try {
       setUpdatingId(targetUser.id);
       setError('');
       setSuccess('');
       await teacherAPI.updateUserRole(targetUser.id, newRole);
-      setUsers((prev) =>
-        prev.map((u) => (u.id === targetUser.id ? { ...u, role: newRole } : u))
-      );
+      setConfirmRoleChange(null);
       setSuccess(`Đã cập nhật vai trò cho ${targetUser.full_name}`);
+      await fetchDirectory(true);
     } catch (err) {
+      setConfirmRoleChange(null);
       setError(err.response?.data?.error || 'Không thể cập nhật vai trò');
     } finally {
       setUpdatingId(null);
@@ -192,23 +202,68 @@ export default function DirectoryPage() {
                 {currentUser?.role === 'teacher' && !isSelf && (
                   <div className="pt-3 mt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
                     <span className="text-[11px] text-slate-500 dark:text-slate-400">Phân quyền:</span>
-                    <button
-                      type="button"
-                      disabled={updatingId === item.id}
-                      onClick={() => handleRoleChange(item, isTeacher ? 'student' : 'teacher')}
-                      className="text-xs text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 font-medium hover:underline disabled:opacity-50"
-                    >
-                      {updatingId === item.id
-                        ? 'Đang đổi...'
-                        : isTeacher
-                        ? 'Chuyển sang Sinh viên'
-                        : 'Nâng lên Giảng viên'}
-                    </button>
+                    {item.email === 'teacher@test.com' ? (
+                      <span className="text-[11px] font-medium text-slate-400 dark:text-slate-500">
+                        Tài khoản giảng viên gốc
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={updatingId === item.id}
+                        onClick={() => requestRoleChange(item, isTeacher ? 'student' : 'teacher')}
+                        className="text-xs text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 font-medium hover:underline disabled:opacity-50"
+                      >
+                        {updatingId === item.id
+                          ? 'Đang đổi...'
+                          : isTeacher
+                          ? 'Chuyển sang Sinh viên'
+                          : 'Nâng lên Giảng viên'}
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
             );
           })}
+        </div>
+      )}
+
+      {confirmRoleChange && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xl max-w-md w-full p-6 space-y-4">
+            <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">
+              Xác nhận thay đổi vai trò
+            </h2>
+            <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+              Chuyển vai trò của{' '}
+              <span className="font-semibold text-slate-900 dark:text-slate-100">
+                {confirmRoleChange.user.full_name}
+              </span>{' '}
+              ({confirmRoleChange.user.email}) thành{' '}
+              <span className="font-semibold text-indigo-600 dark:text-indigo-400">
+                {confirmRoleChange.newRole === 'teacher' ? 'Giảng viên' : 'Sinh viên'}
+              </span>
+              ?
+            </p>
+            <div className="flex items-center justify-end gap-2.5 pt-2">
+              <button
+                type="button"
+                disabled={updatingId === confirmRoleChange.user.id}
+                onClick={() => setConfirmRoleChange(null)}
+                className="px-4 py-2 text-xs font-semibold rounded-lg border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                disabled={updatingId === confirmRoleChange.user.id}
+                onClick={handleConfirmRoleChange}
+                className="px-4 py-2 text-xs font-semibold rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white transition-colors disabled:opacity-50"
+              >
+                {updatingId === confirmRoleChange.user.id ? 'Đang xử lý...' : 'Xác nhận'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

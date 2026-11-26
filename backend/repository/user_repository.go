@@ -14,6 +14,8 @@ type UserRepository interface {
 	Update(user *models.User) error
 	UpdateFields(user *models.User, updates map[string]interface{}) error
 	UpdateRole(id uint, newRole string) error
+	HasOwnedResources(userID uint) (bool, error)
+	CreateAuditLog(log *models.AuditLog) error
 	FindDirectory(q, role, department string, limit int) ([]models.User, error)
 }
 
@@ -63,6 +65,26 @@ func (r *gormUserRepository) UpdateFields(user *models.User, updates map[string]
 
 func (r *gormUserRepository) UpdateRole(id uint, newRole string) error {
 	return r.db.Model(&models.User{}).Where("id = ?", id).Update("role", newRole).Error
+}
+
+func (r *gormUserRepository) HasOwnedResources(userID uint) (bool, error) {
+	var examCount int64
+	if err := r.db.Model(&models.Exam{}).Where("teacher_id = ?", userID).Count(&examCount).Error; err != nil {
+		return false, err
+	}
+	if examCount > 0 {
+		return true, nil
+	}
+
+	var classCount int64
+	if err := r.db.Model(&models.Classroom{}).Where("teacher_id = ?", userID).Count(&classCount).Error; err != nil {
+		return false, err
+	}
+	return classCount > 0, nil
+}
+
+func (r *gormUserRepository) CreateAuditLog(log *models.AuditLog) error {
+	return r.db.Create(log).Error
 }
 
 func (r *gormUserRepository) FindDirectory(q, role, department string, limit int) ([]models.User, error) {

@@ -1,4 +1,5 @@
-import { createContext, useContext, useState, useCallback } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import { profileAPI } from '../api/endpoints';
 
 const AuthContext = createContext(null);
 
@@ -22,6 +23,19 @@ export function AuthProvider({ children }) {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     setUser(null);
+  }, []);
+
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    profileAPI.getProfile()
+      .then(({ data }) => {
+        if (data?.user) {
+          localStorage.setItem('user', JSON.stringify(data.user));
+          setUser(data.user);
+        }
+      })
+      .catch(() => {});
   }, []);
 
   return (
