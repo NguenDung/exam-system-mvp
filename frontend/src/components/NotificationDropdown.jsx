@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { notificationAPI } from '../api/endpoints';
 
 export default function NotificationDropdown() {
@@ -8,11 +8,15 @@ export default function NotificationDropdown() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
   const dropdownRef = useRef(null);
+  const mutationVersionRef = useRef(0);
   const navigate = useNavigate();
+  const location = useLocation();
 
   const fetchNotifications = useCallback(async () => {
+    const startVersion = mutationVersionRef.current;
     try {
       const { data } = await notificationAPI.getAll();
+      if (mutationVersionRef.current !== startVersion) return;
       setNotifications(data.notifications || []);
       setUnreadCount(data.unread_count || 0);
     } catch {
@@ -55,6 +59,7 @@ export default function NotificationDropdown() {
 
   const handleMarkAsRead = async (id, isRead) => {
     if (isRead) return;
+    mutationVersionRef.current += 1;
     try {
       await notificationAPI.markAsRead(id);
       setNotifications((prev) =>
@@ -72,12 +77,21 @@ export default function NotificationDropdown() {
     }
     setIsOpen(false);
     if (item.target_url) {
-      navigate(item.target_url);
+      let target = item.target_url;
+      if (target.startsWith('/teacher/exams/') && !target.includes('?') && /phúc khảo/i.test(`${item.title} ${item.message}`)) {
+        target = `${target}?tab=appeals`;
+      }
+      if (`${location.pathname}${location.search}` === target) {
+        window.dispatchEvent(new CustomEvent('app:refresh-route', { detail: target }));
+      } else {
+        navigate(target);
+      }
     }
   };
 
   const handleMarkAllAsRead = async () => {
     setLoading(true);
+    mutationVersionRef.current += 1;
     try {
       await notificationAPI.markAllAsRead();
       setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
@@ -91,6 +105,7 @@ export default function NotificationDropdown() {
 
   const handleDeleteNotification = async (e, id) => {
     e.stopPropagation();
+    mutationVersionRef.current += 1;
     try {
       await notificationAPI.delete(id);
       const target = notifications.find((n) => n.id === id);
@@ -105,6 +120,7 @@ export default function NotificationDropdown() {
 
   const handleClearRead = async (e) => {
     e.stopPropagation();
+    mutationVersionRef.current += 1;
     try {
       await notificationAPI.clearRead();
       setNotifications((prev) => prev.filter((n) => !n.is_read));

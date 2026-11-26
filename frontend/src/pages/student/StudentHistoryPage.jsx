@@ -218,7 +218,7 @@ export default function StudentHistoryPage() {
                       {Number(item.score).toFixed(2)} / {Number(item.max_score).toFixed(2)}
                     </td>
                     <td className="px-4 py-3.5">
-                      {item.appeal_status ? (
+                      {item.appeal_status && item.appeal_status !== 'NOT_SUBMITTED' ? (
                         <span className="inline-block px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800">
                           {APPEAL_STATUS[item.appeal_status] || item.appeal_status}
                         </span>
@@ -235,13 +235,15 @@ export default function StudentHistoryPage() {
                           Chi tiết
                         </button>
                         <button
+                          disabled={item.appeal_status === 'PENDING'}
+                          title={item.appeal_status === 'PENDING' ? 'Đơn phúc khảo đang chờ xử lý' : 'Gửi đơn phúc khảo'}
                           onClick={() => {
                             setNotice('');
                             setSelectedSubmission(item);
                           }}
-                          className="btn-secondary btn-sm"
+                          className="btn-secondary btn-sm disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                          Phúc khảo
+                          {item.appeal_status === 'PENDING' ? 'Đang phúc khảo' : 'Phúc khảo'}
                         </button>
                       </div>
                     </td>

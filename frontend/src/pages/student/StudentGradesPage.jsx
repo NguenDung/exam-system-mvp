@@ -60,20 +60,38 @@ export default function StudentGradesPage() {
     const now = new Date();
     const map = new Map();
 
+    const scaleToTen = (rawScore, maxPoints) => {
+      if (rawScore === null || rawScore === undefined || Number.isNaN(Number(rawScore))) return null;
+      const raw = Number(rawScore);
+      const max = Number(maxPoints);
+      if (max > 0) {
+        return Math.round(((raw / max) * 10) * 100) / 100;
+      }
+      return Math.round(raw * 100) / 100;
+    };
+
     availableExams.forEach((ex) => {
       const isPastDeadline = new Date(ex.end_time) < now;
+      const att = ex.attempt || null;
+      const rawScore = att?.score !== undefined && att?.score !== null ? att.score : ex.score;
+      const isCompleted = ex.attempt_status === 'submitted' || att?.status === 'completed';
+      const isInProgress = ex.attempt_status === 'in_progress' || ex.attempt_status === 'time_up';
+      const isClosedUnattempted = isPastDeadline && (ex.attempt_status === 'not_attempted' || !ex.attempt_status);
+
       map.set(ex.id, {
         examId: ex.id,
         code: ex.exam_code || `EX-${ex.id}`,
         title: ex.title,
         duration: ex.duration,
+        totalPoints: Number(ex.total_points) || 0,
         endTime: ex.end_time,
         credits: 3,
-        attemptStatus: ex.attempt_status,
-        score10: ex.score !== undefined && ex.score !== null ? Number(ex.score) : null,
-        attemptId: ex.attempt_id || null,
-        isMissed: isPastDeadline && (ex.attempt_status === 'not_attempted' || !ex.attempt_status),
-        isCompleted: ex.attempt_status === 'submitted' || ex.attempt_status === 'time_up',
+        attemptStatus: ex.attempt_status || 'not_attempted',
+        score10: isCompleted ? scaleToTen(rawScore, ex.total_points) : null,
+        attemptId: att?.id || ex.attempt_id || null,
+        isClosedUnattempted,
+        isInProgress,
+        isCompleted,
       });
     });
 
@@ -83,34 +101,50 @@ export default function StudentGradesPage() {
         code: att.exam_code || `EX-${att.exam_id}`,
         title: att.exam_title || `Đề thi #${att.exam_id}`,
         credits: 3,
-        duration: 45,
+        duration: att.exam_duration || 45,
+        totalPoints: Number(att.total_points) || 0,
       };
 
-      const score = att.score !== undefined && att.score !== null ? Number(att.score) : existing.score10;
+      const resolvedTotalPoints = Number(att.total_points) || existing.totalPoints || 0;
       const isCompleted = att.status === 'completed';
+      const rawScore = isCompleted ? att.score : null;
+      const scaled = isCompleted ? scaleToTen(rawScore, resolvedTotalPoints) : existing.score10;
 
       map.set(att.exam_id, {
         ...existing,
+        totalPoints: resolvedTotalPoints,
         attemptId: att.id,
-        score10: score,
+        score10: scaled,
         isCompleted,
-        isMissed: false,
+        isInProgress: !isCompleted,
+        isClosedUnattempted: false,
         attemptStatus: isCompleted ? 'submitted' : 'in_progress',
       });
     });
 
     return Array.from(map.values()).map((course) => {
-      let finalScore = course.score10;
-      if (course.isMissed) {
-        finalScore = 0.0;
-      }
-
-      const gradeInfo = calculateScale(finalScore);
+      const finalScore = course.isCompleted ? course.score10 : null;
+      const gradeInfo = course.isClosedUnattempted
+        ? {
+          letter: '—',
+          scale4: null,
+          status: 'Đã đóng (Chưa dự thi)',
+          badge: 'bg-slate-100 text-slate-500 border border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700',
+        }
+        : course.isInProgress
+          ? {
+            letter: '—',
+            scale4: null,
+            status: 'Đang làm bài',
+            badge: 'bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800',
+          }
+          : calculateScale(finalScore);
       const isFailed = finalScore !== null && finalScore < 4.0;
 
       return {
         ...course,
         finalScore,
+        isMissed: false,
         ...gradeInfo,
         isFailed,
       };
@@ -118,17 +152,17 @@ export default function StudentGradesPage() {
   }, [availableExams, attempts]);
 
   const stats = useMemo(() => {
-    const evaluatedCourses = processedCourses.filter((c) => c.isCompleted || c.isMissed);
-    const completedPassed = evaluatedCourses.filter((c) => c.finalScore !== null && c.finalScore >= 4.0);
-    const failedCourses = evaluatedCourses.filter((c) => c.isFailed || c.isMissed);
+    const evaluatedCourses = processedCourses.filter((c) => c.isCompleted && c.finalScore !== null);
+    const completedPassed = evaluatedCourses.filter((c) => c.finalScore >= 4.0);
+    const failedCourses = evaluatedCourses.filter((c) => c.isFailed);
 
     const totalCredits = evaluatedCourses.reduce((acc, c) => acc + c.credits, 0);
     const earnedCredits = completedPassed.reduce((acc, c) => acc + c.credits, 0);
 
-    const totalWeightedPoints4 = evaluatedCourses.reduce((acc, c) => acc + (c.scale4 * c.credits), 0);
+    const totalWeightedPoints4 = evaluatedCourses.reduce((acc, c) => acc + ((c.scale4 ?? 0) * c.credits), 0);
     const cpa4 = totalCredits > 0 ? (totalWeightedPoints4 / totalCredits).toFixed(2) : '0.00';
 
-    const totalWeightedPoints10 = evaluatedCourses.reduce((acc, c) => acc + ((c.finalScore || 0) * c.credits), 0);
+    const totalWeightedPoints10 = evaluatedCourses.reduce((acc, c) => acc + ((c.finalScore ?? 0) * c.credits), 0);
     const cpa10 = totalCredits > 0 ? (totalWeightedPoints10 / totalCredits).toFixed(2) : '0.00';
 
     let graduationRank = 'Chưa đủ điều kiện';
@@ -159,15 +193,17 @@ export default function StudentGradesPage() {
 
     const failCount = failedCourses.length;
 
-    if (failCount >= 3 || (cpaNum > 0 && cpaNum < 1.2)) {
-      warningLevel = 3;
-      warningText = 'CẢNH BÁO HỌC VỤ MỨC 3 (Nguy cơ buộc thôi học)';
-    } else if (failCount === 2 || (cpaNum > 0 && cpaNum < 1.6)) {
-      warningLevel = 2;
-      warningText = 'Cảnh báo học vụ Mức 2 (Nguy cơ đình chỉ học phần)';
-    } else if (failCount === 1 || (cpaNum > 0 && cpaNum < 2.0)) {
-      warningLevel = 1;
-      warningText = 'Cảnh báo học vụ Mức 1 (Cần cải thiện điểm)';
+    if (totalCredits > 0) {
+      if (failCount >= 3 || cpaNum < 1.2) {
+        warningLevel = 3;
+        warningText = 'CẢNH BÁO HỌC VỤ MỨC 3 (Nguy cơ buộc thôi học)';
+      } else if (failCount === 2 || cpaNum < 1.6) {
+        warningLevel = 2;
+        warningText = 'Cảnh báo học vụ Mức 2 (Nguy cơ đình chỉ học phần)';
+      } else if (failCount === 1 || cpaNum < 2.0) {
+        warningLevel = 1;
+        warningText = 'Cảnh báo học vụ Mức 1 (Cần cải thiện điểm)';
+      }
     }
 
     const distribution = [
@@ -247,13 +283,12 @@ export default function StudentGradesPage() {
         <>
           {/* Academic Warning Notification Banner */}
           {stats.warningLevel > 0 ? (
-            <div className={`p-4 rounded-xl border flex items-start justify-between gap-3 shadow-sm ${
-              stats.warningLevel === 3
-                ? 'bg-rose-50 border-rose-300 dark:bg-rose-950/60 dark:border-rose-800 text-rose-900 dark:text-rose-200'
-                : stats.warningLevel === 2
+            <div className={`p-4 rounded-xl border flex items-start justify-between gap-3 shadow-sm ${stats.warningLevel === 3
+              ? 'bg-rose-50 border-rose-300 dark:bg-rose-950/60 dark:border-rose-800 text-rose-900 dark:text-rose-200'
+              : stats.warningLevel === 2
                 ? 'bg-orange-50 border-orange-200 dark:bg-orange-950/50 dark:border-orange-800 text-orange-900 dark:text-orange-200'
                 : 'bg-amber-50 border-amber-200 dark:bg-amber-950/50 dark:border-amber-800 text-amber-900 dark:text-amber-200'
-            }`}>
+              }`}>
               <div className="flex items-start gap-3">
                 <svg className="w-5 h-5 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
@@ -261,7 +296,7 @@ export default function StudentGradesPage() {
                 <div>
                   <h4 className="font-bold text-sm">{stats.warningText}</h4>
                   <p className="text-xs mt-1 leading-relaxed opacity-90">
-                    Bạn hiện có <strong>{stats.failCount} bài thi</strong> chưa đạt (&lt; 4.0 điểm hoặc đã bỏ lỡ kỳ thi). 
+                    Bạn hiện có <strong>{stats.failCount} bài thi</strong> chưa đạt (&lt; 4.0 điểm hoặc đã bỏ lỡ kỳ thi).
                     Theo quy chế đào tạo tín chỉ, sinh viên cần sớm đăng ký thi lại hoặc liên hệ giảng viên học phần để gỡ điểm.
                   </p>
                 </div>
@@ -368,22 +403,20 @@ export default function StudentGradesPage() {
                 <button
                   type="button"
                   onClick={() => setChartView('subjects')}
-                  className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${
-                    chartView === 'subjects'
-                      ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-sm'
-                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
-                  }`}
+                  className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${chartView === 'subjects'
+                    ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-sm'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                    }`}
                 >
                   Từng môn học
                 </button>
                 <button
                   type="button"
                   onClick={() => setChartView('distribution')}
-                  className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${
-                    chartView === 'distribution'
-                      ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-sm'
-                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
-                  }`}
+                  className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${chartView === 'distribution'
+                    ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-sm'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                    }`}
                 >
                   Phân bố học lực
                 </button>
@@ -770,7 +803,7 @@ export default function StudentGradesPage() {
                           {c.letter}
                         </td>
                         <td className="px-4 py-3 text-center font-mono font-bold text-slate-800 dark:text-slate-200 whitespace-nowrap">
-                          {c.scale4 ? Number(c.scale4).toFixed(1) : '—'}
+                          {c.scale4 !== null && c.scale4 !== undefined ? Number(c.scale4).toFixed(1) : '—'}
                         </td>
                         <td className="px-4 py-3 text-center whitespace-nowrap min-w-[160px]">
                           <span className={`inline-flex items-center justify-center px-3 py-1 rounded-md text-xs font-semibold whitespace-nowrap leading-none ${c.badge}`}>

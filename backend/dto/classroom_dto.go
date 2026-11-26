@@ -74,6 +74,8 @@ type ClassDetailResponse struct {
 type StudentGradeEntry struct {
 	AttemptID      *uint      `json:"attempt_id"`
 	Score          *float64   `json:"score"`
+	ScaledScore    *float64   `json:"scaled_score,omitempty"`
+	MaxPoints      float64    `json:"max_points,omitempty"`
 	Status         string     `json:"status"` // "completed" | "in_progress" | "not_attempted"
 	ViolationCount int        `json:"violation_count"`
 	SubmittedAt    *time.Time `json:"submitted_at"`
@@ -97,6 +99,7 @@ type ClassGradebookExam struct {
 	ExamCode  string    `json:"exam_code"`
 	Title     string    `json:"title"`
 	Duration  int       `json:"duration"`
+	MaxPoints float64   `json:"max_points"`
 	StartTime time.Time `json:"start_time"`
 	EndTime   time.Time `json:"end_time"`
 	Status    string    `json:"status"`

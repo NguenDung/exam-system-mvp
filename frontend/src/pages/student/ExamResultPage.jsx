@@ -44,6 +44,8 @@ export default function ExamResultPage() {
 
   const { attempt, exam, answers, show_correct_answers } = data;
   const maxScore = (answers || []).reduce((total, answer) => total + Number(answer.points || 0), 0);
+  const skippedCount = (answers || []).filter((a) => !a.chosen_option).length;
+  const wrongAnsweredCount = Math.max(0, (attempt.wrong_count || 0) - skippedCount);
   const scorePercent =
     answers && answers.length > 0 ? Math.round((attempt.correct_count / answers.length) * 100) : 0;
 
@@ -86,12 +88,12 @@ export default function ExamResultPage() {
             <div className="text-xs text-slate-500 dark:text-slate-400">Số câu đúng</div>
           </div>
           <div>
-            <div className="text-xl font-bold text-red-600 dark:text-rose-400">{attempt.wrong_count}</div>
+            <div className="text-xl font-bold text-red-600 dark:text-rose-400">{wrongAnsweredCount}</div>
             <div className="text-xs text-slate-500 dark:text-slate-400">Số câu sai</div>
           </div>
           <div>
             <div className="text-xl font-bold text-slate-400 dark:text-slate-500">
-              {(answers?.length || 0) - attempt.correct_count - attempt.wrong_count}
+              {skippedCount}
             </div>
             <div className="text-xs text-slate-500 dark:text-slate-400">Bỏ qua</div>
           </div>
@@ -130,13 +132,12 @@ export default function ExamResultPage() {
               return (
                 <div
                   key={a.question_id}
-                  className={`bg-white dark:bg-slate-900 rounded-xl border p-4 shadow-sm ${
-                    isUnanswered
-                      ? 'border-slate-200 dark:border-slate-800'
-                      : isCorrect
+                  className={`bg-white dark:bg-slate-900 rounded-xl border p-4 shadow-sm ${!show_correct_answers || isUnanswered
+                    ? 'border-slate-200 dark:border-slate-800'
+                    : isCorrect
                       ? 'border-emerald-200 dark:border-emerald-800'
                       : 'border-red-200 dark:border-rose-800'
-                  }`}
+                    }`}
                 >
                   <div className="flex items-start gap-3 mb-3">
                     <span className="flex-shrink-0 w-6 h-6 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-xs flex items-center justify-center">
@@ -146,13 +147,15 @@ export default function ExamResultPage() {
                       <p className="font-medium text-slate-900 dark:text-slate-100 text-sm">{a.prompt}</p>
                       <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">Trọng số: {a.points} điểm</p>
                     </div>
-                    <span className="text-xs font-semibold">
-                      {isCorrect ? (
-                        <span className="text-emerald-700 dark:text-emerald-400">+{Number(a.points_awarded).toFixed(1)}</span>
-                      ) : (
-                        <span className="text-slate-400 dark:text-slate-500">0</span>
-                      )}
-                    </span>
+                    {show_correct_answers && (
+                      <span className="text-xs font-semibold">
+                        {isCorrect ? (
+                          <span className="text-emerald-700 dark:text-emerald-400">+{Number(a.points_awarded).toFixed(2)}</span>
+                        ) : (
+                          <span className="text-slate-400 dark:text-slate-500">0</span>
+                        )}
+                      </span>
+                    )}
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
@@ -162,30 +165,37 @@ export default function ExamResultPage() {
                       const isAnswer = show_correct_answers && a.correct_option === opt;
 
                       let cls = 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/80 text-slate-700 dark:text-slate-200';
-                      if (isAnswer && show_correct_answers) cls = 'border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-200 font-semibold';
-                      if (isChosen && !isCorrect && !isAnswer) cls = 'border-red-300 dark:border-rose-700 bg-red-50 dark:bg-rose-950/40 text-red-900 dark:text-rose-200 font-semibold';
-                      if (isChosen && isCorrect) cls = 'border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-200 font-semibold';
+                      if (!show_correct_answers) {
+                        if (isChosen) cls = 'border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-950/40 text-blue-900 dark:text-blue-200 font-semibold';
+                      } else {
+                        if (isAnswer) cls = 'border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-200 font-semibold';
+                        if (isChosen && !isCorrect && !isAnswer) cls = 'border-red-300 dark:border-rose-700 bg-red-50 dark:bg-rose-950/40 text-red-900 dark:text-rose-200 font-semibold';
+                        if (isChosen && isCorrect) cls = 'border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-200 font-semibold';
+                      }
 
                       return (
                         <div key={opt} className={`flex items-center gap-2 px-3 py-2 rounded border ${cls}`}>
                           <span
-                            className={`w-5 h-5 rounded flex items-center justify-center text-xs font-bold flex-shrink-0 ${
-                              isAnswer && show_correct_answers
+                            className={`w-5 h-5 rounded flex items-center justify-center text-xs font-bold flex-shrink-0 ${!show_correct_answers
+                              ? isChosen
+                                ? 'bg-blue-600 text-white'
+                                : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                              : isAnswer
                                 ? 'bg-emerald-600 text-white'
                                 : isChosen && !isCorrect
-                                ? 'bg-red-600 text-white'
-                                : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
-                            }`}
+                                  ? 'bg-red-600 text-white'
+                                  : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                              }`}
                           >
                             {opt}
                           </span>
                           <span className="truncate">{a[field]}</span>
                           {isChosen && (
                             <span className="ml-auto text-xs font-medium">
-                              {isCorrect ? '(Đúng)' : '(Bạn chọn)'}
+                              {show_correct_answers ? (isCorrect ? '(Đúng)' : '(Bạn chọn)') : '(Bạn chọn)'}
                             </span>
                           )}
-                          {isAnswer && show_correct_answers && !isChosen && (
+                          {isAnswer && !isChosen && (
                             <span className="ml-auto text-xs text-emerald-700 font-semibold">(Đáp án)</span>
                           )}
                         </div>

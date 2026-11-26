@@ -41,6 +41,7 @@ export default function ProfilePage() {
           confirm_password: '',
         });
         setAvatarPreview(u.avatar_url || '');
+        updateUser(u);
       } catch (err) {
         setError(err.response?.data?.error || 'Không thể tải thông tin hồ sơ');
       } finally {
@@ -48,7 +49,7 @@ export default function ProfilePage() {
       }
     }
     loadProfile();
-  }, []);
+  }, [updateUser]);
 
   const handleFileChange = (e) => {
     const file = e.target.files?.[0];
@@ -59,8 +60,8 @@ export default function ProfilePage() {
       return;
     }
 
-    if (file.size > 2 * 1024 * 1024) {
-      setError('Dung lượng ảnh tối đa là 2MB');
+    if (file.size > 1.4 * 1024 * 1024) {
+      setError('Dung lượng ảnh tối đa là 1.4MB (để đảm bảo dưới giới hạn 2MB sau mã hóa)');
       return;
     }
 
@@ -98,6 +99,10 @@ export default function ProfilePage() {
     if (formData.new_password) {
       if (formData.new_password.length < 6) {
         setError('Mật khẩu mới phải có tối thiểu 6 ký tự');
+        return;
+      }
+      if (new TextEncoder().encode(formData.new_password).length > 72) {
+        setError('Mật khẩu mới không được vượt quá 72 byte');
         return;
       }
       if (formData.new_password !== formData.confirm_password) {

@@ -28,6 +28,12 @@ function SharedRoleLayout() {
   return user?.role === 'teacher' ? <TeacherLayout /> : <StudentLayout />;
 }
 
+function HomeRedirect() {
+  const { isAuthenticated, user } = useAuth();
+  if (!isAuthenticated || !user) return <Navigate to="/login" replace />;
+  return <Navigate to={user.role === 'teacher' ? '/teacher' : '/student'} replace />;
+}
+
 export default function App() {
   return (
     <ThemeProvider>
@@ -73,8 +79,8 @@ export default function App() {
             </Route>
 
             {/* Fallback */}
-            <Route path="/" element={<Navigate to="/login" replace />} />
-            <Route path="*" element={<Navigate to="/login" replace />} />
+            <Route path="/" element={<HomeRedirect />} />
+            <Route path="*" element={<HomeRedirect />} />
           </Routes>
         </BrowserRouter>
       </AuthProvider>

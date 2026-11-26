@@ -1,38 +1,50 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
 import { studentAPI } from '../../api/endpoints';
 import Spinner from '../../components/Spinner';
 
 const OPTIONS = ['A', 'B', 'C', 'D'];
 const OPTION_FIELDS = { A: 'option_a', B: 'option_b', C: 'option_c', D: 'option_d' };
+const inFlightStarts = new Map();
 
 function CountdownTimer({ seconds, onExpire, onWarning }) {
-  const [remaining, setRemaining] = useState(seconds);
+  const [remaining, setRemaining] = useState(Math.max(0, seconds));
+  const deadlineRef = useRef(Date.now() + Math.max(0, seconds) * 1000);
   const expiredRef = useRef(false);
   const warnedRef = useRef(false);
 
   useEffect(() => {
-    setRemaining(seconds);
+    const safeSec = Math.max(0, seconds);
+    deadlineRef.current = Date.now() + safeSec * 1000;
+    setRemaining(safeSec);
     expiredRef.current = false;
     warnedRef.current = false;
   }, [seconds]);
 
   useEffect(() => {
-    if (remaining > 0 && remaining <= 60 && !warnedRef.current) {
-      warnedRef.current = true;
-      onWarning(true);
-    }
-    if (remaining <= 0) {
-      if (!expiredRef.current) {
+    const syncRemaining = () => {
+      const next = Math.max(0, Math.ceil((deadlineRef.current - Date.now()) / 1000));
+      setRemaining(next);
+      if (next > 0 && next <= 60 && !warnedRef.current) {
+        warnedRef.current = true;
+        onWarning(true);
+      }
+      if (next <= 0 && !expiredRef.current) {
         expiredRef.current = true;
         onWarning(false);
         onExpire();
       }
-      return;
-    }
-    const id = setTimeout(() => setRemaining((r) => r - 1), 1000);
-    return () => clearTimeout(id);
-  }, [remaining, onExpire, onWarning]);
+    };
+
+    syncRemaining();
+    const id = setInterval(syncRemaining, 500);
+    document.addEventListener('visibilitychange', syncRemaining);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener('visibilitychange', syncRemaining);
+    };
+  }, [seconds, onExpire, onWarning]);
 
   const h = Math.floor(remaining / 3600);
   const m = Math.floor((remaining % 3600) / 60);
@@ -42,13 +54,12 @@ function CountdownTimer({ seconds, onExpire, onWarning }) {
 
   return (
     <div
-      className={`flex items-center gap-2 px-3 py-1.5 rounded font-mono font-bold text-sm sm:text-base transition-colors ${
-        isWarning
-          ? 'bg-red-100 text-red-800 border border-red-300'
-          : isUrgent
+      className={`flex items-center gap-2 px-3 py-1.5 rounded font-mono font-bold text-sm sm:text-base transition-colors ${isWarning
+        ? 'bg-red-100 text-red-800 border border-red-300'
+        : isUrgent
           ? 'bg-amber-100 text-amber-800 border border-amber-300'
           : 'bg-slate-100 text-slate-800 border border-slate-200'
-      }`}
+        }`}
     >
       <span className="text-xs uppercase font-sans font-medium text-slate-500 hidden sm:inline">Thời gian:</span>
       <span>
@@ -143,8 +154,10 @@ function SubmitConfirmModal({ answeredCount, totalCount, flaggedCount, onConfirm
 export default function ExamTakingPage() {
   const { exam_id } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   const [loading, setLoading] = useState(true);
+  const [needsConfirmation, setNeedsConfirmation] = useState(false);
   const [attempt, setAttempt] = useState(null);
   const [questions, setQuestions] = useState([]);
   const [answers, setAnswers] = useState({});
@@ -166,17 +179,52 @@ export default function ExamTakingPage() {
   const answersRef = useRef(answers);
   const autoSubmittedRef = useRef(false);
   const lastViolationReportRef = useRef(0);
+  const saveSeqRef = useRef(0);
   answersRef.current = answers;
 
-  const loadExam = useCallback(async () => {
+  const getAnswerCacheKey = useCallback(
+    (attemptId) => `exam_attempt_${user?.id || 'anon'}_${attemptId}_answers`,
+    [user?.id]
+  );
+  const getFlagCacheKey = useCallback(
+    (attemptId) => `exam_attempt_${user?.id || 'anon'}_${attemptId}_flagged`,
+    [user?.id]
+  );
+  const clearAttemptCache = useCallback(
+    (attemptId) => {
+      if (!attemptId) return;
+      try {
+        localStorage.removeItem(getAnswerCacheKey(attemptId));
+        localStorage.removeItem(`exam_attempt_${attemptId}_answers`);
+        localStorage.removeItem(getFlagCacheKey(attemptId));
+      } catch { }
+    },
+    [getAnswerCacheKey, getFlagCacheKey]
+  );
+
+  const loadExam = useCallback(async (confirmed = false) => {
+    const startKey = `${user?.id || 'anon'}:${exam_id}:${confirmed}`;
     try {
-      const { data } = await studentAPI.startExam(exam_id);
+      setLoadError('');
+      setNeedsConfirmation(false);
+      let reqPromise = inFlightStarts.get(startKey);
+      if (!reqPromise) {
+        reqPromise = studentAPI.startExam(exam_id, confirmed ? { confirmed: true } : {});
+        inFlightStarts.set(startKey, reqPromise);
+        reqPromise.finally(() => {
+          if (inFlightStarts.get(startKey) === reqPromise) {
+            inFlightStarts.delete(startKey);
+          }
+        });
+      }
+      const { data } = await reqPromise;
 
       if (
         data.auto_submitted ||
         data.attempt?.status === 'completed' ||
         (data.remaining_seconds === 0 && data.attempt?.id && !data.questions?.length)
       ) {
+        clearAttemptCache(data.attempt?.id);
         navigate(`/student/attempts/${data.attempt.id}/result`, { replace: true });
         return;
       }
@@ -194,11 +242,16 @@ export default function ExamTakingPage() {
       // Reconcile server answers with local offline cache in case previous requests failed.
       if (data.attempt?.id) {
         try {
-          const cacheKey = `exam_attempt_${data.attempt.id}_answers`;
-          const localRaw = localStorage.getItem(cacheKey);
+          const localRaw =
+            localStorage.getItem(getAnswerCacheKey(data.attempt.id)) ||
+            localStorage.getItem(`exam_attempt_${data.attempt.id}_answers`);
           if (localRaw) {
             const localParsed = JSON.parse(localRaw);
             Object.assign(savedMap, localParsed);
+          }
+          const flagRaw = localStorage.getItem(getFlagCacheKey(data.attempt.id));
+          if (flagRaw) {
+            setFlagged(JSON.parse(flagRaw));
           }
         } catch (e) {
           console.warn('Không thể đọc localStorage cache:', e);
@@ -207,8 +260,13 @@ export default function ExamTakingPage() {
 
       setAnswers(savedMap);
     } catch (err) {
+      if (err.response?.status === 428) {
+        setNeedsConfirmation(true);
+        return;
+      }
       const payload = err.response?.data;
       if (payload?.attempt?.id && payload?.attempt?.status === 'completed') {
+        clearAttemptCache(payload.attempt.id);
         navigate(`/student/attempts/${payload.attempt.id}/result`, { replace: true });
         return;
       }
@@ -216,39 +274,48 @@ export default function ExamTakingPage() {
     } finally {
       setLoading(false);
     }
-  }, [exam_id, navigate]);
+  }, [exam_id, user?.id, navigate, clearAttemptCache, getAnswerCacheKey, getFlagCacheKey]);
 
   useEffect(() => {
-    loadExam();
+    loadExam(false);
   }, [loadExam]);
 
   const saveAnswersToServer = useCallback(async (answerMap) => {
-    if (!attempt) return;
+    if (!attempt || submitting || autoSubmittedRef.current) return;
     const answersArray = Object.entries(answerMap).map(([qId, opt]) => ({
       question_id: parseInt(qId, 10),
       chosen_option: opt,
     }));
     if (answersArray.length === 0) return;
+    const seq = ++saveSeqRef.current;
     setSaveStatus('saving');
     try {
       await studentAPI.saveAnswers(attempt.id, { answers: answersArray });
-      setSaveStatus('saved');
+      if (seq === saveSeqRef.current) {
+        setSaveStatus('saved');
+      }
     } catch (err) {
       const payload = err.response?.data;
       if (payload?.auto_submitted && (payload?.attempt?.id || attempt.id)) {
+        autoSubmittedRef.current = true;
+        clearAttemptCache(payload?.attempt?.id || attempt.id);
         navigate(`/student/attempts/${payload.attempt?.id || attempt.id}/result`, { replace: true });
         return;
       }
       if (payload?.attempt?.status === 'completed') {
+        autoSubmittedRef.current = true;
+        clearAttemptCache(payload.attempt.id);
         navigate(`/student/attempts/${payload.attempt.id}/result`, { replace: true });
         return;
       }
-      setSaveStatus('error');
+      if (seq === saveSeqRef.current) {
+        setSaveStatus('error');
+      }
     } finally {
       if (saveStatusTimerRef.current) clearTimeout(saveStatusTimerRef.current);
       saveStatusTimerRef.current = setTimeout(() => setSaveStatus(''), 2500);
     }
-  }, [attempt, navigate]);
+  }, [attempt, submitting, navigate, clearAttemptCache]);
 
   useEffect(() => {
     if (!attempt) return;
@@ -263,7 +330,7 @@ export default function ExamTakingPage() {
     setAnswers(newAnswers);
     if (attempt?.id) {
       try {
-        localStorage.setItem(`exam_attempt_${attempt.id}_answers`, JSON.stringify(newAnswers));
+        localStorage.setItem(getAnswerCacheKey(attempt.id), JSON.stringify(newAnswers));
       } catch (e) {
         console.warn('Không thể ghi localStorage cache:', e);
       }
@@ -272,10 +339,18 @@ export default function ExamTakingPage() {
   };
 
   const toggleFlag = (questionId) => {
-    setFlagged((prev) => ({
-      ...prev,
-      [questionId]: !prev[questionId],
-    }));
+    setFlagged((prev) => {
+      const next = {
+        ...prev,
+        [questionId]: !prev[questionId],
+      };
+      if (attempt?.id) {
+        try {
+          localStorage.setItem(getFlagCacheKey(attempt.id), JSON.stringify(next));
+        } catch { }
+      }
+      return next;
+    });
   };
 
   const reportViolation = useCallback(async (reason) => {
@@ -293,6 +368,7 @@ export default function ExamTakingPage() {
 
       if (data.auto_submitted || currentViolations >= 3) {
         autoSubmittedRef.current = true;
+        clearAttemptCache(attempt.id);
         navigate(`/student/attempts/${attempt.id}/result`, {
           replace: true,
           state: { violationNotice: 'Bài thi đã tự động khóa và thu bài do thí sinh vi phạm quy chế rời màn hình làm bài 3 lần.' }
@@ -304,7 +380,7 @@ export default function ExamTakingPage() {
     } catch (err) {
       console.error('Không thể ghi nhận vi phạm:', err);
     }
-  }, [attempt, submitting, violationCount, navigate]);
+  }, [attempt, submitting, violationCount, navigate, clearAttemptCache]);
 
   useEffect(() => {
     if (!attempt || attempt.status === 'completed') return;
@@ -338,7 +414,9 @@ export default function ExamTakingPage() {
     let answersToSubmit = finalAnswers || answersRef.current;
     if (attempt?.id) {
       try {
-        const localRaw = localStorage.getItem(`exam_attempt_${attempt.id}_answers`);
+        const localRaw =
+          localStorage.getItem(getAnswerCacheKey(attempt.id)) ||
+          localStorage.getItem(`exam_attempt_${attempt.id}_answers`);
         if (localRaw) {
           answersToSubmit = { ...JSON.parse(localRaw), ...answersToSubmit };
         }
@@ -353,30 +431,26 @@ export default function ExamTakingPage() {
     }));
     try {
       const { data } = await studentAPI.submitExam(attempt.id, { answers: answersArray });
-      if (attempt?.id) {
-        try {
-          localStorage.removeItem(`exam_attempt_${attempt.id}_answers`);
-        } catch (e) {}
-      }
+      clearAttemptCache(attempt.id);
       const resultId = data?.attempt?.id || attempt.id;
       navigate(`/student/attempts/${resultId}/result`, { replace: true });
     } catch (err) {
       const payload = err.response?.data;
-      if (attempt?.id) {
-        try {
-          localStorage.removeItem(`exam_attempt_${attempt.id}_answers`);
-        } catch (e) {}
-      }
-      if (payload?.attempt?.id || attempt.id) {
+      const alreadyDone =
+        payload?.attempt?.status === 'completed' ||
+        payload?.auto_submitted ||
+        (err.response?.status === 400 && /already submitted/i.test(payload?.error || ''));
+      if (alreadyDone) {
+        clearAttemptCache(payload?.attempt?.id || attempt.id);
         navigate(`/student/attempts/${payload?.attempt?.id || attempt.id}/result`, { replace: true });
         return;
       }
-      setSubmitError(payload?.error || 'Nộp bài không thành công. Vui lòng thử lại.');
+      setSubmitError(payload?.error || 'Nộp bài không thành công. Dữ liệu đã được giữ lại, vui lòng thử lại.');
       setTimeout(() => setSubmitError(''), 6000);
       autoSubmittedRef.current = false;
       setSubmitting(false);
     }
-  }, [attempt, submitting, navigate]);
+  }, [attempt, submitting, navigate, clearAttemptCache, getAnswerCacheKey]);
 
   const handleOneMinuteWarning = useCallback((show = true) => {
     setShowTimeWarning(show);
@@ -397,6 +471,33 @@ export default function ExamTakingPage() {
       <div className="min-h-screen bg-slate-100 flex flex-col items-center justify-center gap-3">
         <Spinner size="lg" />
         <p className="text-slate-500 text-sm">Đang kết nối vào phòng thi...</p>
+      </div>
+    );
+  }
+
+  if (needsConfirmation) {
+    return (
+      <div className="min-h-screen bg-slate-100 dark:bg-slate-950 flex flex-col items-center justify-center p-4">
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-6 max-w-md w-full space-y-4 shadow-lg text-slate-900 dark:text-slate-100">
+          <h2 className="text-lg font-bold">Xác nhận vào phòng thi</h2>
+          <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+            Đồng hồ đếm ngược sẽ bắt đầu tính giờ ngay khi bạn bấm xác nhận. Hãy đảm bảo đường truyền ổn định và không rời khỏi màn hình thi.
+          </p>
+          <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+            <button onClick={() => navigate('/schedule')} className="btn-secondary text-sm">
+              Quay lại
+            </button>
+            <button
+              onClick={() => {
+                setLoading(true);
+                loadExam(true);
+              }}
+              className="btn-primary text-sm"
+            >
+              Bắt đầu làm bài
+            </button>
+          </div>
+        </div>
       </div>
     );
   }
@@ -453,7 +554,7 @@ export default function ExamTakingPage() {
             {saveStatus === 'saved' && <span className="text-xs text-emerald-400 font-medium">Đã lưu tự động</span>}
             {saveStatus === 'error' && <span className="text-xs text-red-400">Lưu lỗi mạng</span>}
 
-            {remainingSeconds > 0 && (
+            {attempt && (
               <CountdownTimer
                 seconds={remainingSeconds}
                 onExpire={handleTimerExpire}
@@ -492,11 +593,10 @@ export default function ExamTakingPage() {
                 {/* Flag Question Toggle */}
                 <button
                   onClick={() => toggleFlag(currentQuestion.id)}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1 rounded text-xs font-medium border transition-colors ${
-                    isCurrentFlagged
-                      ? 'bg-amber-100 dark:bg-amber-950/60 text-amber-900 dark:text-amber-300 border-amber-300 dark:border-amber-700'
-                      : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700'
-                  }`}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1 rounded text-xs font-medium border transition-colors ${isCurrentFlagged
+                    ? 'bg-amber-100 dark:bg-amber-950/60 text-amber-900 dark:text-amber-300 border-amber-300 dark:border-amber-700'
+                    : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700'
+                    }`}
                 >
                   <span className={`inline-block w-2 h-2 rounded-full ${isCurrentFlagged ? 'bg-amber-500' : 'bg-slate-300 dark:bg-slate-600'}`} />
                   {isCurrentFlagged ? 'Đã đặt cờ xem lại' : 'Đặt cờ câu này'}
@@ -520,16 +620,14 @@ export default function ExamTakingPage() {
                       key={opt}
                       onClick={() => handleSelectAnswer(currentQuestion.id, opt)}
                       disabled={submitting}
-                      className={`w-full flex items-start gap-3 p-4 rounded-lg border text-left text-sm sm:text-base transition-colors ${
-                        isSelected
-                          ? 'border-indigo-600 dark:border-indigo-500 bg-indigo-50/70 dark:bg-indigo-950/50 text-indigo-950 dark:text-indigo-200 font-medium'
-                          : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/80 text-slate-700 dark:text-slate-200 hover:border-slate-300 dark:hover:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800'
-                      }`}
+                      className={`w-full flex items-start gap-3 p-4 rounded-lg border text-left text-sm sm:text-base transition-colors ${isSelected
+                        ? 'border-indigo-600 dark:border-indigo-500 bg-indigo-50/70 dark:bg-indigo-950/50 text-indigo-950 dark:text-indigo-200 font-medium'
+                        : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/80 text-slate-700 dark:text-slate-200 hover:border-slate-300 dark:hover:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800'
+                        }`}
                     >
                       <span
-                        className={`w-7 h-7 rounded flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5 ${
-                          isSelected ? 'bg-indigo-600 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600'
-                        }`}
+                        className={`w-7 h-7 rounded flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5 ${isSelected ? 'bg-indigo-600 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600'
+                          }`}
                       >
                         {opt}
                       </span>

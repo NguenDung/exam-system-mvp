@@ -61,9 +61,9 @@ type ViolationRequest struct {
 }
 
 type UpdateScoreRequest struct {
-	Score       float64 `json:"score" binding:"required"`
-	TeacherNote string  `json:"teacher_note"`
-	Note        string  `json:"note"`
+	Score       *float64 `json:"score" binding:"required"`
+	TeacherNote string   `json:"teacher_note"`
+	Note        string   `json:"note"`
 }
 
 type CreateStudentRequest struct {

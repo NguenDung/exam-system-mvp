@@ -63,8 +63,10 @@ export default function StudentHomePage() {
 
     try {
       const { data } = await scheduleAPI.getSchedule();
-      const items = data.schedule || data.events || [];
-      setUpcomingEvents(Array.isArray(items) ? items.slice(0, 3) : []);
+      const ongoing = Array.isArray(data.ongoing) ? data.ongoing : [];
+      const upcoming = Array.isArray(data.upcoming) ? data.upcoming : [];
+      const items = [...ongoing, ...upcoming];
+      setUpcomingEvents(items.slice(0, 3));
     } catch {
       setUpcomingEvents([]);
     }
@@ -140,14 +142,19 @@ export default function StudentHomePage() {
     });
   }, [availableExams, activeTab, searchQuery]);
 
-  // Calculations for stats widget
+  // Calculations for stats widget (normalized to 10-point scale)
   const stats = useMemo(() => {
     const completed = attempts.filter((a) => a.status === 'completed');
     const totalCompleted = completed.length;
+    const toTen = (a) => {
+      const raw = Number(a.score) || 0;
+      const maxPts = Number(a.total_points) || 0;
+      return maxPts > 0 ? (raw / maxPts) * 10 : raw;
+    };
     const avgScore = totalCompleted > 0
-      ? (completed.reduce((acc, cur) => acc + (Number(cur.score) || 0), 0) / totalCompleted).toFixed(1)
+      ? (completed.reduce((acc, cur) => acc + toTen(cur), 0) / totalCompleted).toFixed(1)
       : '—';
-    const passed = completed.filter((a) => (Number(a.score) || 0) >= 5).length;
+    const passed = completed.filter((a) => toTen(a) >= 5).length;
     const passRate = totalCompleted > 0 ? Math.round((passed / totalCompleted) * 100) : 0;
 
     return { totalCompleted, avgScore, passRate };
@@ -240,7 +247,13 @@ export default function StudentHomePage() {
                   <div className="pt-1">
                     {lookupResult.attempt_status === 'not_attempted' && lookupResult.exam_status === 'open' && (
                       <button
-                        onClick={() => setStartingExam(lookupResult.exam)}
+                        onClick={() =>
+                          setStartingExam({
+                            ...lookupResult.exam,
+                            question_count: lookupResult.question_count ?? lookupResult.exam?.question_count,
+                            total_points: lookupResult.total_points ?? lookupResult.exam?.total_points,
+                          })
+                        }
                         className="btn-primary btn-sm text-xs"
                       >
                         Vào thi ngay
@@ -297,11 +310,10 @@ export default function StudentHomePage() {
                   <button
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors ${
-                      activeTab === tab.id
-                        ? 'bg-blue-600 text-white shadow-sm'
-                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800'
-                    }`}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors ${activeTab === tab.id
+                      ? 'bg-blue-600 text-white shadow-sm'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800'
+                      }`}
                   >
                     {tab.label}
                   </button>
@@ -339,6 +351,10 @@ export default function StudentHomePage() {
                   const isNotAttempted = ex.attempt_status === 'not_attempted';
                   const isInProgress = ex.attempt_status === 'in_progress';
                   const isFinished = ex.attempt_status === 'submitted' || ex.attempt_status === 'time_up';
+                  const isExamOpen = !ex.exam_status || ex.exam_status === 'open';
+                  const questionCount = ex.question_count ?? ex.questions_count ?? 0;
+                  const attemptId = ex.attempt?.id ?? ex.attempt_id;
+                  const attemptScore = ex.attempt?.score ?? ex.score;
 
                   return (
                     <div
@@ -369,7 +385,7 @@ export default function StudentHomePage() {
                           </div>
                           <div className="flex justify-between">
                             <span className="text-slate-500 dark:text-slate-400">Số lượng:</span>
-                            <strong className="text-slate-800 dark:text-slate-200">{ex.questions_count} câu ({ex.total_points} điểm)</strong>
+                            <strong className="text-slate-800 dark:text-slate-200">{questionCount} câu ({ex.total_points ?? 0} điểm)</strong>
                           </div>
                           <div className="flex justify-between">
                             <span className="text-slate-500 dark:text-slate-400">Hạn chót:</span>
@@ -386,13 +402,19 @@ export default function StudentHomePage() {
                       </div>
 
                       <div className="pt-3.5 border-t border-slate-100 dark:border-slate-800 mt-3">
-                        {isNotAttempted && (
+                        {isNotAttempted && isExamOpen && (
                           <button
                             onClick={() => setStartingExam(ex)}
                             className="w-full btn-primary text-xs py-2"
                           >
                             Bắt đầu làm bài
                           </button>
+                        )}
+
+                        {isNotAttempted && !isExamOpen && (
+                          <div className="w-full text-center text-xs py-2 px-3 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-medium">
+                            {ex.exam_status === 'not_started_yet' ? 'Chưa đến giờ mở đề' : 'Đã quá hạn tham gia'}
+                          </div>
                         )}
 
                         {isInProgress && (
@@ -406,10 +428,11 @@ export default function StudentHomePage() {
 
                         {isFinished && (
                           <button
-                            onClick={() => navigate(`/student/attempts/${ex.attempt_id}/result`)}
-                            className="w-full btn-secondary text-xs py-2 font-medium"
+                            disabled={!attemptId}
+                            onClick={() => attemptId && navigate(`/student/attempts/${attemptId}/result`)}
+                            className="w-full btn-secondary text-xs py-2 font-medium disabled:opacity-50"
                           >
-                            Xem kết quả ({ex.score !== undefined ? Number(ex.score).toFixed(2) : '—'} điểm)
+                            Xem kết quả ({attemptScore !== undefined && attemptScore !== null ? Number(attemptScore).toFixed(2) : '—'} điểm)
                           </button>
                         )}
                       </div>
@@ -469,11 +492,10 @@ export default function StudentHomePage() {
                         </td>
                         <td className="px-4 py-3 text-center">
                           <span
-                            className={`px-2 py-0.5 rounded font-semibold text-[11px] ${
-                              a.status === 'completed'
-                                ? 'bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800'
-                                : 'bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800'
-                            }`}
+                            className={`px-2 py-0.5 rounded font-semibold text-[11px] ${a.status === 'completed'
+                              ? 'bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800'
+                              : 'bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800'
+                              }`}
                           >
                             {a.status === 'completed' ? 'Đã nộp' : 'Đang làm'}
                           </span>
@@ -623,7 +645,7 @@ export default function StudentHomePage() {
             <div className="text-xs text-slate-600 dark:text-slate-300 space-y-2 bg-slate-50 dark:bg-slate-800/60 p-3.5 rounded-lg border border-slate-200 dark:border-slate-700">
               <p>Môn thi: <strong className="text-slate-900 dark:text-slate-100">{startingExam.title}</strong></p>
               <p>Thời lượng làm bài: <strong className="text-slate-900 dark:text-slate-100">{startingExam.duration} phút</strong></p>
-              <p>Số lượng câu hỏi: <strong className="text-slate-900 dark:text-slate-100">{startingExam.questions_count} câu</strong></p>
+              <p>Số lượng câu hỏi: <strong className="text-slate-900 dark:text-slate-100">{startingExam.question_count ?? startingExam.questions_count ?? 'Theo đề'} {(startingExam.question_count ?? startingExam.questions_count) !== undefined ? 'câu' : ''}</strong></p>
               <p className="text-amber-800 dark:text-amber-400 font-medium pt-1 border-t border-slate-200 dark:border-slate-700">
                 Lưu ý: Đồng hồ tính giờ sẽ bắt đầu đếm ngược ngay khi bạn xác nhận vào thi. Hãy đảm bảo kết nối mạng ổn định.
               </p>

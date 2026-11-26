@@ -3,6 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import { teacherAPI, classroomAPI } from '../../api/endpoints';
 import Spinner from '../../components/Spinner';
 
+function toLocalDatetimeInputValue(isoString) {
+  if (!isoString) return '';
+  const d = new Date(isoString);
+  if (Number.isNaN(d.getTime())) return '';
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 function StatusBadge({ status }) {
   return (
     <span
@@ -38,6 +46,10 @@ function CreateExamModal({ onClose, onCreated }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (new Date(form.end_time) <= new Date(form.start_time)) {
+      setError('Thời gian kết thúc phải sau thời gian bắt đầu');
+      return;
+    }
     setLoading(true);
     setError('');
     try {
@@ -158,8 +170,8 @@ function EditExamModal({ exam, onClose, onUpdated }) {
     title: exam.title || '',
     description: exam.description || '',
     duration: exam.duration || 30,
-    start_time: exam.start_time ? new Date(exam.start_time).toISOString().slice(0, 16) : '',
-    end_time: exam.end_time ? new Date(exam.end_time).toISOString().slice(0, 16) : '',
+    start_time: toLocalDatetimeInputValue(exam.start_time),
+    end_time: toLocalDatetimeInputValue(exam.end_time),
     is_published: exam.status === 'published',
     classroom_id: exam.classroom_id || '',
   });
@@ -178,6 +190,10 @@ function EditExamModal({ exam, onClose, onUpdated }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (form.start_time && form.end_time && new Date(form.end_time) <= new Date(form.start_time)) {
+      setError('Thời gian kết thúc phải sau thời gian bắt đầu');
+      return;
+    }
     setLoading(true);
     setError('');
     try {
@@ -187,8 +203,8 @@ function EditExamModal({ exam, onClose, onUpdated }) {
         duration: parseInt(form.duration, 10),
         start_time: form.start_time ? new Date(form.start_time).toISOString() : exam.start_time,
         end_time: form.end_time ? new Date(form.end_time).toISOString() : exam.end_time,
-        is_published: form.is_published,
-        classroom_id: form.classroom_id ? parseInt(form.classroom_id, 10) : null,
+        status: form.is_published ? 'published' : 'draft',
+        classroom_id: form.classroom_id ? parseInt(form.classroom_id, 10) : 0,
       };
       const { data } = await teacherAPI.updateExam(exam.id, payload);
       onUpdated(data.exam);
@@ -309,6 +325,7 @@ function EditExamModal({ exam, onClose, onUpdated }) {
 export default function TeacherExamsPage() {
   const [exams, setExams] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingExam, setEditingExam] = useState(null);
   const [deletingExam, setDeletingExam] = useState(null);
@@ -317,11 +334,12 @@ export default function TeacherExamsPage() {
   const navigate = useNavigate();
 
   const fetchExams = async () => {
+    setFetchError('');
     try {
       const { data } = await teacherAPI.listExams();
       setExams(data.exams || []);
     } catch (err) {
-      console.error(err);
+      setFetchError(err.response?.data?.error || 'Không thể tải danh sách đề thi');
     } finally {
       setLoading(false);
     }
@@ -366,6 +384,13 @@ export default function TeacherExamsPage() {
           Tạo đề thi
         </button>
       </div>
+
+      {fetchError && (
+        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3.5 text-sm text-red-700 flex items-center justify-between gap-2">
+          <span>{fetchError}</span>
+          <button onClick={fetchExams} className="btn-secondary btn-sm">Thử lại</button>
+        </div>
+      )}
 
       {loading ? (
         <div className="flex justify-center py-20"><Spinner size="lg" /></div>

@@ -52,7 +52,10 @@ func (h *ExamHandler) TeacherCreateExam(c *gin.Context) {
 
 	exam, err := h.examService.CreateExam(teacherID, req)
 	if err != nil {
-		if errors.Is(err, service.ErrInvalidTimeRange) {
+		if errors.Is(err, service.ErrInvalidTimeRange) ||
+			errors.Is(err, service.ErrInvalidDuration) ||
+			errors.Is(err, service.ErrInvalidClassroom) ||
+			errors.Is(err, service.ErrInvalidTitle) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		} else {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create exam"})
@@ -142,7 +145,19 @@ func (h *ExamHandler) TeacherUpdateExam(c *gin.Context) {
 
 	exam, err := h.examService.UpdateExam(teacherID, examID, req)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Exam not found"})
+		if errors.Is(err, service.ErrExamNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Exam not found"})
+		} else if errors.Is(err, service.ErrInvalidTimeRange) ||
+			errors.Is(err, service.ErrInvalidDuration) ||
+			errors.Is(err, service.ErrInvalidClassroom) ||
+			errors.Is(err, service.ErrInvalidExamStatus) ||
+			errors.Is(err, service.ErrInvalidExamState) ||
+			errors.Is(err, service.ErrNoQuestionsInExam) ||
+			errors.Is(err, service.ErrInvalidTitle) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		}
 		return
 	}
 
@@ -241,7 +256,12 @@ func (h *ExamHandler) TeacherAddQuestions(c *gin.Context) {
 
 	createdQuestions, err := h.examService.AddQuestions(teacherID, examID, req.Questions)
 	if err != nil {
-		if errors.Is(err, service.ErrExamNotDraft) {
+		if errors.Is(err, service.ErrExamNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		} else if errors.Is(err, service.ErrExamNotDraft) ||
+			errors.Is(err, service.ErrEmptyQuestions) ||
+			errors.Is(err, service.ErrInvalidQuestion) ||
+			errors.Is(err, service.ErrInvalidCorrectOpt) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		} else {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to add questions"})
@@ -339,7 +359,11 @@ func (h *ExamHandler) TeacherUpdateAttemptScore(c *gin.Context) {
 
 	attempt, err := h.examService.UpdateAttemptScore(teacherID, attemptID, req)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		if errors.Is(err, service.ErrInvalidScore) || errors.Is(err, service.ErrAttemptNotCompleted) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		} else {
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		}
 		return
 	}
 
@@ -419,7 +443,9 @@ func (h *ExamHandler) TeacherUpdateQuestion(c *gin.Context) {
 
 	q, err := h.examService.UpdateQuestion(teacherID, questionID, req)
 	if err != nil {
-		if errors.Is(err, service.ErrExamNotDraft) {
+		if errors.Is(err, service.ErrExamNotDraft) ||
+			errors.Is(err, service.ErrInvalidQuestion) ||
+			errors.Is(err, service.ErrInvalidCorrectOpt) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		} else {
 			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
@@ -558,6 +584,10 @@ func (h *ExamHandler) TeacherUpdateStudent(c *gin.Context) {
 	if err != nil {
 		if err.Error() == "Email already in use" {
 			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+		} else if errors.Is(err, service.ErrInvalidEmail) ||
+			errors.Is(err, service.ErrInvalidStudentName) ||
+			errors.Is(err, service.ErrInvalidPasswordLen) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		} else {
 			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		}

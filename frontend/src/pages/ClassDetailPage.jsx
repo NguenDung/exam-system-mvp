@@ -32,6 +32,7 @@ export default function ClassDetailPage() {
   const [addMode, setAddMode] = useState('email'); // 'email' | 'student_code'
   const [addInputValue, setAddInputValue] = useState('');
   const [adding, setAdding] = useState(false);
+  const [modalError, setModalError] = useState('');
 
   // Copy code feedback
   const [copiedCode, setCopiedCode] = useState(false);
@@ -80,31 +81,34 @@ export default function ClassDetailPage() {
     if (!gradebookData) return;
     const examsList = gradebookData.exams || [];
     const studentsList = gradebookData.students || [];
+    const escapeCsvCell = (val) => `"${String(val ?? '').replace(/"/g, '""')}"`;
 
     let csvContent = '\uFEFF'; // UTF-8 BOM for Excel
     const headers = ['STT', 'Mã SV', 'Họ và tên', 'Email', 'Khoa / Bộ môn'];
-    examsList.forEach((ex) => headers.push(`"${ex.title} (${ex.exam_code})"`));
-    headers.push('Điểm trung bình', 'Xếp loại');
+    examsList.forEach((ex) => headers.push(escapeCsvCell(`${ex.title} (${ex.exam_code})`)));
+    headers.push('Điểm trung bình (Hệ 10)', 'Xếp loại');
     csvContent += headers.join(',') + '\r\n';
 
     studentsList.forEach((st, idx) => {
       const row = [
         idx + 1,
-        `"${st.student_code || ''}"`,
-        `"${st.full_name}"`,
-        `"${st.email}"`,
-        `"${st.department || ''}"`,
+        escapeCsvCell(st.student_code || ''),
+        escapeCsvCell(st.full_name),
+        escapeCsvCell(st.email),
+        escapeCsvCell(st.department || ''),
       ];
       examsList.forEach((ex) => {
         const scoreEntry = st.exam_scores?.[ex.id];
-        if (scoreEntry && scoreEntry.score !== null && scoreEntry.score !== undefined) {
+        if (scoreEntry && scoreEntry.status === 'completed' && scoreEntry.score !== null && scoreEntry.score !== undefined) {
           row.push(Number(scoreEntry.score).toFixed(2));
+        } else if (scoreEntry && scoreEntry.status === 'in_progress') {
+          row.push('Đang thi');
         } else {
           row.push('Chưa thi');
         }
       });
-      row.push(Number(st.average_score).toFixed(2));
-      row.push(`"${st.academic_rank}"`);
+      row.push(st.completed_count > 0 ? Number(st.average_score).toFixed(2) : '—');
+      row.push(escapeCsvCell(st.academic_rank));
       csvContent += row.join(',') + '\r\n';
     });
 
@@ -116,11 +120,14 @@ export default function ClassDetailPage() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   const handleCopyCode = () => {
     if (!classData?.code) return;
-    navigator.clipboard.writeText(classData.code);
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(classData.code).catch(() => {});
+    }
     setCopiedCode(true);
     setTimeout(() => setCopiedCode(false), 2000);
   };
@@ -129,12 +136,13 @@ export default function ClassDetailPage() {
     e.preventDefault();
     const val = addInputValue.trim();
     if (!val) {
-      setError('Vui lòng nhập thông tin tìm kiếm sinh viên');
+      setModalError('Vui lòng nhập thông tin tìm kiếm sinh viên');
       return;
     }
 
     try {
       setAdding(true);
+      setModalError('');
       setError('');
       setSuccess('');
       const payload = {};
@@ -146,8 +154,11 @@ export default function ClassDetailPage() {
       setAddInputValue('');
       setSuccess(`Đã thêm sinh viên ${data.member.student?.full_name || val} vào lớp`);
       fetchClassDetail();
+      if (gradebookData) {
+        fetchGradebook();
+      }
     } catch (err) {
-      setError(err.response?.data?.error || 'Không tìm thấy sinh viên hoặc sinh viên đã trong lớp');
+      setModalError(err.response?.data?.error || 'Không tìm thấy sinh viên hoặc sinh viên đã trong lớp');
     } finally {
       setAdding(false);
     }
@@ -164,6 +175,9 @@ export default function ClassDetailPage() {
       await classroomAPI.removeMember(id, member.student_id);
       setSuccess(`Đã xóa sinh viên ${member.full_name} khỏi lớp`);
       setMembers((prev) => prev.filter((m) => m.student_id !== member.student_id));
+      if (gradebookData) {
+        fetchGradebook();
+      }
     } catch (err) {
       setError(err.response?.data?.error || 'Không thể xóa sinh viên');
     }
@@ -442,12 +456,12 @@ export default function ClassDetailPage() {
                       </h3>
                       <span
                         className={`text-[11px] font-semibold px-2 py-0.5 rounded ${
-                          exam.is_published
+                          exam.status === 'published'
                             ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                             : 'bg-slate-100 text-slate-600 border border-slate-200'
                         }`}
                       >
-                        {exam.is_published ? 'Đã công bố' : 'Bản nháp'}
+                        {exam.status === 'published' ? 'Đã công bố' : 'Bản nháp'}
                       </span>
                     </div>
                     <p className="text-xs text-slate-500 line-clamp-2 mb-3">
@@ -455,10 +469,10 @@ export default function ClassDetailPage() {
                     </p>
                     <div className="flex items-center gap-3 text-xs text-slate-600">
                       <div>
-                        Thời gian: <span className="font-semibold text-slate-800 dark:text-slate-200">{exam.duration_minutes} phút</span>
+                        Thời gian: <span className="font-semibold text-slate-800 dark:text-slate-200">{exam.duration} phút</span>
                       </div>
                       <div className="font-mono text-[11px] bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-1.5 py-0.5 rounded">
-                        Mã: {exam.code}
+                        Mã: {exam.exam_code}
                       </div>
                     </div>
                   </div>
@@ -600,6 +614,7 @@ export default function ClassDetailPage() {
                     <option value="Khá">Khá (5.5 - 6.9)</option>
                     <option value="Trung bình">Trung bình (4.0 - 5.4)</option>
                     <option value="Yếu / Cảnh báo">Yếu / Cảnh báo (&lt; 4.0)</option>
+                    <option value="Chưa có điểm">Chưa có điểm</option>
                   </select>
                 </div>
 
@@ -630,7 +645,9 @@ export default function ClassDetailPage() {
                             <div className="font-bold text-slate-800 dark:text-slate-200 truncate max-w-[140px]" title={ex.title}>
                               {ex.title}
                             </div>
-                            <div className="font-mono text-[10px] text-slate-400">{ex.exam_code}</div>
+                            <div className="font-mono text-[10px] text-slate-400">
+                              {ex.exam_code}{ex.max_points > 0 ? ` (${ex.max_points}đ)` : ''}
+                            </div>
                           </th>
                         ))}
                         <th className="px-3 py-3 whitespace-nowrap text-center bg-blue-50/60 dark:bg-blue-950/30 text-blue-900 dark:text-blue-300 font-bold min-w-[90px]">
@@ -710,18 +727,28 @@ export default function ClassDetailPage() {
                               {/* Exam Columns */}
                               {(gradebookData.exams || []).map((ex) => {
                                 const scoreEntry = st.exam_scores?.[ex.id];
-                                if (scoreEntry && scoreEntry.score !== null && scoreEntry.score !== undefined) {
+                                if (scoreEntry && scoreEntry.status === 'in_progress') {
+                                  return (
+                                    <td key={ex.id} className="px-4 py-3 text-center whitespace-nowrap">
+                                      <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800">
+                                        Đang thi
+                                      </span>
+                                    </td>
+                                  );
+                                }
+                                if (scoreEntry && scoreEntry.status === 'completed' && scoreEntry.score !== null && scoreEntry.score !== undefined) {
                                   const sNum = Number(scoreEntry.score);
-                                  const isFail = sNum < 4.0;
+                                  const scaledNum = scoreEntry.scaled_score !== undefined && scoreEntry.scaled_score !== null ? Number(scoreEntry.scaled_score) : sNum;
+                                  const isFail = scaledNum < 4.0;
                                   return (
                                     <td key={ex.id} className="px-4 py-3 text-center whitespace-nowrap">
                                       <button
                                         type="button"
-                                        onClick={() => navigate(`/teacher/exams/${ex.id}`)}
+                                        onClick={() => navigate(`/teacher/exams/${ex.id}/results`)}
                                         className={`font-mono font-bold hover:underline ${
                                           isFail ? 'text-rose-600 dark:text-rose-400' : 'text-slate-900 dark:text-slate-100'
                                         }`}
-                                        title={`Xem bài làm (Vi phạm: ${scoreEntry.violation_count})`}
+                                        title={`Xem bảng điểm chi tiết (Vi phạm: ${scoreEntry.violation_count})`}
                                       >
                                         {sNum.toFixed(2)}
                                       </button>
@@ -730,15 +757,6 @@ export default function ClassDetailPage() {
                                           (!{scoreEntry.violation_count})
                                         </span>
                                       )}
-                                    </td>
-                                  );
-                                }
-                                if (scoreEntry && scoreEntry.status === 'in_progress') {
-                                  return (
-                                    <td key={ex.id} className="px-4 py-3 text-center whitespace-nowrap">
-                                      <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800">
-                                        Đang thi
-                                      </span>
                                     </td>
                                   );
                                 }
@@ -778,6 +796,11 @@ export default function ClassDetailPage() {
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xl max-w-md w-full p-6 space-y-4 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100">
             <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">Thêm sinh viên vào lớp</h2>
+            {modalError && (
+              <div className="p-2.5 bg-red-50 dark:bg-rose-950/40 border border-red-200 dark:border-rose-800 text-red-700 dark:text-rose-300 text-xs rounded">
+                {modalError}
+              </div>
+            )}
             <form onSubmit={handleAddMember} className="space-y-4">
               <div className="flex gap-4 border-b border-slate-200 dark:border-slate-800 pb-2">
                 <button
@@ -817,7 +840,10 @@ export default function ClassDetailPage() {
               <div className="flex justify-end gap-3 pt-2">
                 <button
                   type="button"
-                  onClick={() => setShowAddModal(false)}
+                  onClick={() => {
+                    setShowAddModal(false);
+                    setModalError('');
+                  }}
                   className="btn-secondary text-xs px-3 py-2 border border-slate-300 dark:border-slate-700 rounded text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
                 >
                   Hủy

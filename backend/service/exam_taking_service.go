@@ -217,6 +217,13 @@ func (s *examTakingService) LookupExam(studentID uint, code string) (map[string]
 		return nil, errors.New("Exam not found or not published")
 	}
 
+	if exam.ClassroomID != nil {
+		member, err := s.classRepo.FindMember(*exam.ClassroomID, studentID)
+		if err != nil || member == nil {
+			return nil, errors.New("You are not enrolled in the classroom for this exam")
+		}
+	}
+
 	now := time.Now()
 	var examTimeStatus string
 	switch {
@@ -233,12 +240,18 @@ func (s *examTakingService) LookupExam(studentID uint, code string) (map[string]
 
 	var attemptStatus string
 	if hasAttempt {
+		if attempt.Status != "completed" && !now.Before(attemptDeadline(attempt.StartedAt, *exam)) {
+			if err := s.gradeAttemptInTransaction(attempt.ID); err == nil {
+				if reloaded, rErr := s.examRepo.FindAttemptByID(attempt.ID); rErr == nil {
+					attempt = reloaded
+				}
+			}
+		}
 		if attempt.Status == "completed" {
 			attemptStatus = "submitted"
 		} else {
-			elapsed := now.Sub(attempt.StartedAt)
-			remaining := time.Duration(exam.Duration)*time.Minute - elapsed
-			if remaining <= 0 {
+			deadline := attemptDeadline(attempt.StartedAt, *exam)
+			if !now.Before(deadline) {
 				attemptStatus = "time_up"
 			} else {
 				attemptStatus = "in_progress"
@@ -248,8 +261,12 @@ func (s *examTakingService) LookupExam(studentID uint, code string) (map[string]
 		attemptStatus = "not_attempted"
 	}
 
+	qCount, qPoints, _ := s.examRepo.GetQuestionStats(exam.ID)
+
 	res := map[string]interface{}{
 		"exam":           exam,
+		"question_count": qCount,
+		"total_points":   qPoints,
 		"exam_status":    examTimeStatus,
 		"attempt_status": attemptStatus,
 	}
@@ -423,12 +440,19 @@ func (s *examTakingService) SaveAnswers(studentID, attemptID uint, req dto.SaveA
 		}
 	}
 
-	var answers []models.AttemptAnswer
+	answers := make([]models.AttemptAnswer, 0, len(answersInput))
 	for _, a := range answersInput {
+		var optPtr *string
+		if a.ChosenOption != nil {
+			trimmed := strings.ToUpper(strings.TrimSpace(*a.ChosenOption))
+			if trimmed != "" {
+				optPtr = &trimmed
+			}
+		}
 		answers = append(answers, models.AttemptAnswer{
 			AttemptID:    attemptID,
 			QuestionID:   a.QuestionID,
-			ChosenOption: a.ChosenOption,
+			ChosenOption: optPtr,
 		})
 	}
 
@@ -594,7 +618,7 @@ func (s *examTakingService) GetResult(studentID, attemptID uint) (map[string]int
 		Points        float64 `json:"points"`
 	}
 
-	var answers []AnswerDetail
+	answers := make([]AnswerDetail, 0, len(questions))
 	for _, q := range questions {
 		ans, has := ansMap[q.ID]
 		detail := AnswerDetail{
@@ -631,14 +655,22 @@ func (s *examTakingService) ListAttempts(studentID uint) ([]map[string]interface
 	if err != nil {
 		return nil, err
 	}
+	pointsCache := make(map[uint]float64)
 	res := make([]map[string]interface{}, 0, len(attempts))
 	for _, a := range attempts {
+		totalPoints, ok := pointsCache[a.ExamID]
+		if !ok {
+			_, pts, _ := s.examRepo.GetQuestionStats(a.ExamID)
+			totalPoints = pts
+			pointsCache[a.ExamID] = pts
+		}
 		item := map[string]interface{}{
 			"id":              a.ID,
 			"exam_id":         a.ExamID,
 			"user_id":         a.UserID,
 			"status":          a.Status,
 			"score":           a.Score,
+			"total_points":    totalPoints,
 			"teacher_note":    a.TeacherNote,
 			"violation_count": a.ViolationCount,
 			"correct_count":   a.CorrectCount,
@@ -702,7 +734,18 @@ func (s *examTakingService) GetExamSchedule(userID uint, role string) (map[strin
 		classMap[c.ID] = c
 	}
 
+	teacherNameMap := make(map[uint]string)
+
 	for _, exam := range exams {
+		teacherName, ok := teacherNameMap[exam.TeacherID]
+		if !ok {
+			teacherName = "Giảng viên"
+			if tUser, err := s.userRepo.FindByID(exam.TeacherID); err == nil && tUser != nil && tUser.FullName != "" {
+				teacherName = tUser.FullName
+			}
+			teacherNameMap[exam.TeacherID] = teacherName
+		}
+
 		var timeStatus string
 		var countdownSeconds int64
 
@@ -747,7 +790,7 @@ func (s *examTakingService) GetExamSchedule(userID uint, role string) (map[strin
 			"classroom_name":    className,
 			"classroom_code":    classCode,
 			"teacher_id":        exam.TeacherID,
-			"teacher_name":      "Giảng viên",
+			"teacher_name":      teacherName,
 			"question_count":    qCount,
 			"total_points":      qPoints,
 			"countdown_seconds": countdownSeconds,
@@ -760,6 +803,13 @@ func (s *examTakingService) GetExamSchedule(userID uint, role string) (map[strin
 		} else {
 			attempt, err := s.examRepo.FindAttemptByExamAndUser(exam.ID, userID)
 			if err == nil && attempt != nil {
+				if attempt.Status != "completed" && !now.Before(attemptDeadline(attempt.StartedAt, exam)) {
+					if gErr := s.gradeAttemptInTransaction(attempt.ID); gErr == nil {
+						if reloaded, rErr := s.examRepo.FindAttemptByID(attempt.ID); rErr == nil {
+							attempt = reloaded
+						}
+					}
+				}
 				item["attempt_id"] = attempt.ID
 				if attempt.Status == "completed" {
 					item["attempt_status"] = "submitted"

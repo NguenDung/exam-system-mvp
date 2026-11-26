@@ -32,6 +32,7 @@ export default function ClassroomsPage() {
 
   // Copy code feedback
   const [copiedCode, setCopiedCode] = useState('');
+  const [modalError, setModalError] = useState('');
 
   const fetchClasses = useCallback(async () => {
     try {
@@ -51,7 +52,9 @@ export default function ClassroomsPage() {
   }, [fetchClasses]);
 
   const handleCopyCode = (code) => {
-    navigator.clipboard.writeText(code);
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(code).catch(() => { });
+    }
     setCopiedCode(code);
     setTimeout(() => setCopiedCode(''), 2000);
   };
@@ -59,11 +62,12 @@ export default function ClassroomsPage() {
   const handleCreateClass = async (e) => {
     e.preventDefault();
     if (!newClassName.trim()) {
-      setError('Tên lớp học không được để trống');
+      setModalError('Tên lớp học không được để trống');
       return;
     }
     try {
       setCreating(true);
+      setModalError('');
       setError('');
       setSuccess('');
       const { data } = await classroomAPI.create({
@@ -76,7 +80,7 @@ export default function ClassroomsPage() {
       setSuccess(`Đã tạo lớp học "${data.class.name}" với mã tham gia: ${data.class.code}`);
       fetchClasses();
     } catch (err) {
-      setError(err.response?.data?.error || 'Không thể tạo lớp học');
+      setModalError(err.response?.data?.error || 'Không thể tạo lớp học');
     } finally {
       setCreating(false);
     }
@@ -85,11 +89,12 @@ export default function ClassroomsPage() {
   const handleEditClass = async (e) => {
     e.preventDefault();
     if (!editName.trim()) {
-      setError('Tên lớp học không được để trống');
+      setModalError('Tên lớp học không được để trống');
       return;
     }
     try {
       setUpdating(true);
+      setModalError('');
       setError('');
       setSuccess('');
       await classroomAPI.update(editingClass.id, {
@@ -100,7 +105,7 @@ export default function ClassroomsPage() {
       setSuccess('Cập nhật thông tin lớp học thành công');
       fetchClasses();
     } catch (err) {
-      setError(err.response?.data?.error || 'Không thể cập nhật lớp học');
+      setModalError(err.response?.data?.error || 'Không thể cập nhật lớp học');
     } finally {
       setUpdating(false);
     }
@@ -125,11 +130,12 @@ export default function ClassroomsPage() {
     e.preventDefault();
     const code = joinCode.trim().toUpperCase();
     if (!code) {
-      setError('Vui lòng nhập mã lớp học');
+      setModalError('Vui lòng nhập mã lớp học');
       return;
     }
     try {
       setJoining(true);
+      setModalError('');
       setError('');
       setSuccess('');
       const { data } = await classroomAPI.join(code);
@@ -138,7 +144,7 @@ export default function ClassroomsPage() {
       setSuccess(`Đã tham gia lớp học "${data.class.name}" thành công`);
       fetchClasses();
     } catch (err) {
-      setError(err.response?.data?.error || 'Không thể tham gia lớp học. Kiểm tra lại mã lớp.');
+      setModalError(err.response?.data?.error || 'Không thể tham gia lớp học. Kiểm tra lại mã lớp.');
     } finally {
       setJoining(false);
     }
@@ -161,14 +167,20 @@ export default function ClassroomsPage() {
         <div>
           {isTeacher ? (
             <button
-              onClick={() => setShowCreateModal(true)}
+              onClick={() => {
+                setModalError('');
+                setShowCreateModal(true);
+              }}
               className="btn-primary text-sm font-semibold px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
             >
               Tạo lớp học mới
             </button>
           ) : (
             <button
-              onClick={() => setShowJoinModal(true)}
+              onClick={() => {
+                setModalError('');
+                setShowJoinModal(true);
+              }}
               className="btn-primary text-sm font-semibold px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
             >
               Tham gia lớp học
@@ -268,6 +280,7 @@ export default function ClassroomsPage() {
                     <button
                       type="button"
                       onClick={() => {
+                        setModalError('');
                         setEditingClass(cls);
                         setEditName(cls.name);
                         setEditDesc(cls.description || '');
@@ -297,6 +310,11 @@ export default function ClassroomsPage() {
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xl max-w-md w-full p-6 space-y-4 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100">
             <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">Tạo lớp học mới</h2>
+            {modalError && (
+              <div className="p-2.5 bg-red-50 dark:bg-rose-950/40 border border-red-200 dark:border-rose-800 text-red-700 dark:text-rose-300 text-xs rounded">
+                {modalError}
+              </div>
+            )}
             <form onSubmit={handleCreateClass} className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase mb-1">
@@ -349,6 +367,11 @@ export default function ClassroomsPage() {
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xl max-w-md w-full p-6 space-y-4 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100">
             <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">Chỉnh sửa lớp học</h2>
+            {modalError && (
+              <div className="p-2.5 bg-red-50 dark:bg-rose-950/40 border border-red-200 dark:border-rose-800 text-red-700 dark:text-rose-300 text-xs rounded">
+                {modalError}
+              </div>
+            )}
             <form onSubmit={handleEditClass} className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase mb-1">
@@ -402,6 +425,11 @@ export default function ClassroomsPage() {
             <p className="text-xs text-slate-500 dark:text-slate-400">
               Nhập mã gồm 6 ký tự được giảng viên phụ trách cung cấp để ghi danh vào lớp.
             </p>
+            {modalError && (
+              <div className="p-2.5 bg-red-50 dark:bg-rose-950/40 border border-red-200 dark:border-rose-800 text-red-700 dark:text-rose-300 text-xs rounded">
+                {modalError}
+              </div>
+            )}
             <form onSubmit={handleJoinClass} className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase mb-1">

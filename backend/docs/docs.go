@@ -2752,6 +2752,9 @@ const docTemplate = `{
                 "id": {
                     "type": "integer"
                 },
+                "max_points": {
+                    "type": "number"
+                },
                 "start_time": {
                     "type": "string"
                 },
@@ -3291,6 +3294,12 @@ const docTemplate = `{
             "properties": {
                 "attempt_id": {
                     "type": "integer"
+                },
+                "max_points": {
+                    "type": "number"
+                },
+                "scaled_score": {
+                    "type": "number"
                 },
                 "score": {
                     "type": "number"

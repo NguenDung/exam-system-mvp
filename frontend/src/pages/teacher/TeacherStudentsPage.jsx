@@ -27,7 +27,7 @@ export default function TeacherStudentsPage() {
     setError(null);
     try {
       const res = await teacherAPI.listStudents(query ? { q: query } : {});
-      setStudents(res.data.data || []);
+      setStudents(res.data.students || res.data.data || []);
     } catch (err) {
       setError(err.response?.data?.error || 'Không thể tải danh sách sinh viên');
     } finally {
@@ -189,12 +189,12 @@ export default function TeacherStudentsPage() {
             <tbody className="divide-y divide-slate-200">
               {students.map((student) => (
                 <tr key={student.id} className="hover:bg-slate-50 transition-colors">
-                  <td className="px-6 py-4 font-mono text-xs text-slate-500">#{student.id}</td>
+                  <td className="px-6 py-4 font-mono text-xs text-slate-500">{student.student_code || `#${student.id}`}</td>
                   <td className="px-6 py-4 font-medium text-slate-900">{student.full_name}</td>
                   <td className="px-6 py-4 text-slate-600">{student.email}</td>
                   <td className="px-6 py-4 text-center">
                     <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-800">
-                      {student.completed_attempts || 0} / {student.total_attempts || 0} hoàn thành
+                      {student.exams_taken ?? 0} bài thi
                     </span>
                   </td>
                   <td className="px-6 py-4 text-slate-500 text-xs">

@@ -1299,13 +1299,32 @@ func TestStudentHistoryAndAppealsOwnershipAndWorkflow(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("history detail: want 200, got %d — %s", w.Code, w.Body)
 	}
-	detailAnswers := parseJSON(t, w)["answers"].([]interface{})
+	detailBeforeClose := parseJSON(t, w)
+	detailAnswers := detailBeforeClose["answers"].([]interface{})
 	if len(detailAnswers) != 5 {
 		t.Fatalf("history detail should include all exam questions, got %d", len(detailAnswers))
 	}
-	if detailAnswers[0].(map[string]interface{})["correct_option"] == nil {
-		t.Fatal("student history detail should show the correct option")
+	if detailBeforeClose["show_correct_answers"] != false {
+		t.Fatalf("expected show_correct_answers=false before end_time, got %v", detailBeforeClose["show_correct_answers"])
 	}
+	if detailAnswers[0].(map[string]interface{})["correct_option"] != nil {
+		t.Fatal("student history detail must hide correct_option before exam end_time")
+	}
+
+	origEndTime := exam.EndTime
+	config.DB.Model(&exam).Update("end_time", time.Now().Add(-time.Minute))
+	wAfter := do(t, srv, "GET", fmt.Sprintf("/api/student/history/%d", attemptID), studentToken, nil)
+	if wAfter.Code != http.StatusOK {
+		t.Fatalf("history detail after close: want 200, got %d — %s", wAfter.Code, wAfter.Body)
+	}
+	detailAfterClose := parseJSON(t, wAfter)
+	if detailAfterClose["show_correct_answers"] != true {
+		t.Fatalf("expected show_correct_answers=true after end_time, got %v", detailAfterClose["show_correct_answers"])
+	}
+	if detailAfterClose["answers"].([]interface{})[0].(map[string]interface{})["correct_option"] == nil {
+		t.Fatal("student history detail should show correct_option after exam end_time")
+	}
+	config.DB.Model(&exam).Update("end_time", origEndTime)
 
 	otherStudent := models.User{
 		Email: "other-history-student@test.com", PasswordHash: "unused",
@@ -2419,5 +2438,275 @@ func TestSwagger_UIAndDocJSON(t *testing.T) {
 	paths, ok := doc["paths"].(map[string]interface{})
 	if !ok || len(paths) < 40 {
 		t.Fatalf("expected generated swagger paths >= 40, got %d", len(paths))
+	}
+}
+
+func TestRegression_UpdateScoreZeroAndValidation(t *testing.T) {
+	srv := setupTestServer(t)
+	teacherToken := loginUser(t, srv, "teacher@test.com", "123456")
+	studentToken := loginUser(t, srv, "student@test.com", "123456")
+
+	var exam models.Exam
+	config.DB.Where("exam_code = ?", "IT2026").First(&exam)
+
+	wStart := do(t, srv, "POST", fmt.Sprintf("/api/student/exams/%d/start", exam.ID), studentToken, map[string]bool{"confirmed": true})
+	if wStart.Code != http.StatusOK {
+		t.Fatalf("start exam: want 200, got %d — %s", wStart.Code, wStart.Body)
+	}
+	attemptID := uint(parseJSON(t, wStart)["attempt"].(map[string]interface{})["id"].(float64))
+
+	// Updating score while still in_progress must fail with 400
+	wInProgress := do(t, srv, "PATCH", fmt.Sprintf("/api/teacher/attempts/%d/score", attemptID), teacherToken, gin.H{
+		"score": 4.0,
+		"note":  "Chưa nộp bài",
+	})
+	if wInProgress.Code != http.StatusBadRequest {
+		t.Fatalf("update score in_progress: want 400, got %d — %s", wInProgress.Code, wInProgress.Body)
+	}
+
+	wSub := do(t, srv, "POST", fmt.Sprintf("/api/student/attempts/%d/submit", attemptID), studentToken, gin.H{})
+	if wSub.Code != http.StatusOK {
+		t.Fatalf("submit exam: want 200, got %d — %s", wSub.Code, wSub.Body)
+	}
+
+	// Negative score must fail with 400
+	wNeg := do(t, srv, "PATCH", fmt.Sprintf("/api/teacher/attempts/%d/score", attemptID), teacherToken, gin.H{
+		"score": -1,
+	})
+	if wNeg.Code != http.StatusBadRequest {
+		t.Fatalf("negative score: want 400, got %d — %s", wNeg.Code, wNeg.Body)
+	}
+
+	// Score of 0 must succeed
+	wZero := do(t, srv, "PATCH", fmt.Sprintf("/api/teacher/attempts/%d/score", attemptID), teacherToken, gin.H{
+		"score": 0,
+		"note":  "Điểm 0 sau rà soát",
+	})
+	if wZero.Code != http.StatusOK {
+		t.Fatalf("update score to 0: want 200, got %d — %s", wZero.Code, wZero.Body)
+	}
+	attemptRes := parseJSON(t, wZero)["attempt"].(map[string]interface{})
+	if attemptRes["score"].(float64) != 0 {
+		t.Fatalf("expected score 0, got %v", attemptRes["score"])
+	}
+	if attemptRes["teacher_note"] != "Điểm 0 sau rà soát" {
+		t.Fatalf("expected teacher_note propagated from note, got %v", attemptRes["teacher_note"])
+	}
+}
+
+func TestRegression_ExamValidationUnlinkAndQuestionOrdering(t *testing.T) {
+	srv := setupTestServer(t)
+	teacherToken := loginUser(t, srv, "teacher@test.com", "123456")
+
+	// Create other teacher and classroom to verify classroom ownership validation
+	otherHash, _ := bcrypt.GenerateFromPassword([]byte("123456"), bcrypt.DefaultCost)
+	otherTeacher := models.User{Email: "other-owner@test.com", PasswordHash: string(otherHash), FullName: "Other Owner", Role: models.RoleTeacher}
+	config.DB.Create(&otherTeacher)
+	otherClass := models.Classroom{Name: "Other Class", Code: "OTH001", TeacherID: otherTeacher.ID}
+	config.DB.Create(&otherClass)
+
+	now := time.Now()
+	// Zero duration -> 400
+	wBadDur := do(t, srv, "POST", "/api/teacher/exams", teacherToken, gin.H{
+		"title": "Bad Duration Exam", "duration": 0,
+		"start_time": now.Add(time.Minute), "end_time": now.Add(time.Hour),
+	})
+	if wBadDur.Code != http.StatusBadRequest {
+		t.Fatalf("zero duration: want 400, got %d", wBadDur.Code)
+	}
+
+	// Foreign classroom -> 400
+	wForeignClass := do(t, srv, "POST", "/api/teacher/exams", teacherToken, gin.H{
+		"title": "Foreign Class Exam", "duration": 30,
+		"start_time": now.Add(time.Minute), "end_time": now.Add(time.Hour),
+		"classroom_id": otherClass.ID,
+	})
+	if wForeignClass.Code != http.StatusBadRequest {
+		t.Fatalf("foreign classroom: want 400, got %d", wForeignClass.Code)
+	}
+
+	// Own classroom
+	wCls := do(t, srv, "POST", "/api/teacher/classes", teacherToken, gin.H{"name": "Own Class"})
+	if wCls.Code != http.StatusCreated {
+		t.Fatalf("create own class: want 201, got %d", wCls.Code)
+	}
+	ownClassID := uint(parseJSON(t, wCls)["class"].(map[string]interface{})["id"].(float64))
+
+	wCreate := do(t, srv, "POST", "/api/teacher/exams", teacherToken, gin.H{
+		"title": "Valid Exam", "duration": 30,
+		"start_time": now.Add(-time.Minute), "end_time": now.Add(time.Hour),
+		"classroom_id": ownClassID,
+	})
+	if wCreate.Code != http.StatusCreated {
+		t.Fatalf("create valid exam: want 201, got %d — %s", wCreate.Code, wCreate.Body)
+	}
+	examID := uint(parseJSON(t, wCreate)["exam"].(map[string]interface{})["id"].(float64))
+
+	// Publishing empty exam via PUT status must fail with 400
+	wEmptyPub := do(t, srv, "PUT", fmt.Sprintf("/api/teacher/exams/%d", examID), teacherToken, gin.H{"status": "published"})
+	if wEmptyPub.Code != http.StatusBadRequest {
+		t.Fatalf("publish empty exam via PUT: want 400, got %d — %s", wEmptyPub.Code, wEmptyPub.Body)
+	}
+
+	// Invalid end_time via PUT must fail with 400
+	wBadTime := do(t, srv, "PUT", fmt.Sprintf("/api/teacher/exams/%d", examID), teacherToken, gin.H{
+		"end_time": now.Add(-10 * time.Minute),
+	})
+	if wBadTime.Code != http.StatusBadRequest {
+		t.Fatalf("invalid end_time via PUT: want 400, got %d — %s", wBadTime.Code, wBadTime.Body)
+	}
+
+	// Unlink classroom via classroom_id: 0
+	wUnlink := do(t, srv, "PUT", fmt.Sprintf("/api/teacher/exams/%d", examID), teacherToken, gin.H{"classroom_id": 0})
+	if wUnlink.Code != http.StatusOK {
+		t.Fatalf("unlink classroom: want 200, got %d — %s", wUnlink.Code, wUnlink.Body)
+	}
+	if parseJSON(t, wUnlink)["exam"].(map[string]interface{})["classroom_id"] != nil {
+		t.Fatalf("expected classroom_id to be nil after unlinking, got %v", wUnlink.Body)
+	}
+
+	// Invalid correct_option -> 400
+	wBadOpt := do(t, srv, "POST", fmt.Sprintf("/api/teacher/exams/%d/questions", examID), teacherToken, gin.H{
+		"questions": []gin.H{{
+			"prompt": "Q1", "option_a": "1", "option_b": "2", "option_c": "3", "option_d": "4", "correct_option": "Z",
+		}},
+	})
+	if wBadOpt.Code != http.StatusBadRequest {
+		t.Fatalf("invalid correct_option: want 400, got %d", wBadOpt.Code)
+	}
+
+	// Two separate batches -> monotonic sort_order 1, 2
+	do(t, srv, "POST", fmt.Sprintf("/api/teacher/exams/%d/questions", examID), teacherToken, gin.H{
+		"questions": []gin.H{{
+			"prompt": "Q1", "option_a": "1", "option_b": "2", "option_c": "3", "option_d": "4", "correct_option": "A",
+		}},
+	})
+	wQ2 := do(t, srv, "POST", fmt.Sprintf("/api/teacher/exams/%d/questions", examID), teacherToken, gin.H{
+		"questions": []gin.H{{
+			"prompt": "Q2", "option_a": "1", "option_b": "2", "option_c": "3", "option_d": "4", "correct_option": "B",
+		}},
+	})
+	if wQ2.Code != http.StatusCreated {
+		t.Fatalf("add Q2: want 201, got %d", wQ2.Code)
+	}
+	q2 := parseJSON(t, wQ2)["questions"].([]interface{})[0].(map[string]interface{})
+	if int(q2["sort_order"].(float64)) != 2 {
+		t.Fatalf("expected monotonic sort_order=2 for second batch, got %v", q2["sort_order"])
+	}
+}
+
+func TestRegression_LookupExamClassroomRestrictionAndAutoSubmit(t *testing.T) {
+	srv := setupTestServer(t)
+	teacherToken := loginUser(t, srv, "teacher@test.com", "123456")
+	studentToken := loginUser(t, srv, "student@test.com", "123456")
+
+	otherHash, _ := bcrypt.GenerateFromPassword([]byte("123456"), bcrypt.DefaultCost)
+	outsider := models.User{Email: "outsider-lookup@test.com", PasswordHash: string(otherHash), FullName: "Outsider", Role: models.RoleStudent}
+	config.DB.Create(&outsider)
+	outsiderToken := loginUser(t, srv, "outsider-lookup@test.com", "123456")
+
+	wCls := do(t, srv, "POST", "/api/teacher/classes", teacherToken, gin.H{"name": "Private Exam Class"})
+	clsBody := parseJSON(t, wCls)["class"].(map[string]interface{})
+	classID := uint(clsBody["id"].(float64))
+	classCode := clsBody["code"].(string)
+
+	// Enroll only student@test.com
+	wJoin := do(t, srv, "POST", "/api/student/classes/join", studentToken, gin.H{"code": classCode})
+	if wJoin.Code != http.StatusOK {
+		t.Fatalf("join class: want 200, got %d", wJoin.Code)
+	}
+
+	now := time.Now()
+	wExam := do(t, srv, "POST", "/api/teacher/exams", teacherToken, gin.H{
+		"title": "Private Quiz", "duration": 10,
+		"start_time": now.Add(-5 * time.Minute), "end_time": now.Add(time.Hour),
+		"classroom_id": classID,
+	})
+	examObj := parseJSON(t, wExam)["exam"].(map[string]interface{})
+	examID := uint(examObj["id"].(float64))
+	examCode := examObj["exam_code"].(string)
+
+	do(t, srv, "POST", fmt.Sprintf("/api/teacher/exams/%d/questions", examID), teacherToken, gin.H{
+		"questions": []gin.H{{
+			"prompt": "Private Q1", "option_a": "A", "option_b": "B", "option_c": "C", "option_d": "D", "correct_option": "A",
+		}},
+	})
+	do(t, srv, "PATCH", fmt.Sprintf("/api/teacher/exams/%d/publish", examID), teacherToken, nil)
+
+	// Unenrolled student cannot lookup classroom exam (403)
+	wOut := do(t, srv, "GET", "/api/student/exams/lookup?code="+examCode, outsiderToken, nil)
+	if wOut.Code != http.StatusForbidden {
+		t.Fatalf("outsider lookup private exam: want 403, got %d — %s", wOut.Code, wOut.Body)
+	}
+
+	// Enrolled student starts exam, then time expires in DB
+	wStart := do(t, srv, "POST", fmt.Sprintf("/api/student/exams/%d/start", examID), studentToken, gin.H{"confirmed": true})
+	if wStart.Code != http.StatusOK {
+		t.Fatalf("start private exam: want 200, got %d", wStart.Code)
+	}
+	attemptID := uint(parseJSON(t, wStart)["attempt"].(map[string]interface{})["id"].(float64))
+	config.DB.Model(&models.ExamAttempt{}).Where("id = ?", attemptID).Update("started_at", now.Add(-20*time.Minute))
+
+	// Lookup auto-submits expired in_progress attempt so attempt_status="submitted" and result returns 200
+	wLookup := do(t, srv, "GET", "/api/student/exams/lookup?code="+examCode, studentToken, nil)
+	if wLookup.Code != http.StatusOK {
+		t.Fatalf("enrolled lookup: want 200, got %d — %s", wLookup.Code, wLookup.Body)
+	}
+	lookupData := parseJSON(t, wLookup)
+	if lookupData["attempt_status"] != "submitted" {
+		t.Fatalf("expected auto-submitted attempt_status='submitted', got %v", lookupData["attempt_status"])
+	}
+	wRes := do(t, srv, "GET", fmt.Sprintf("/api/student/attempts/%d/result", attemptID), studentToken, nil)
+	if wRes.Code != http.StatusOK {
+		t.Fatalf("result after lookup auto-submit: want 200, got %d — %s", wRes.Code, wRes.Body)
+	}
+}
+
+func TestRegression_GradebookScaling(t *testing.T) {
+	srv := setupTestServer(t)
+	teacherToken := loginUser(t, srv, "teacher@test.com", "123456")
+	studentToken := loginUser(t, srv, "student@test.com", "123456")
+
+	wCreate := do(t, srv, "POST", "/api/teacher/classes", teacherToken, gin.H{"name": "Scale Test Class"})
+	clsObj := parseJSON(t, wCreate)["class"].(map[string]interface{})
+	classID := uint(clsObj["id"].(float64))
+	do(t, srv, "POST", "/api/student/classes/join", studentToken, gin.H{"code": clsObj["code"].(string)})
+
+	// Seeded IT2026 has 5 questions * 1.0 = 5.0 total points
+	var exam models.Exam
+	config.DB.Where("exam_code = ?", "IT2026").First(&exam)
+	config.DB.Model(&exam).Update("classroom_id", classID)
+	defer config.DB.Model(&exam).Update("classroom_id", nil)
+
+	var questions []models.Question
+	config.DB.Where("exam_id = ?", exam.ID).Find(&questions)
+
+	wStart := do(t, srv, "POST", fmt.Sprintf("/api/student/exams/%d/start", exam.ID), studentToken, gin.H{"confirmed": true})
+	attemptID := uint(parseJSON(t, wStart)["attempt"].(map[string]interface{})["id"].(float64))
+
+	ansPayload := make([]gin.H, 0, len(questions))
+	for _, q := range questions {
+		ansPayload = append(ansPayload, gin.H{"question_id": q.ID, "chosen_option": q.CorrectOption})
+	}
+	wSub := do(t, srv, "POST", fmt.Sprintf("/api/student/attempts/%d/submit", attemptID), studentToken, gin.H{"answers": ansPayload})
+	if wSub.Code != http.StatusOK {
+		t.Fatalf("submit perfect exam: want 200, got %d", wSub.Code)
+	}
+
+	wGB := do(t, srv, "GET", fmt.Sprintf("/api/teacher/classes/%d/gradebook", classID), teacherToken, nil)
+	if wGB.Code != http.StatusOK {
+		t.Fatalf("get gradebook: want 200, got %d — %s", wGB.Code, wGB.Body)
+	}
+	gb := parseJSON(t, wGB)
+	exams := gb["exams"].([]interface{})
+	if exams[0].(map[string]interface{})["max_points"].(float64) != 5 {
+		t.Fatalf("expected exam max_points=5, got %v", exams[0])
+	}
+	stRow := gb["students"].([]interface{})[0].(map[string]interface{})
+	if stRow["average_score"].(float64) != 10 {
+		t.Fatalf("expected scaled average_score=10 for 5/5 score, got %v", stRow["average_score"])
+	}
+	if stRow["academic_rank"] != "Xuất sắc" {
+		t.Fatalf("expected academic_rank='Xuất sắc', got %v", stRow["academic_rank"])
 	}
 }

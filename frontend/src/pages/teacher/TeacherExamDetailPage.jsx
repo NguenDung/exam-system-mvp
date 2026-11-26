@@ -1,10 +1,19 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
-import { teacherAPI } from '../../api/endpoints';
+import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom';
+import { teacherAPI, classroomAPI } from '../../api/endpoints';
 import Spinner from '../../components/Spinner';
 import ExamAppealsTab from './ExamAppealsTab';
 
 const OPTION_LABELS = ['A', 'B', 'C', 'D'];
+const VALID_TABS = new Set(['info', 'questions', 'scores', 'appeals']);
+
+function toLocalDatetimeInputValue(isoString) {
+  if (!isoString) return '';
+  const d = new Date(isoString);
+  if (Number.isNaN(d.getTime())) return '';
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
 
 const EMPTY_QUESTION = {
   prompt: '',
@@ -19,54 +28,101 @@ const EMPTY_QUESTION = {
 function parseBulkQuestionsText(text) {
   const trimmed = text.trim();
   if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
+    let parsed;
     try {
-      const parsed = JSON.parse(trimmed);
-      return Array.isArray(parsed) ? parsed : [parsed];
+      parsed = JSON.parse(trimmed);
     } catch (e) {
       throw new Error('Định dạng JSON không hợp lệ: ' + e.message);
     }
+    const items = Array.isArray(parsed)
+      ? parsed
+      : Array.isArray(parsed?.questions)
+      ? parsed.questions
+      : [parsed];
+    if (items.length === 0) {
+      throw new Error('Danh sách câu hỏi JSON không được để trống.');
+    }
+    return items.map((item, idx) => {
+      const correct = String(item?.correct_option || '').trim().toUpperCase();
+      if (!item?.prompt || !item?.option_a || !item?.option_b || !item?.option_c || !item?.option_d) {
+        throw new Error(`Câu hỏi JSON số ${idx + 1} thiếu prompt hoặc thiếu 4 phương án A, B, C, D.`);
+      }
+      if (!OPTION_LABELS.includes(correct)) {
+        throw new Error(`Câu hỏi JSON số ${idx + 1} có đáp án đúng không hợp lệ (cần A, B, C hoặc D).`);
+      }
+      return {
+        prompt: String(item.prompt).trim(),
+        option_a: String(item.option_a).trim(),
+        option_b: String(item.option_b).trim(),
+        option_c: String(item.option_c).trim(),
+        option_d: String(item.option_d).trim(),
+        correct_option: correct,
+        points: Number(item.points) > 0 ? Number(item.points) : 1,
+      };
+    });
   }
 
-  const blocks = trimmed.split(/(?:\r?\n){2,}|---+/).filter((b) => b.trim());
+  const rawBlocks = /^\s*---+\s*$/m.test(trimmed)
+    ? trimmed.split(/^\s*---+\s*$/m)
+    : trimmed.split(/(?:\r?\n){2,}/);
+  const blocks = rawBlocks.map((b) => b.trim()).filter(Boolean);
   const questions = [];
 
   for (let i = 0; i < blocks.length; i++) {
-    const block = blocks[i].trim();
-    if (!block) continue;
-    const lines = block.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+    const lines = blocks[i].split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
 
     let prompt = '';
     let option_a = '';
     let option_b = '';
     let option_c = '';
     let option_d = '';
-    let correct_option = 'A';
+    let correct_option = '';
     let points = 1;
+    let lastField = '';
 
     for (const line of lines) {
       if (/^(?:Câu(?:\s*\d+)?[:.]|Prompt[:.]?)\s*(.*)/i.test(line)) {
         prompt = line.replace(/^(?:Câu(?:\s*\d+)?[:.]|Prompt[:.]?)\s*/i, '').trim();
-      } else if (/^[A|a][.:)]\s*(.*)/.test(line)) {
-        option_a = line.replace(/^[A|a][.:)]\s*/, '').trim();
-      } else if (/^[B|b][.:)]\s*(.*)/.test(line)) {
-        option_b = line.replace(/^[B|b][.:)]\s*/, '').trim();
-      } else if (/^[C|c][.:)]\s*(.*)/.test(line)) {
-        option_c = line.replace(/^[C|c][.:)]\s*/, '').trim();
-      } else if (/^[D|d][.:)]\s*(.*)/.test(line)) {
-        option_d = line.replace(/^[D|d][.:)]\s*/, '').trim();
-      } else if (/^(?:Đáp án|Correct)[:.]?\s*([A-D])/i.test(line)) {
-        const match = line.match(/^(?:Đáp án|Correct)[:.]?\s*([A-D])/i);
+        lastField = 'prompt';
+      } else if (/^[A][.:)]\s*(.*)/i.test(line)) {
+        option_a = line.replace(/^[A][.:)]\s*/i, '').trim();
+        lastField = 'option_a';
+      } else if (/^[B][.:)]\s*(.*)/i.test(line)) {
+        option_b = line.replace(/^[B][.:)]\s*/i, '').trim();
+        lastField = 'option_b';
+      } else if (/^[C][.:)]\s*(.*)/i.test(line)) {
+        option_c = line.replace(/^[C][.:)]\s*/i, '').trim();
+        lastField = 'option_c';
+      } else if (/^[D][.:)]\s*(.*)/i.test(line)) {
+        option_d = line.replace(/^[D][.:)]\s*/i, '').trim();
+        lastField = 'option_d';
+      } else if (/^(?:Đáp án|Correct)[:.]?\s*([A-D])\b/i.test(line)) {
+        const match = line.match(/^(?:Đáp án|Correct)[:.]?\s*([A-D])\b/i);
         if (match) correct_option = match[1].toUpperCase();
+        lastField = '';
       } else if (/^(?:Điểm|Points)[:.]?\s*(\d+(?:\.\d+)?)/i.test(line)) {
         const match = line.match(/^(?:Điểm|Points)[:.]?\s*(\d+(?:\.\d+)?)/i);
         if (match) points = parseFloat(match[1]);
-      } else if (!prompt) {
-        prompt = line;
+        lastField = '';
+      } else if (lastField === 'prompt' || !prompt) {
+        prompt = prompt ? `${prompt}\n${line}` : line;
+        lastField = 'prompt';
+      } else if (lastField === 'option_a') {
+        option_a = `${option_a} ${line}`;
+      } else if (lastField === 'option_b') {
+        option_b = `${option_b} ${line}`;
+      } else if (lastField === 'option_c') {
+        option_c = `${option_c} ${line}`;
+      } else if (lastField === 'option_d') {
+        option_d = `${option_d} ${line}`;
       }
     }
 
     if (!prompt || !option_a || !option_b || !option_c || !option_d) {
       throw new Error(`Khối câu hỏi số ${i + 1} thiếu nội dung hoặc không đủ 4 phương án A, B, C, D.`);
+    }
+    if (!OPTION_LABELS.includes(correct_option)) {
+      throw new Error(`Khối câu hỏi số ${i + 1} thiếu dòng "Đáp án: A/B/C/D" hợp lệ.`);
     }
 
     questions.push({
@@ -76,7 +132,7 @@ function parseBulkQuestionsText(text) {
       option_c,
       option_d,
       correct_option,
-      points,
+      points: points > 0 ? points : 1,
     });
   }
 
@@ -91,10 +147,12 @@ function QuestionForm({ onSave, onCancel, saving }) {
   const [q, setQ] = useState(EMPTY_QUESTION);
   const set = (k) => (e) => setQ((p) => ({ ...p, [k]: e.target.value }));
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    onSave({ ...q, points: parseFloat(q.points) || 1 });
-    setQ(EMPTY_QUESTION);
+    const ok = await onSave({ ...q, points: parseFloat(q.points) || 1 });
+    if (ok) {
+      setQ(EMPTY_QUESTION);
+    }
   };
 
   return (
@@ -439,11 +497,16 @@ function EditScoreModal({ attempt, onClose, onUpdated }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    const parsedScore = parseFloat(score);
+    if (score === '' || Number.isNaN(parsedScore) || parsedScore < 0) {
+      setError('Điểm số phải là số không âm');
+      return;
+    }
     setLoading(true);
     setError('');
     try {
       await teacherAPI.updateAttemptScore(attempt.attempt_id, {
-        score: parseFloat(score),
+        score: parsedScore,
         teacher_note: teacherNote,
       });
       onUpdated();
@@ -597,14 +660,15 @@ function AuditLogModal({ onClose }) {
   );
 }
 
-function EditExamModal({ exam, onClose, onUpdated }) {
+function EditExamModal({ exam, classes, onClose, onUpdated }) {
   const [form, setForm] = useState({
     title: exam.title || '',
     description: exam.description || '',
     duration: exam.duration || 30,
-    start_time: exam.start_time ? new Date(exam.start_time).toISOString().slice(0, 16) : '',
-    end_time: exam.end_time ? new Date(exam.end_time).toISOString().slice(0, 16) : '',
+    start_time: toLocalDatetimeInputValue(exam.start_time),
+    end_time: toLocalDatetimeInputValue(exam.end_time),
     is_published: exam.status === 'published',
+    classroom_id: exam.classroom_id || '',
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -616,6 +680,10 @@ function EditExamModal({ exam, onClose, onUpdated }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (form.start_time && form.end_time && new Date(form.end_time) <= new Date(form.start_time)) {
+      setError('Thời gian kết thúc phải sau thời gian bắt đầu');
+      return;
+    }
     setLoading(true);
     setError('');
     try {
@@ -625,7 +693,8 @@ function EditExamModal({ exam, onClose, onUpdated }) {
         duration: parseInt(form.duration, 10),
         start_time: form.start_time ? new Date(form.start_time).toISOString() : exam.start_time,
         end_time: form.end_time ? new Date(form.end_time).toISOString() : exam.end_time,
-        is_published: form.is_published,
+        status: form.is_published ? 'published' : 'draft',
+        classroom_id: form.classroom_id ? parseInt(form.classroom_id, 10) : 0,
       };
       const { data } = await teacherAPI.updateExam(exam.id, payload);
       onUpdated(data.exam);
@@ -664,6 +733,22 @@ function EditExamModal({ exam, onClose, onUpdated }) {
               onChange={handleChange}
               className="input resize-none"
             />
+          </div>
+          <div>
+            <label className="label">Gán cho Lớp học (tùy chọn)</label>
+            <select
+              name="classroom_id"
+              value={form.classroom_id || ''}
+              onChange={handleChange}
+              className="input"
+            >
+              <option value="">Công khai cho tất cả sinh viên</option>
+              {(classes || []).map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name} ({c.code})
+                </option>
+              ))}
+            </select>
           </div>
           <div>
             <label className="label">Thời lượng làm bài (phút) *</label>
@@ -731,14 +816,18 @@ function EditExamModal({ exam, onClose, onUpdated }) {
 export default function TeacherExamDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialTabParam = searchParams.get('tab');
   const [exam, setExam] = useState(null);
+  const [classes, setClasses] = useState([]);
   const [questions, setQuestions] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [toast, setToast] = useState(null);
-  const [activeTab, setActiveTab] = useState('info');
+  const [activeTab, setActiveTab] = useState(VALID_TABS.has(initialTabParam) ? initialTabParam : 'info');
   const [scoreData, setScoreData] = useState(null);
   const [scoreLoading, setScoreLoading] = useState(false);
   const [scoreError, setScoreError] = useState('');
@@ -762,20 +851,35 @@ export default function TeacherExamDetailPage() {
     setTimeout(() => setToast(null), 3000);
   }, []);
 
+  useEffect(() => {
+    const tabParam = searchParams.get('tab');
+    if (tabParam && VALID_TABS.has(tabParam)) {
+      setActiveTab(tabParam);
+    }
+  }, [searchParams]);
+
   const fetchData = useCallback(async () => {
+    setLoadError('');
     try {
-      const { data } = await teacherAPI.getExam(id);
+      const [{ data }, classRes] = await Promise.all([
+        teacherAPI.getExam(id),
+        classroomAPI.list().catch(() => ({ data: { classes: [] } })),
+      ]);
       setExam(data.exam);
       setQuestions(data.exam.questions || []);
-    } catch {
-      navigate('/teacher');
+      setClasses(classRes.data?.classes || []);
+    } catch (err) {
+      setLoadError(err.response?.data?.error || 'Không thể tải chi tiết đề thi.');
     } finally {
       setLoading(false);
     }
-  }, [id, navigate]);
+  }, [id]);
 
   useEffect(() => {
     fetchData();
+    const handleRefresh = () => fetchData();
+    window.addEventListener('app:refresh-route', handleRefresh);
+    return () => window.removeEventListener('app:refresh-route', handleRefresh);
   }, [fetchData]);
 
   const fetchScores = useCallback(() => {
@@ -801,8 +905,10 @@ export default function TeacherExamDetailPage() {
       setQuestions((q) => [...q, ...(data.questions || [])]);
       setShowForm(false);
       showToast('Đã thêm câu hỏi thành công');
+      return true;
     } catch (err) {
       showToast(err.response?.data?.error || 'Thêm câu hỏi không thành công', 'error');
+      return false;
     } finally {
       setSaving(false);
     }
@@ -901,16 +1007,37 @@ export default function TeacherExamDetailPage() {
       window.URL.revokeObjectURL(url);
       showToast('Đã tải xuống bảng điểm CSV thành công');
     } catch (err) {
-      showToast(err.response?.data?.error || 'Lỗi khi xuất bảng điểm CSV', 'error');
+      let message = 'Lỗi khi xuất bảng điểm CSV';
+      if (err.response?.data instanceof Blob) {
+        try {
+          const parsed = JSON.parse(await err.response.data.text());
+          if (parsed?.error) message = parsed.error;
+        } catch {}
+      } else if (err.response?.data?.error) {
+        message = err.response.data.error;
+      }
+      showToast(message, 'error');
     } finally {
       setExportingCSV(false);
     }
   };
 
   if (loading) return <div className="flex justify-center py-20"><Spinner size="lg" /></div>;
+  if (loadError) {
+    return (
+      <div className="bg-white dark:bg-slate-900 rounded-xl border border-red-200 dark:border-rose-900/60 p-8 max-w-md mx-auto text-center space-y-4">
+        <p className="text-sm text-red-700 dark:text-rose-300">{loadError}</p>
+        <div className="flex justify-center gap-2">
+          <button onClick={() => navigate('/teacher')} className="btn-secondary btn-sm">Quay lại danh sách</button>
+          <button onClick={fetchData} className="btn-primary btn-sm">Thử lại</button>
+        </div>
+      </div>
+    );
+  }
   if (!exam) return null;
 
   const isDraft = exam.status === 'draft';
+  const assignedClass = exam.classroom_id ? classes.find((c) => c.id === exam.classroom_id) : null;
   const tabs = [
     { id: 'info', label: 'Thông tin chung' },
     { id: 'questions', label: 'Câu hỏi & Đáp án' },
@@ -923,7 +1050,7 @@ export default function TeacherExamDetailPage() {
       {/* Toast */}
       {toast && (
         <div
-          className={`fixed top-4 right-4 z-50 px-4 py-2.5 rounded-md shadow-lg text-white text-sm font-medium transition-all ${
+          className={`fixed top-4 right-4 z-[60] px-4 py-2.5 rounded-md shadow-lg text-white text-sm font-medium transition-all ${
             toast.type === 'error' ? 'bg-red-700' : 'bg-emerald-700'
           }`}
         >
@@ -985,7 +1112,10 @@ export default function TeacherExamDetailPage() {
         {tabs.map((tab) => (
           <button
             key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
+            onClick={() => {
+              setActiveTab(tab.id);
+              setSearchParams(tab.id === 'info' ? {} : { tab: tab.id });
+            }}
             className={`whitespace-nowrap border-b-2 px-4 py-2.5 text-sm font-medium ${
               activeTab === tab.id
                 ? 'border-indigo-600 text-indigo-700'
@@ -1014,6 +1144,16 @@ export default function TeacherExamDetailPage() {
             <dl className="mt-4 grid gap-4 text-sm sm:grid-cols-2">
               <div><dt className="text-slate-500">Mã kỳ thi</dt><dd className="font-mono font-semibold text-slate-900">{exam.exam_code}</dd></div>
               <div><dt className="text-slate-500">Thời lượng làm bài</dt><dd className="font-medium">{exam.duration} phút</dd></div>
+              <div>
+                <dt className="text-slate-500">Phạm vi / Lớp học</dt>
+                <dd className="font-medium">
+                  {assignedClass
+                    ? `${assignedClass.name} (${assignedClass.code})`
+                    : exam.classroom_id
+                    ? `Lớp #${exam.classroom_id}`
+                    : 'Công khai cho tất cả sinh viên'}
+                </dd>
+              </div>
               <div><dt className="text-slate-500">Thời điểm mở đề</dt><dd>{new Date(exam.start_time).toLocaleString('vi-VN')}</dd></div>
               <div><dt className="text-slate-500">Thời điểm đóng đề</dt><dd>{new Date(exam.end_time).toLocaleString('vi-VN')}</dd></div>
               {exam.description && (
@@ -1191,6 +1331,7 @@ export default function TeacherExamDetailPage() {
       {showEditExamModal && (
         <EditExamModal
           exam={exam}
+          classes={classes}
           onClose={() => setShowEditExamModal(false)}
           onUpdated={(updated) => {
             setExam(updated);

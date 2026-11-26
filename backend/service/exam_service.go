@@ -18,11 +18,27 @@ import (
 )
 
 var (
-	ErrExamNotFound      = errors.New("Exam not found or you do not have permission")
-	ErrExamNotDraft      = errors.New("Exam is already published and questions cannot be modified")
-	ErrInvalidTimeRange  = errors.New("end_time must be after start_time")
-	ErrNoQuestionsInExam = errors.New("Exam must have at least 1 question before publishing")
+	ErrExamNotFound        = errors.New("Exam not found or you do not have permission")
+	ErrExamNotDraft        = errors.New("Exam is already published and questions cannot be modified")
+	ErrInvalidTimeRange    = errors.New("end_time must be after start_time")
+	ErrNoQuestionsInExam   = errors.New("Exam must have at least 1 question before publishing")
+	ErrInvalidDuration     = errors.New("duration must be greater than 0")
+	ErrInvalidClassroom    = errors.New("Classroom not found or you do not have permission")
+	ErrInvalidExamStatus   = errors.New("status must be 'draft' or 'published'")
+	ErrInvalidExamState    = errors.New("Cannot revert exam to draft after students have attempted it")
+	ErrInvalidTitle        = errors.New("title cannot be empty")
+	ErrEmptyQuestions      = errors.New("questions list cannot be empty")
+	ErrInvalidQuestion     = errors.New("Question prompt and all four options are required")
+	ErrInvalidCorrectOpt   = errors.New("correct_option must be A, B, C, or D")
+	ErrInvalidScore        = errors.New("score must be non-negative")
+	ErrAttemptNotCompleted = errors.New("Cannot update score for an attempt that has not been submitted")
+	ErrInvalidStudentName  = errors.New("full_name cannot be empty")
+	ErrInvalidPasswordLen  = errors.New("Password must be between 6 and 72 bytes")
 )
+
+func isValidOption(opt string) bool {
+	return opt == "A" || opt == "B" || opt == "C" || opt == "D"
+}
 
 type ExamService interface {
 	CreateExam(teacherID uint, req dto.CreateExamRequest) (*models.Exam, error)
@@ -69,8 +85,29 @@ func NewExamService(
 }
 
 func (s *examService) CreateExam(teacherID uint, req dto.CreateExamRequest) (*models.Exam, error) {
+	title := strings.TrimSpace(req.Title)
+	if title == "" {
+		return nil, ErrInvalidTitle
+	}
 	if !req.EndTime.After(req.StartTime) {
 		return nil, ErrInvalidTimeRange
+	}
+
+	duration := req.Duration
+	if duration <= 0 && req.DurationMinutes > 0 {
+		duration = req.DurationMinutes
+	}
+	if duration <= 0 {
+		return nil, ErrInvalidDuration
+	}
+
+	var classroomID *uint
+	if req.ClassroomID != nil && *req.ClassroomID > 0 {
+		cls, err := s.examRepo.FindClassroomByID(*req.ClassroomID)
+		if err != nil || cls.TeacherID != teacherID {
+			return nil, ErrInvalidClassroom
+		}
+		classroomID = req.ClassroomID
 	}
 
 	var examCode string
@@ -82,21 +119,16 @@ func (s *examService) CreateExam(teacherID uint, req dto.CreateExamRequest) (*mo
 		}
 	}
 
-	duration := req.Duration
-	if duration <= 0 && req.DurationMinutes > 0 {
-		duration = req.DurationMinutes
-	}
-
 	exam := models.Exam{
 		TeacherID:   teacherID,
 		ExamCode:    examCode,
-		Title:       strings.TrimSpace(req.Title),
+		Title:       title,
 		Description: strings.TrimSpace(req.Description),
 		Duration:    duration,
 		StartTime:   req.StartTime,
 		EndTime:     req.EndTime,
 		Status:      "draft",
-		ClassroomID: req.ClassroomID,
+		ClassroomID: classroomID,
 	}
 
 	if err := s.examRepo.CreateExam(&exam); err != nil {
@@ -125,30 +157,79 @@ func (s *examService) UpdateExam(teacherID, examID uint, req dto.UpdateExamReque
 
 	updates := map[string]interface{}{}
 	if req.Title != nil {
-		updates["title"] = strings.TrimSpace(*req.Title)
+		title := strings.TrimSpace(*req.Title)
+		if title == "" {
+			return nil, ErrInvalidTitle
+		}
+		updates["title"] = title
 	}
 	if req.Description != nil {
 		updates["description"] = strings.TrimSpace(*req.Description)
 	}
 	if req.Duration != nil {
+		if *req.Duration <= 0 {
+			return nil, ErrInvalidDuration
+		}
 		updates["duration"] = *req.Duration
-	}
-	if req.DurationMinutes != nil {
+	} else if req.DurationMinutes != nil {
+		if *req.DurationMinutes <= 0 {
+			return nil, ErrInvalidDuration
+		}
 		updates["duration"] = *req.DurationMinutes
 	}
+
+	effectiveStart := exam.StartTime
+	effectiveEnd := exam.EndTime
 	if req.StartTime != nil {
+		effectiveStart = *req.StartTime
 		updates["start_time"] = *req.StartTime
 	}
 	if req.EndTime != nil {
+		effectiveEnd = *req.EndTime
 		updates["end_time"] = *req.EndTime
 	}
-	if req.Status != nil {
-		updates["status"] = *req.Status
-	}
-	if req.ClassroomID != nil {
-		updates["classroom_id"] = req.ClassroomID
+	if !effectiveEnd.After(effectiveStart) {
+		return nil, ErrInvalidTimeRange
 	}
 
+	if req.Status != nil {
+		status := strings.ToLower(strings.TrimSpace(*req.Status))
+		if status != "draft" && status != "published" {
+			return nil, ErrInvalidExamStatus
+		}
+		if status == "published" && exam.Status != "published" {
+			count, _, err := s.examRepo.GetQuestionStats(examID)
+			if err != nil || count == 0 {
+				return nil, ErrNoQuestionsInExam
+			}
+			now := time.Now()
+			if exam.PublishedAt == nil {
+				updates["published_at"] = &now
+			}
+		}
+		if status == "draft" && exam.Status == "published" {
+			attemptCount, _ := s.examRepo.CountAttemptsByExamID(examID)
+			if attemptCount > 0 {
+				return nil, ErrInvalidExamState
+			}
+		}
+		updates["status"] = status
+	}
+	if req.ClassroomID != nil {
+		if *req.ClassroomID == 0 {
+			updates["classroom_id"] = nil
+		} else {
+			cls, err := s.examRepo.FindClassroomByID(*req.ClassroomID)
+			if err != nil || cls.TeacherID != teacherID {
+				return nil, ErrInvalidClassroom
+			}
+			updates["classroom_id"] = *req.ClassroomID
+		}
+	}
+
+	if len(updates) == 0 {
+		return exam, nil
+	}
 	if err := s.examRepo.UpdateExam(exam, updates); err != nil {
 		return nil, err
 	}
@@ -193,22 +274,38 @@ func (s *examService) AddQuestions(teacherID, examID uint, questionsDTO []dto.Qu
 	if exam.Status != "draft" {
 		return nil, ErrExamNotDraft
 	}
+	if len(questionsDTO) == 0 {
+		return nil, ErrEmptyQuestions
+	}
 
+	maxOrder, _ := s.examRepo.GetMaxQuestionSortOrder(examID)
 	questions := make([]models.Question, 0, len(questionsDTO))
 	for i, q := range questionsDTO {
+		prompt := strings.TrimSpace(q.Prompt)
+		optA := strings.TrimSpace(q.OptionA)
+		optB := strings.TrimSpace(q.OptionB)
+		optC := strings.TrimSpace(q.OptionC)
+		optD := strings.TrimSpace(q.OptionD)
+		if prompt == "" || optA == "" || optB == "" || optC == "" || optD == "" {
+			return nil, ErrInvalidQuestion
+		}
+		correctOpt := strings.ToUpper(strings.TrimSpace(q.CorrectOption))
+		if !isValidOption(correctOpt) {
+			return nil, ErrInvalidCorrectOpt
+		}
 		pts := q.Points
 		if pts <= 0 {
 			pts = 1.0
 		}
 		questions = append(questions, models.Question{
 			ExamID:        examID,
-			SortOrder:     i + 1,
-			Prompt:        q.Prompt,
-			OptionA:       q.OptionA,
-			OptionB:       q.OptionB,
-			OptionC:       q.OptionC,
-			OptionD:       q.OptionD,
-			CorrectOption: strings.ToUpper(strings.TrimSpace(q.CorrectOption)),
+			SortOrder:     maxOrder + i + 1,
+			Prompt:        prompt,
+			OptionA:       optA,
+			OptionB:       optB,
+			OptionC:       optC,
+			OptionD:       optD,
+			CorrectOption: correctOpt,
 			Points:        pts,
 		})
 	}
@@ -230,12 +327,25 @@ func (s *examService) UpdateQuestion(teacherID, questionID uint, qDTO dto.Questi
 		return nil, ErrExamNotDraft
 	}
 
-	q.Prompt = qDTO.Prompt
-	q.OptionA = qDTO.OptionA
-	q.OptionB = qDTO.OptionB
-	q.OptionC = qDTO.OptionC
-	q.OptionD = qDTO.OptionD
-	q.CorrectOption = strings.ToUpper(strings.TrimSpace(qDTO.CorrectOption))
+	prompt := strings.TrimSpace(qDTO.Prompt)
+	optA := strings.TrimSpace(qDTO.OptionA)
+	optB := strings.TrimSpace(qDTO.OptionB)
+	optC := strings.TrimSpace(qDTO.OptionC)
+	optD := strings.TrimSpace(qDTO.OptionD)
+	if prompt == "" || optA == "" || optB == "" || optC == "" || optD == "" {
+		return nil, ErrInvalidQuestion
+	}
+	correctOpt := strings.ToUpper(strings.TrimSpace(qDTO.CorrectOption))
+	if !isValidOption(correctOpt) {
+		return nil, ErrInvalidCorrectOpt
+	}
+
+	q.Prompt = prompt
+	q.OptionA = optA
+	q.OptionB = optB
+	q.OptionC = optC
+	q.OptionD = optD
+	q.CorrectOption = correctOpt
 	if qDTO.Points > 0 {
 		q.Points = qDTO.Points
 	}
@@ -379,6 +489,10 @@ func (s *examService) ExportResultsCSV(teacherID, examID uint) ([]byte, string, 
 }
 
 func (s *examService) UpdateAttemptScore(teacherID, attemptID uint, req dto.UpdateScoreRequest) (*models.ExamAttempt, error) {
+	if req.Score == nil || *req.Score < 0 {
+		return nil, ErrInvalidScore
+	}
+
 	attempt, err := s.examRepo.FindAttemptByID(attemptID)
 	if err != nil {
 		return nil, errors.New("Attempt not found")
@@ -388,12 +502,16 @@ func (s *examService) UpdateAttemptScore(teacherID, attemptID uint, req dto.Upda
 	if err != nil || exam.TeacherID != teacherID {
 		return nil, errors.New("Permission denied")
 	}
+	if attempt.Status != "completed" {
+		return nil, ErrAttemptNotCompleted
+	}
 
+	newScore := *req.Score
 	oldScore := attempt.Score
-	attempt.Score = req.Score
-	note := req.TeacherNote
-	if note == "" && req.Note != "" {
-		note = req.Note
+	attempt.Score = newScore
+	note := strings.TrimSpace(req.TeacherNote)
+	if note == "" {
+		note = strings.TrimSpace(req.Note)
 	}
 	attempt.TeacherNote = note
 
@@ -405,7 +523,7 @@ func (s *examService) UpdateAttemptScore(teacherID, attemptID uint, req dto.Upda
 		ActorID:   teacherID,
 		Action:    "UPDATE_SCORE",
 		TargetID:  attempt.ID,
-		Details:   fmt.Sprintf("Changed score from %.2f to %.2f. Note: %s", oldScore, req.Score, req.TeacherNote),
+		Details:   fmt.Sprintf("Changed score from %.2f to %.2f. Note: %s", oldScore, newScore, note),
 		CreatedAt: time.Now(),
 	})
 
@@ -413,7 +531,7 @@ func (s *examService) UpdateAttemptScore(teacherID, attemptID uint, req dto.Upda
 		s.notifSvc.CreateNotification(
 			attempt.UserID,
 			"Cập nhật điểm thi",
-			fmt.Sprintf("Giảng viên đã hiệu chỉnh điểm thi của bạn trên đề thi \"%s\" thành %.2f điểm.", exam.Title, req.Score),
+			fmt.Sprintf("Giảng viên đã hiệu chỉnh điểm thi của bạn trên đề thi \"%s\" thành %.2f điểm.", exam.Title, newScore),
 			fmt.Sprintf("/student/history/%d", attempt.ID),
 		)
 	}
@@ -480,9 +598,23 @@ func (s *examService) ListStudents(teacherID uint, query string) ([]map[string]i
 }
 
 func (s *examService) CreateStudent(teacherID uint, req dto.CreateStudentRequest) (*models.User, error) {
-	email := strings.ToLower(strings.TrimSpace(req.Email))
-	existing, _ := s.userRepo.FindByEmail(email)
-	if existing != nil {
+	fullName := strings.TrimSpace(req.FullName)
+	if fullName == "" {
+		return nil, ErrInvalidStudentName
+	}
+	email := normalizeEmail(req.Email)
+	if !isValidEmail(email) {
+		return nil, ErrInvalidEmail
+	}
+	if len(req.Password) < 6 || !passwordByteLenOK(req.Password) {
+		return nil, ErrInvalidPasswordLen
+	}
+
+	existing, err := s.userRepo.FindByEmail(email)
+	if err == nil && existing != nil {
+		return nil, errors.New("Email already registered")
+	}
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, errors.New("Email already registered")
 	}
 
@@ -492,7 +624,7 @@ func (s *examService) CreateStudent(teacherID uint, req dto.CreateStudentRequest
 	}
 
 	user := models.User{
-		FullName:     strings.TrimSpace(req.FullName),
+		FullName:     fullName,
 		Email:        email,
 		PasswordHash: string(hash),
 		Role:         models.RoleStudent,
@@ -512,20 +644,34 @@ func (s *examService) UpdateStudent(teacherID, studentID uint, req dto.UpdateStu
 
 	updates := map[string]interface{}{}
 	if req.FullName != "" {
-		updates["full_name"] = strings.TrimSpace(req.FullName)
+		fullName := strings.TrimSpace(req.FullName)
+		if fullName == "" {
+			return nil, ErrInvalidStudentName
+		}
+		updates["full_name"] = fullName
 	}
 	if req.Email != "" {
-		email := strings.ToLower(strings.TrimSpace(req.Email))
+		email := normalizeEmail(req.Email)
+		if !isValidEmail(email) {
+			return nil, ErrInvalidEmail
+		}
 		if email != student.Email {
-			ex, _ := s.userRepo.FindByEmail(email)
-			if ex != nil {
+			ex, err := s.userRepo.FindByEmail(email)
+			if err == nil && ex != nil {
+				return nil, errors.New("Email already in use")
+			}
+			if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 				return nil, errors.New("Email already in use")
 			}
 			updates["email"] = email
 		}
 	}
 	if req.Password != nil && strings.TrimSpace(*req.Password) != "" {
-		hash, err := bcrypt.GenerateFromPassword([]byte(*req.Password), bcrypt.DefaultCost)
+		pass := *req.Password
+		if len(pass) < 6 || !passwordByteLenOK(pass) {
+			return nil, ErrInvalidPasswordLen
+		}
+		hash, err := bcrypt.GenerateFromPassword([]byte(pass), bcrypt.DefaultCost)
 		if err != nil {
 			return nil, errors.New("Failed to hash password")
 		}

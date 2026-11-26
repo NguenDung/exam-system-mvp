@@ -343,6 +343,15 @@ func (s *classroomService) GetClassDetail(userID uint, role string, classID uint
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		exams = []models.Exam{}
 	}
+	if role != models.RoleTeacher {
+		publishedExams := make([]models.Exam, 0, len(exams))
+		for _, ex := range exams {
+			if ex.Status == "published" {
+				publishedExams = append(publishedExams, ex)
+			}
+		}
+		exams = publishedExams
+	}
 
 	return &dto.ClassDetailResponse{
 		Class: dto.ClassDetailClass{
@@ -382,15 +391,23 @@ func (s *classroomService) GetClassGradebook(teacherID, classID uint) (*dto.Clas
 		exams = []models.Exam{}
 	}
 
-	var examIDs []uint
-	gradebookExams := make([]dto.ClassGradebookExam, 0, len(exams))
+	examIDs := make([]uint, 0, len(exams))
 	for _, ex := range exams {
 		examIDs = append(examIDs, ex.ID)
+	}
+	maxPointsMap, err := s.classRepo.GetExamMaxPoints(examIDs)
+	if err != nil {
+		maxPointsMap = make(map[uint]float64)
+	}
+
+	gradebookExams := make([]dto.ClassGradebookExam, 0, len(exams))
+	for _, ex := range exams {
 		gradebookExams = append(gradebookExams, dto.ClassGradebookExam{
 			ID:        ex.ID,
 			ExamCode:  ex.ExamCode,
 			Title:     ex.Title,
 			Duration:  ex.Duration,
+			MaxPoints: maxPointsMap[ex.ID],
 			StartTime: ex.StartTime,
 			EndTime:   ex.EndTime,
 			Status:    ex.Status,
@@ -415,33 +432,43 @@ func (s *classroomService) GetClassGradebook(teacherID, classID uint) (*dto.Clas
 	var totalScoresSum float64
 	var totalScoresCount int
 	highestAvg := 0.0
-	lowestAvg := 10.0
+	lowestAvg := 0.0
 	atRiskCount := 0
 
 	for _, m := range rawMembers {
 		userAttempts := attemptMap[m.StudentID]
 		examScores := make(map[uint]dto.StudentGradeEntry)
-		var studentSum float64
+		var studentScaledSum float64
 		var studentCompleted int
 
 		for _, ex := range exams {
+			maxPts := maxPointsMap[ex.ID]
 			if att, exists := userAttempts[ex.ID]; exists {
 				scoreVal := att.Score
+				var scaledPtr *float64
+				if att.Status == "completed" {
+					scaledVal := scoreVal
+					if maxPts > 0 {
+						scaledVal = (scoreVal / maxPts) * 10.0
+					}
+					scaledPtr = &scaledVal
+					studentScaledSum += scaledVal
+					studentCompleted++
+				}
 				examScores[ex.ID] = dto.StudentGradeEntry{
 					AttemptID:      &att.ID,
 					Score:          &scoreVal,
+					ScaledScore:    scaledPtr,
+					MaxPoints:      maxPts,
 					Status:         att.Status,
 					ViolationCount: att.ViolationCount,
 					SubmittedAt:    att.SubmittedAt,
-				}
-				if att.Status == "completed" {
-					studentSum += att.Score
-					studentCompleted++
 				}
 			} else {
 				examScores[ex.ID] = dto.StudentGradeEntry{
 					AttemptID:      nil,
 					Score:          nil,
+					MaxPoints:      maxPts,
 					Status:         "not_attempted",
 					ViolationCount: 0,
 					SubmittedAt:    nil,
@@ -451,7 +478,7 @@ func (s *classroomService) GetClassGradebook(teacherID, classID uint) (*dto.Clas
 
 		var avgScore float64
 		if studentCompleted > 0 {
-			avgScore = studentSum / float64(studentCompleted)
+			avgScore = studentScaledSum / float64(studentCompleted)
 		}
 
 		var rank string
@@ -473,11 +500,16 @@ func (s *classroomService) GetClassGradebook(teacherID, classID uint) (*dto.Clas
 		if studentCompleted > 0 {
 			totalScoresSum += avgScore
 			totalScoresCount++
-			if avgScore > highestAvg {
+			if totalScoresCount == 1 {
 				highestAvg = avgScore
-			}
-			if avgScore < lowestAvg {
 				lowestAvg = avgScore
+			} else {
+				if avgScore > highestAvg {
+					highestAvg = avgScore
+				}
+				if avgScore < lowestAvg {
+					lowestAvg = avgScore
+				}
 			}
 			if avgScore < 4.0 {
 				atRiskCount++
@@ -501,8 +533,6 @@ func (s *classroomService) GetClassGradebook(teacherID, classID uint) (*dto.Clas
 	classAvg := 0.0
 	if totalScoresCount > 0 {
 		classAvg = totalScoresSum / float64(totalScoresCount)
-	} else {
-		lowestAvg = 0.0
 	}
 
 	summary := dto.ClassGradebookSummary{

@@ -19,12 +19,14 @@ type ExamRepository interface {
 	DeleteExam(id uint) error
 	GetPublishedExams(enrolledClassIDs []uint) ([]models.Exam, error)
 	GetAllClassrooms() ([]models.Classroom, error)
+	FindClassroomByID(id uint) (*models.Classroom, error)
 
 	AddQuestions(examID uint, questions []models.Question) ([]models.Question, error)
 	FindQuestionByID(id uint) (*models.Question, error)
 	UpdateQuestion(q *models.Question) error
 	DeleteQuestion(id uint) error
 	GetQuestionStats(examID uint) (count int64, points float64, err error)
+	GetMaxQuestionSortOrder(examID uint) (int, error)
 	GetQuestionsByExamID(examID uint) ([]models.Question, error)
 
 	CreateAttempt(attempt *models.ExamAttempt) error
@@ -95,7 +97,30 @@ func (r *gormExamRepository) UpdateExam(exam *models.Exam, updates map[string]in
 }
 
 func (r *gormExamRepository) DeleteExam(id uint) error {
-	return r.db.Select(clause.Associations).Delete(&models.Exam{}, id).Error
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		var attemptIDs []uint
+		if err := tx.Model(&models.ExamAttempt{}).Where("exam_id = ?", id).Pluck("id", &attemptIDs).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("exam_id = ?", id).Delete(&models.Appeal{}).Error; err != nil {
+			return err
+		}
+		if len(attemptIDs) > 0 {
+			if err := tx.Where("attempt_id IN ?", attemptIDs).Delete(&models.AttemptAnswer{}).Error; err != nil {
+				return err
+			}
+			if err := tx.Where("submission_id IN ?", attemptIDs).Delete(&models.Appeal{}).Error; err != nil {
+				return err
+			}
+		}
+		if err := tx.Where("exam_id = ?", id).Delete(&models.ExamAttempt{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("exam_id = ?", id).Delete(&models.Question{}).Error; err != nil {
+			return err
+		}
+		return tx.Delete(&models.Exam{}, id).Error
+	})
 }
 
 func (r *gormExamRepository) GetPublishedExams(enrolledClassIDs []uint) ([]models.Exam, error) {
@@ -114,6 +139,14 @@ func (r *gormExamRepository) GetAllClassrooms() ([]models.Classroom, error) {
 	var classrooms []models.Classroom
 	err := r.db.Find(&classrooms).Error
 	return classrooms, err
+}
+
+func (r *gormExamRepository) FindClassroomByID(id uint) (*models.Classroom, error) {
+	var classroom models.Classroom
+	if err := r.db.First(&classroom, id).Error; err != nil {
+		return nil, err
+	}
+	return &classroom, nil
 }
 
 func (r *gormExamRepository) AddQuestions(examID uint, questions []models.Question) ([]models.Question, error) {
@@ -155,6 +188,15 @@ func (r *gormExamRepository) GetQuestionStats(examID uint) (count int64, points 
 		Select("COUNT(id) AS count, COALESCE(SUM(points), 0) AS points").
 		Scan(&stats).Error
 	return stats.Count, stats.Points, err
+}
+
+func (r *gormExamRepository) GetMaxQuestionSortOrder(examID uint) (int, error) {
+	var maxOrder int
+	err := r.db.Model(&models.Question{}).
+		Where("exam_id = ?", examID).
+		Select("COALESCE(MAX(sort_order), 0)").
+		Scan(&maxOrder).Error
+	return maxOrder, err
 }
 
 func (r *gormExamRepository) GetQuestionsByExamID(examID uint) ([]models.Question, error) {
@@ -241,8 +283,23 @@ func (r *gormExamRepository) SaveAnswersAtomic(attemptID uint, answers []models.
 
 func (r *gormExamRepository) GradeAttemptAtomic(attemptID uint, updatedAnswers []models.AttemptAnswer, attempt *models.ExamAttempt) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
+		now := time.Now()
+		res := tx.Model(&models.ExamAttempt{}).
+			Where("id = ? AND status = ?", attemptID, "in_progress").
+			Updates(map[string]interface{}{
+				"score":         attempt.Score,
+				"correct_count": attempt.CorrectCount,
+				"wrong_count":   attempt.WrongCount,
+				"status":        "completed",
+				"submitted_at":  attempt.SubmittedAt,
+			})
+		if res.Error != nil {
+			return res.Error
+		}
+		if res.RowsAffected == 0 {
+			return nil
+		}
 		if len(updatedAnswers) > 0 {
-			now := time.Now()
 			for i := range updatedAnswers {
 				updatedAnswers[i].AttemptID = attemptID
 				if updatedAnswers[i].UpdatedAt.IsZero() {
@@ -256,7 +313,7 @@ func (r *gormExamRepository) GradeAttemptAtomic(attemptID uint, updatedAnswers [
 				return err
 			}
 		}
-		return tx.Save(attempt).Error
+		return nil
 	})
 }
 

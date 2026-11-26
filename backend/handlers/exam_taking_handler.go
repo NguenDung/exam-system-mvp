@@ -76,7 +76,11 @@ func (h *ExamTakingHandler) StudentLookupExam(c *gin.Context) {
 
 	res, err := h.takingService.LookupExam(userID, code)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		if err.Error() == "You are not enrolled in the classroom for this exam" {
+			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		} else {
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		}
 		return
 	}
 

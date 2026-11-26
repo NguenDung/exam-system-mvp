@@ -64,7 +64,7 @@ export default function ExamSchedulePage() {
 
   const isTeacher = user?.role === 'teacher';
 
-  const filterList = (list) => {
+  const filterList = useCallback((list) => {
     if (!searchQuery.trim()) return list;
     const q = searchQuery.toLowerCase();
     return list.filter(
@@ -74,11 +74,33 @@ export default function ExamSchedulePage() {
         (item.classroom_name && item.classroom_name.toLowerCase().includes(q)) ||
         (item.teacher_name && item.teacher_name.toLowerCase().includes(q))
     );
-  };
+  }, [searchQuery]);
 
-  const ongoingList = useMemo(() => filterList(data.ongoing || []), [data.ongoing, searchQuery]);
-  const upcomingList = useMemo(() => filterList(data.upcoming || []), [data.upcoming, searchQuery]);
-  const pastList = useMemo(() => filterList(data.past || []), [data.past, searchQuery]);
+  const { allOngoing, allUpcoming, allPast, totalAll } = useMemo(() => {
+    const merged = [...(data.ongoing || []), ...(data.upcoming || []), ...(data.past || [])];
+    const ongoing = [];
+    const upcoming = [];
+    const past = [];
+    merged.forEach((item) => {
+      const startMs = new Date(item.start_time).getTime();
+      const endMs = new Date(item.end_time).getTime();
+      const liveStatus = now < startMs ? 'upcoming' : now > endMs ? 'past' : 'ongoing';
+      const normalized = { ...item, time_status: liveStatus };
+      if (liveStatus === 'ongoing') ongoing.push(normalized);
+      else if (liveStatus === 'upcoming') upcoming.push(normalized);
+      else past.push(normalized);
+    });
+    return {
+      allOngoing: ongoing,
+      allUpcoming: upcoming,
+      allPast: past,
+      totalAll: merged.length,
+    };
+  }, [data.ongoing, data.upcoming, data.past, now]);
+
+  const ongoingList = useMemo(() => filterList(allOngoing), [allOngoing, filterList]);
+  const upcomingList = useMemo(() => filterList(allUpcoming), [allUpcoming, filterList]);
+  const pastList = useMemo(() => filterList(allPast), [allPast, filterList]);
 
   const renderCountdown = (item) => {
     if (item.time_status === 'upcoming') {
@@ -108,13 +130,12 @@ export default function ExamSchedulePage() {
     return (
       <div
         key={item.id}
-        className={`bg-white dark:bg-slate-900 rounded-xl border p-5 shadow-sm transition-shadow hover:shadow-md flex flex-col justify-between ${
-          item.time_status === 'ongoing'
-            ? 'border-emerald-300 dark:border-emerald-700 ring-1 ring-emerald-100 dark:ring-emerald-950'
-            : item.time_status === 'upcoming'
+        className={`bg-white dark:bg-slate-900 rounded-xl border p-5 shadow-sm transition-shadow hover:shadow-md flex flex-col justify-between ${item.time_status === 'ongoing'
+          ? 'border-emerald-300 dark:border-emerald-700 ring-1 ring-emerald-100 dark:ring-emerald-950'
+          : item.time_status === 'upcoming'
             ? 'border-indigo-200 dark:border-indigo-800'
             : 'border-slate-200 dark:border-slate-800 opacity-90'
-        }`}
+          }`}
       >
         <div>
           <div className="flex items-start justify-between gap-3 mb-2">
@@ -236,19 +257,17 @@ export default function ExamSchedulePage() {
 
               {item.time_status === 'past' && (
                 <>
-                  {item.attempt_status === 'submitted' ? (
+                  {(item.attempt_status === 'submitted' || item.attempt_status === 'time_up') && item.attempt_id ? (
                     <div className="flex items-center justify-between">
                       <span className="text-xs text-slate-700 font-semibold">
-                        Điểm: {item.score ?? 'N/A'}
+                        Điểm: {item.score !== undefined && item.score !== null ? Number(item.score).toFixed(2) : 'N/A'}
                       </span>
-                      {item.attempt_id && (
-                        <Link
-                          to={`/student/attempts/${item.attempt_id}/result`}
-                          className="text-xs font-medium text-indigo-600 hover:underline"
-                        >
-                          Xem bài làm
-                        </Link>
-                      )}
+                      <Link
+                        to={`/student/attempts/${item.attempt_id}/result`}
+                        className="text-xs font-medium text-indigo-600 hover:underline"
+                      >
+                        Xem bài làm
+                      </Link>
                     </div>
                   ) : (
                     <div className="text-center text-xs text-slate-400 font-medium py-1">
@@ -305,60 +324,53 @@ export default function ExamSchedulePage() {
         <button
           type="button"
           onClick={() => setActiveTab('all')}
-          className={`text-xs font-semibold px-3 py-1.5 rounded-md transition-colors ${
-            activeTab === 'all'
-              ? 'bg-slate-900 text-white'
-              : 'text-slate-600 hover:bg-slate-100'
-          }`}
+          className={`text-xs font-semibold px-3 py-1.5 rounded-md transition-colors ${activeTab === 'all'
+            ? 'bg-slate-900 text-white'
+            : 'text-slate-600 hover:bg-slate-100'
+            }`}
         >
-          Tất cả ({data.summary?.total || 0})
+          Tất cả ({totalAll})
         </button>
         <button
           type="button"
           onClick={() => setActiveTab('ongoing')}
-          className={`text-xs font-semibold px-3 py-1.5 rounded-md transition-colors flex items-center gap-1.5 ${
-            activeTab === 'ongoing'
-              ? 'bg-emerald-600 text-white'
-              : 'text-slate-600 hover:bg-slate-100'
-          }`}
+          className={`text-xs font-semibold px-3 py-1.5 rounded-md transition-colors flex items-center gap-1.5 ${activeTab === 'ongoing'
+            ? 'bg-emerald-600 text-white'
+            : 'text-slate-600 hover:bg-slate-100'
+            }`}
         >
           <span>Đang diễn ra</span>
-          <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
-            activeTab === 'ongoing' ? 'bg-emerald-700 text-white' : 'bg-emerald-100 text-emerald-800'
-          }`}>
-            {data.summary?.ongoing_count || 0}
+          <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${activeTab === 'ongoing' ? 'bg-emerald-700 text-white' : 'bg-emerald-100 text-emerald-800'
+            }`}>
+            {allOngoing.length}
           </span>
         </button>
         <button
           type="button"
           onClick={() => setActiveTab('upcoming')}
-          className={`text-xs font-semibold px-3 py-1.5 rounded-md transition-colors flex items-center gap-1.5 ${
-            activeTab === 'upcoming'
-              ? 'bg-indigo-600 text-white'
-              : 'text-slate-600 hover:bg-slate-100'
-          }`}
+          className={`text-xs font-semibold px-3 py-1.5 rounded-md transition-colors flex items-center gap-1.5 ${activeTab === 'upcoming'
+            ? 'bg-indigo-600 text-white'
+            : 'text-slate-600 hover:bg-slate-100'
+            }`}
         >
           <span>Sắp diễn ra</span>
-          <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
-            activeTab === 'upcoming' ? 'bg-indigo-700 text-white' : 'bg-indigo-100 text-indigo-800'
-          }`}>
-            {data.summary?.upcoming_count || 0}
+          <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${activeTab === 'upcoming' ? 'bg-indigo-700 text-white' : 'bg-indigo-100 text-indigo-800'
+            }`}>
+            {allUpcoming.length}
           </span>
         </button>
         <button
           type="button"
           onClick={() => setActiveTab('past')}
-          className={`text-xs font-semibold px-3 py-1.5 rounded-md transition-colors flex items-center gap-1.5 ${
-            activeTab === 'past'
-              ? 'bg-slate-700 text-white'
-              : 'text-slate-600 hover:bg-slate-100'
-          }`}
+          className={`text-xs font-semibold px-3 py-1.5 rounded-md transition-colors flex items-center gap-1.5 ${activeTab === 'past'
+            ? 'bg-slate-700 text-white'
+            : 'text-slate-600 hover:bg-slate-100'
+            }`}
         >
           <span>Đã kết thúc</span>
-          <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
-            activeTab === 'past' ? 'bg-slate-800 text-white' : 'bg-slate-200 text-slate-800'
-          }`}>
-            {data.summary?.past_count || 0}
+          <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${activeTab === 'past' ? 'bg-slate-800 text-white' : 'bg-slate-200 text-slate-800'
+            }`}>
+            {allPast.length}
           </span>
         </button>
       </div>

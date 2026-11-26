@@ -5,12 +5,23 @@ const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('user')); } catch { return null; }
+    const token = localStorage.getItem('token');
+    if (!token) {
+      localStorage.removeItem('user');
+      return null;
+    }
+    try {
+      return JSON.parse(localStorage.getItem('user'));
+    } catch {
+      return null;
+    }
   });
+  const [hasToken, setHasToken] = useState(() => Boolean(localStorage.getItem('token')));
 
   const login = useCallback((token, userData) => {
     localStorage.setItem('token', token);
     localStorage.setItem('user', JSON.stringify(userData));
+    setHasToken(true);
     setUser(userData);
   }, []);
 
@@ -22,6 +33,7 @@ export function AuthProvider({ children }) {
   const logout = useCallback(() => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+    setHasToken(false);
     setUser(null);
   }, []);
 
@@ -32,6 +44,7 @@ export function AuthProvider({ children }) {
       .then(({ data }) => {
         if (data?.user) {
           localStorage.setItem('user', JSON.stringify(data.user));
+          setHasToken(true);
           setUser(data.user);
         }
       })
@@ -39,7 +52,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, updateUser, isAuthenticated: !!user }}>
+    <AuthContext.Provider value={{ user, login, logout, updateUser, isAuthenticated: Boolean(user && hasToken) }}>
       {children}
     </AuthContext.Provider>
   );

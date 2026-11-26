@@ -18,13 +18,29 @@ export default function RegisterPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!form.full_name.trim()) {
+      setError('Họ và tên không được để trống');
+      return;
+    }
+    if (form.password.length < 6) {
+      setError('Mật khẩu phải có tối thiểu 6 ký tự');
+      return;
+    }
+    if (new TextEncoder().encode(form.password).length > 72) {
+      setError('Mật khẩu không được vượt quá 72 byte');
+      return;
+    }
     if (form.password !== form.confirm) {
       setError('Mật khẩu xác nhận không khớp');
       return;
     }
     setLoading(true);
     try {
-      await authAPI.register({ full_name: form.full_name, email: form.email, password: form.password });
+      await authAPI.register({
+        full_name: form.full_name.trim(),
+        email: form.email.trim(),
+        password: form.password,
+      });
       setSuccess(true);
       setTimeout(() => navigate('/login'), 1500);
     } catch (err) {
@@ -90,6 +106,7 @@ export default function RegisterPage() {
                 <input
                   name="password"
                   type="password"
+                  minLength={6}
                   value={form.password}
                   onChange={handleChange}
                   className="input"

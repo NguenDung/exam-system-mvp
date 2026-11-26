@@ -21,6 +21,7 @@ type ClassroomRepository interface {
 	GetMembersWithStudent(classID uint) ([]models.ClassroomMember, error)
 	GetClassExams(classID uint) ([]models.Exam, error)
 	GetClassAttempts(examIDs []uint) ([]models.ExamAttempt, error)
+	GetExamMaxPoints(examIDs []uint) (map[uint]float64, error)
 	CountMembers(classID uint) (int64, error)
 	CountExams(classID uint) (int64, error)
 	IsCodeExists(code string) (bool, error)
@@ -134,6 +135,29 @@ func (r *gormClassroomRepository) GetClassAttempts(examIDs []uint) ([]models.Exa
 	var attempts []models.ExamAttempt
 	err := r.db.Where("exam_id IN ?", examIDs).Find(&attempts).Error
 	return attempts, err
+}
+
+func (r *gormClassroomRepository) GetExamMaxPoints(examIDs []uint) (map[uint]float64, error) {
+	result := make(map[uint]float64, len(examIDs))
+	if len(examIDs) == 0 {
+		return result, nil
+	}
+	var rows []struct {
+		ExamID    uint
+		MaxPoints float64
+	}
+	err := r.db.Model(&models.Question{}).
+		Select("exam_id, COALESCE(SUM(points), 0) AS max_points").
+		Where("exam_id IN ?", examIDs).
+		Group("exam_id").
+		Scan(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	for _, row := range rows {
+		result[row.ExamID] = row.MaxPoints
+	}
+	return result, nil
 }
 
 func (r *gormClassroomRepository) CountMembers(classID uint) (int64, error) {

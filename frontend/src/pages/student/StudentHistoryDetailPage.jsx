@@ -52,6 +52,8 @@ export default function StudentHistoryDetailPage() {
   }
   if (!detail) return null;
 
+  const showCorrectAnswers = detail.show_correct_answers !== false;
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center gap-3">
@@ -80,7 +82,19 @@ export default function StudentHistoryDetailPage() {
           <p className="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wide">Mã đề</p>
           <p className="mt-1 font-mono text-sm font-bold text-slate-900 dark:text-slate-100">{detail.exam.exam_code}</p>
         </div>
+        {detail.teacher_note && (
+          <div className="sm:col-span-2 lg:col-span-4 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 p-3 text-sm text-blue-900 dark:text-blue-200">
+            <span className="font-semibold">Ghi chú từ giảng viên: </span>
+            {detail.teacher_note}
+          </div>
+        )}
       </section>
+
+      {!showCorrectAnswers && (
+        <div className="rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 p-3 text-xs text-amber-800 dark:text-amber-300">
+          Đáp án chuẩn sẽ được hiển thị sau khi kỳ thi chính thức kết thúc thời gian làm bài ({formatDate(detail.exam.end_time)}).
+        </div>
+      )}
 
       <div>
         <h2 className="mb-4 text-base font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wide">Chi tiết bài làm</h2>
@@ -90,11 +104,17 @@ export default function StudentHistoryDetailPage() {
           </div>
         ) : (
           <div className="space-y-4">
-            {detail.answers.map((answer, index) => (
+            {detail.answers.map((answer, index) => {
+              const canReveal = showCorrectAnswers && Boolean(answer.correct_option);
+              return (
               <article
                 key={answer.question_id}
                 className={`bg-white dark:bg-slate-900 rounded-xl border p-5 shadow-sm ${
-                  answer.is_correct ? 'border-emerald-200 dark:border-emerald-800/80' : 'border-red-200 dark:border-rose-800/80'
+                  !canReveal
+                    ? 'border-slate-200 dark:border-slate-800'
+                    : answer.is_correct
+                    ? 'border-emerald-200 dark:border-emerald-800/80'
+                    : 'border-red-200 dark:border-rose-800/80'
                 }`}
               >
                 <div className="flex flex-wrap items-start justify-between gap-3">
@@ -104,19 +124,25 @@ export default function StudentHistoryDetailPage() {
                     </p>
                     <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Trọng số: {answer.points} điểm</p>
                   </div>
-                  <span
-                    className={`rounded px-2.5 py-0.5 text-xs font-semibold ${
-                      answer.is_correct
-                        ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border dark:border-emerald-800'
-                        : 'bg-red-100 text-red-800 dark:bg-rose-950/60 dark:text-rose-300 dark:border dark:border-rose-800'
-                    }`}
-                  >
-                    {answer.is_correct ? 'Đúng' : 'Chưa chính xác'}
-                  </span>
+                  {canReveal ? (
+                    <span
+                      className={`rounded px-2.5 py-0.5 text-xs font-semibold ${
+                        answer.is_correct
+                          ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border dark:border-emerald-800'
+                          : 'bg-red-100 text-red-800 dark:bg-rose-950/60 dark:text-rose-300 dark:border dark:border-rose-800'
+                      }`}
+                    >
+                      {answer.is_correct ? 'Đúng' : 'Chưa chính xác'}
+                    </span>
+                  ) : (
+                    <span className="rounded px-2.5 py-0.5 text-xs font-medium bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                      Chưa mở đáp án
+                    </span>
+                  )}
                 </div>
                 <div className="mt-4 grid gap-2 sm:grid-cols-2">
                   {OPTIONS.map((option) => {
-                    const isCorrect = answer.correct_option === option;
+                    const isCorrect = canReveal && answer.correct_option === option;
                     const isChosen = answer.chosen_option === option;
                     return (
                       <div
@@ -124,8 +150,10 @@ export default function StudentHistoryDetailPage() {
                         className={`rounded-lg border p-2.5 text-xs sm:text-sm ${
                           isCorrect
                             ? 'border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-200 font-medium'
-                            : isChosen
+                            : isChosen && canReveal
                             ? 'border-red-300 dark:border-rose-700 bg-red-50 dark:bg-rose-950/40 text-red-900 dark:text-rose-200 font-medium'
+                            : isChosen
+                            ? 'border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-950/40 text-blue-900 dark:text-blue-200 font-medium'
                             : 'border-slate-200 dark:border-slate-700/80 bg-slate-50/50 dark:bg-slate-800/40 text-slate-700 dark:text-slate-300'
                         }`}
                       >
@@ -139,10 +167,13 @@ export default function StudentHistoryDetailPage() {
                 </div>
                 <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-xs text-slate-600 dark:text-slate-400 border-t border-slate-100 dark:border-slate-800 pt-2">
                   <span>Bạn đã chọn: <strong className="text-slate-800 dark:text-slate-200">{answer.chosen_option || 'Chưa chọn'}</strong></span>
-                  <span>Đáp án chuẩn: <strong className="text-emerald-700 dark:text-emerald-400">{answer.correct_option}</strong></span>
+                  {canReveal && (
+                    <span>Đáp án chuẩn: <strong className="text-emerald-700 dark:text-emerald-400">{answer.correct_option}</strong></span>
+                  )}
                 </div>
               </article>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

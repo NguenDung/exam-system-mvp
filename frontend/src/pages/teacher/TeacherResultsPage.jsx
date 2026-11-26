@@ -20,11 +20,16 @@ function EditScoreModal({ attempt, onClose, onUpdated }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    const parsedScore = parseFloat(score);
+    if (score === '' || Number.isNaN(parsedScore) || parsedScore < 0) {
+      setError('Điểm số phải là số không âm');
+      return;
+    }
     setLoading(true);
     setError('');
     try {
       await teacherAPI.updateAttemptScore(attempt.attempt_id, {
-        score: parseFloat(score),
+        score: parsedScore,
         teacher_note: teacherNote,
       });
       onUpdated();
@@ -94,23 +99,26 @@ export default function TeacherResultsPage() {
   const navigate = useNavigate();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [editingAttempt, setEditingAttempt] = useState(null);
   const [resettingAttempt, setResettingAttempt] = useState(null);
   const [resetLoading, setResetLoading] = useState(false);
+  const [resetError, setResetError] = useState('');
   const [feedbackMsg, setFeedbackMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [exportingCSV, setExportingCSV] = useState(false);
 
   const fetchResults = useCallback(async () => {
+    setLoadError('');
     try {
       const { data: d } = await teacherAPI.getResults(id);
       setData(d);
-    } catch {
-      navigate('/teacher');
+    } catch (err) {
+      setLoadError(err.response?.data?.error || 'Không thể tải bảng điểm bài thi.');
     } finally {
       setLoading(false);
     }
-  }, [id, navigate]);
+  }, [id]);
 
   useEffect(() => {
     fetchResults();
@@ -119,6 +127,7 @@ export default function TeacherResultsPage() {
   const handleResetAttempt = async () => {
     if (!resettingAttempt) return;
     setResetLoading(true);
+    setResetError('');
     try {
       await teacherAPI.resetAttempt(resettingAttempt.attempt_id);
       setFeedbackMsg(`Đã xóa lượt thi của thí sinh ${resettingAttempt.full_name}. Sinh viên có thể thi lại.`);
@@ -126,8 +135,7 @@ export default function TeacherResultsPage() {
       fetchResults();
       setTimeout(() => setFeedbackMsg(''), 4000);
     } catch (err) {
-      setErrorMsg(err.response?.data?.error || 'Không thể xóa lượt thi');
-      setTimeout(() => setErrorMsg(''), 5000);
+      setResetError(err.response?.data?.error || 'Không thể xóa lượt thi');
     } finally {
       setResetLoading(false);
     }
@@ -149,7 +157,16 @@ export default function TeacherResultsPage() {
       setFeedbackMsg('Đã tải xuống bảng điểm CSV');
       setTimeout(() => setFeedbackMsg(''), 4000);
     } catch (err) {
-      setErrorMsg(err.response?.data?.error || 'Lỗi khi xuất bảng điểm CSV');
+      let message = 'Lỗi khi xuất bảng điểm CSV';
+      if (err.response?.data instanceof Blob) {
+        try {
+          const parsed = JSON.parse(await err.response.data.text());
+          if (parsed?.error) message = parsed.error;
+        } catch { }
+      } else if (err.response?.data?.error) {
+        message = err.response.data.error;
+      }
+      setErrorMsg(message);
       setTimeout(() => setErrorMsg(''), 5000);
     } finally {
       setExportingCSV(false);
@@ -157,9 +174,21 @@ export default function TeacherResultsPage() {
   };
 
   if (loading) return <div className="flex justify-center py-20"><Spinner size="lg" /></div>;
+  if (loadError) {
+    return (
+      <div className="bg-white dark:bg-slate-900 rounded-xl border border-red-200 dark:border-rose-900/60 p-8 max-w-md mx-auto text-center space-y-4">
+        <p className="text-sm text-red-700 dark:text-rose-300">{loadError}</p>
+        <div className="flex justify-center gap-2">
+          <button onClick={() => navigate('/teacher')} className="btn-secondary btn-sm">Quay lại</button>
+          <button onClick={fetchResults} className="btn-primary btn-sm">Thử lại</button>
+        </div>
+      </div>
+    );
+  }
   if (!data) return null;
 
   const { exam, statistics: stats, results } = data;
+  const completedCount = data.stats?.completed ?? results.filter((r) => r.status === 'completed').length;
 
   return (
     <div>
@@ -198,9 +227,9 @@ export default function TeacherResultsPage() {
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
         <StatCard label="Lượt làm bài" value={stats.total_students} />
-        <StatCard label="Điểm trung bình" value={stats.total_students > 0 ? stats.avg_score.toFixed(2) : '—'} />
-        <StatCard label="Điểm cao nhất" value={stats.total_students > 0 ? stats.max_score.toFixed(2) : '—'} />
-        <StatCard label="Điểm thấp nhất" value={stats.total_students > 0 ? stats.min_score.toFixed(2) : '—'} />
+        <StatCard label="Điểm trung bình" value={completedCount > 0 ? stats.avg_score.toFixed(2) : '—'} />
+        <StatCard label="Điểm cao nhất" value={completedCount > 0 ? stats.max_score.toFixed(2) : '—'} />
+        <StatCard label="Điểm thấp nhất" value={completedCount > 0 ? stats.min_score.toFixed(2) : '—'} />
       </div>
 
       {/* Results table */}
@@ -237,7 +266,9 @@ export default function TeacherResultsPage() {
                     <td className="px-5 py-3.5 font-medium text-slate-900">{r.full_name}</td>
                     <td className="px-5 py-3.5 text-slate-500">{r.email}</td>
                     <td className="px-5 py-3.5 text-center">
-                      <span className="font-bold text-slate-900">{r.score.toFixed(2)}</span>
+                      <span className="font-bold text-slate-900">
+                        {r.status === 'completed' ? Number(r.score).toFixed(2) : '—'}
+                      </span>
                     </td>
                     <td className="px-5 py-3.5 text-center text-emerald-700 font-medium">
                       {r.correct_count}
@@ -246,9 +277,8 @@ export default function TeacherResultsPage() {
                       {r.wrong_count}
                     </td>
                     <td className="px-5 py-3.5 text-center">
-                      <span className={`px-2.5 py-0.5 rounded text-xs font-semibold ${
-                        r.status === 'completed' ? 'bg-blue-100 text-blue-800' : 'bg-amber-100 text-amber-800'
-                      }`}>
+                      <span className={`px-2.5 py-0.5 rounded text-xs font-semibold ${r.status === 'completed' ? 'bg-blue-100 text-blue-800' : 'bg-amber-100 text-amber-800'
+                        }`}>
                         {r.status === 'completed' ? 'Đã nộp' : 'Đang làm'}
                       </span>
                     </td>
@@ -278,7 +308,10 @@ export default function TeacherResultsPage() {
                         </button>
                       )}
                       <button
-                        onClick={() => setResettingAttempt(r)}
+                        onClick={() => {
+                          setResetError('');
+                          setResettingAttempt(r);
+                        }}
                         className="btn-secondary btn-sm text-xs py-1 text-red-600 hover:bg-red-50 hover:border-red-200"
                       >
                         Cho thi lại
@@ -317,6 +350,11 @@ export default function TeacherResultsPage() {
             <p className="text-xs text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/50 p-2.5 rounded-lg border border-slate-200 dark:border-slate-700">
               Toàn bộ bài làm và kết quả của thí sinh sẽ bị xóa. Sinh viên có thể thi lại từ đầu.
             </p>
+            {resetError && (
+              <div className="rounded bg-red-50 dark:bg-rose-950/40 p-3 text-xs text-red-700 dark:text-rose-300 border border-red-200 dark:border-rose-800">
+                {resetError}
+              </div>
+            )}
             <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
               <button
                 type="button"

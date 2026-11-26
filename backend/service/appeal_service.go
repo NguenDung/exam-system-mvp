@@ -57,8 +57,15 @@ func (s *appealService) GetHistoryDetail(submissionID, studentID uint) (map[stri
 		return nil, errors.New("Submission not found")
 	}
 
+	showCorrectAnswers := time.Now().After(exam.EndTime)
+	if !showCorrectAnswers {
+		for _, ans := range answers {
+			delete(ans, "correct_option")
+		}
+	}
+
 	res := map[string]interface{}{
-		"submission_id": attempt.ID,
+		"submission_id":        attempt.ID,
 		"exam": map[string]interface{}{
 			"id":        exam.ID,
 			"title":     exam.Title,
@@ -66,12 +73,14 @@ func (s *appealService) GetHistoryDetail(submissionID, studentID uint) (map[stri
 			"duration":  exam.Duration,
 			"end_time":  exam.EndTime,
 		},
-		"score":        attempt.Score,
-		"max_score":    maxScore,
-		"started_at":   attempt.StartedAt,
-		"submitted_at": attempt.SubmittedAt,
-		"answers":      answers,
-		"appeals":      appeals,
+		"score":                attempt.Score,
+		"max_score":            maxScore,
+		"teacher_note":         attempt.TeacherNote,
+		"show_correct_answers": showCorrectAnswers,
+		"started_at":           attempt.StartedAt,
+		"submitted_at":         attempt.SubmittedAt,
+		"answers":              answers,
+		"appeals":              appeals,
 	}
 
 	return res, nil
