@@ -1,0 +1,2539 @@
+basePath: /
+definitions:
+  dto.ActionAppealRequest:
+    properties:
+      response:
+        type: string
+    type: object
+  dto.AddClassMemberRequest:
+    properties:
+      email:
+        type: string
+      student_code:
+        type: string
+      student_id:
+        type: integer
+    type: object
+  dto.AddQuestionsRequest:
+    properties:
+      questions:
+        items:
+          $ref: '#/definitions/dto.QuestionDTO'
+        type: array
+    required:
+    - questions
+    type: object
+  dto.AnswerInputDTO:
+    properties:
+      chosen_option:
+        enum:
+        - A
+        - B
+        - C
+        - D
+        type: string
+      question_id:
+        type: integer
+    required:
+    - question_id
+    type: object
+  dto.AppealEnvelope:
+    properties:
+      appeal:
+        $ref: '#/definitions/models.Appeal'
+      message:
+        type: string
+    type: object
+  dto.AttemptEnvelope:
+    properties:
+      attempt:
+        $ref: '#/definitions/models.ExamAttempt'
+      message:
+        type: string
+    type: object
+  dto.AuditLogsResponse:
+    properties:
+      data:
+        items:
+          $ref: '#/definitions/models.AuditLog'
+        type: array
+      logs:
+        items:
+          $ref: '#/definitions/models.AuditLog'
+        type: array
+    type: object
+  dto.ClassDetailClass:
+    properties:
+      code:
+        type: string
+      created_at:
+        type: string
+      description:
+        type: string
+      id:
+        type: integer
+      name:
+        type: string
+      teacher_id:
+        type: integer
+    type: object
+  dto.ClassDetailResponse:
+    properties:
+      class:
+        $ref: '#/definitions/dto.ClassDetailClass'
+      exams: {}
+      members:
+        items:
+          $ref: '#/definitions/dto.MemberInfo'
+        type: array
+      teacher:
+        $ref: '#/definitions/dto.ClassDetailTeacher'
+    type: object
+  dto.ClassDetailTeacher:
+    properties:
+      avatar_url:
+        type: string
+      bio:
+        type: string
+      department:
+        type: string
+      email:
+        type: string
+      full_name:
+        type: string
+      id:
+        type: integer
+    type: object
+  dto.ClassEnvelope:
+    properties:
+      class:
+        $ref: '#/definitions/models.Classroom'
+      message:
+        type: string
+    type: object
+  dto.ClassGradebookExam:
+    properties:
+      duration:
+        type: integer
+      end_time:
+        type: string
+      exam_code:
+        type: string
+      id:
+        type: integer
+      start_time:
+        type: string
+      status:
+        type: string
+      title:
+        type: string
+    type: object
+  dto.ClassGradebookResponse:
+    properties:
+      class_code:
+        type: string
+      class_id:
+        type: integer
+      class_name:
+        type: string
+      exams:
+        items:
+          $ref: '#/definitions/dto.ClassGradebookExam'
+        type: array
+      students:
+        items:
+          $ref: '#/definitions/dto.StudentGradebookRow'
+        type: array
+      summary:
+        $ref: '#/definitions/dto.ClassGradebookSummary'
+    type: object
+  dto.ClassGradebookSummary:
+    properties:
+      at_risk_count:
+        description: Average < 4.0
+        type: integer
+      class_average:
+        type: number
+      highest_average:
+        type: number
+      lowest_average:
+        type: number
+      total_exams:
+        type: integer
+      total_students:
+        type: integer
+    type: object
+  dto.ClassListItem:
+    properties:
+      code:
+        type: string
+      created_at:
+        type: string
+      description:
+        type: string
+      exam_count:
+        type: integer
+      id:
+        type: integer
+      member_count:
+        type: integer
+      name:
+        type: string
+      teacher_id:
+        type: integer
+      teacher_name:
+        type: string
+    type: object
+  dto.ClassesListResponse:
+    properties:
+      classes:
+        items:
+          $ref: '#/definitions/dto.ClassListItem'
+        type: array
+    type: object
+  dto.CreateAppealRequest:
+    properties:
+      content:
+        type: string
+      submission_id:
+        type: integer
+      submissionId:
+        type: integer
+      title:
+        maxLength: 255
+        type: string
+    required:
+    - content
+    type: object
+  dto.CreateClassRequest:
+    properties:
+      description:
+        type: string
+      name:
+        type: string
+    required:
+    - name
+    type: object
+  dto.CreateExamRequest:
+    properties:
+      classroom_id:
+        type: integer
+      description:
+        type: string
+      duration:
+        type: integer
+      duration_minutes:
+        type: integer
+      end_time:
+        type: string
+      start_time:
+        type: string
+      title:
+        type: string
+    required:
+    - end_time
+    - start_time
+    - title
+    type: object
+  dto.CreateStudentRequest:
+    properties:
+      email:
+        type: string
+      full_name:
+        type: string
+      password:
+        minLength: 6
+        type: string
+    required:
+    - email
+    - full_name
+    - password
+    type: object
+  dto.DirectoryResponse:
+    properties:
+      users:
+        items:
+          $ref: '#/definitions/dto.UserDirectoryItem'
+        type: array
+    type: object
+  dto.ErrorResponse:
+    properties:
+      error:
+        type: string
+    type: object
+  dto.ExamEnvelope:
+    properties:
+      exam:
+        $ref: '#/definitions/models.Exam'
+      message:
+        type: string
+    type: object
+  dto.ExamsListResponse:
+    properties:
+      exams:
+        items:
+          $ref: '#/definitions/models.Exam'
+        type: array
+    type: object
+  dto.HealthResponse:
+    properties:
+      service:
+        example: exam-system-mvp
+        type: string
+      status:
+        example: ok
+        type: string
+    type: object
+  dto.JoinClassRequest:
+    properties:
+      code:
+        type: string
+    required:
+    - code
+    type: object
+  dto.LoginRequest:
+    properties:
+      email:
+        type: string
+      password:
+        maxLength: 72
+        type: string
+    required:
+    - email
+    - password
+    type: object
+  dto.LoginResponse:
+    properties:
+      expires_at:
+        type: integer
+      token:
+        type: string
+      user:
+        $ref: '#/definitions/dto.UserProfileResponse'
+    type: object
+  dto.MemberInfo:
+    properties:
+      avatar_url:
+        type: string
+      bio:
+        type: string
+      department:
+        type: string
+      email:
+        type: string
+      full_name:
+        type: string
+      id:
+        type: integer
+      joined_at:
+        type: string
+      student_code:
+        type: string
+      student_id:
+        type: integer
+    type: object
+  dto.MessageResponse:
+    properties:
+      message:
+        type: string
+    type: object
+  dto.NotificationListResponse:
+    properties:
+      notifications:
+        items:
+          $ref: '#/definitions/models.Notification'
+        type: array
+      unread_count:
+        type: integer
+    type: object
+  dto.PaginationMeta:
+    properties:
+      page:
+        type: integer
+      page_size:
+        type: integer
+      total:
+        type: integer
+    type: object
+  dto.QuestionDTO:
+    properties:
+      correct_option:
+        type: string
+      option_a:
+        type: string
+      option_b:
+        type: string
+      option_c:
+        type: string
+      option_d:
+        type: string
+      points:
+        type: number
+      prompt:
+        type: string
+    required:
+    - correct_option
+    - option_a
+    - option_b
+    - option_c
+    - option_d
+    - prompt
+    type: object
+  dto.QuestionEnvelope:
+    properties:
+      message:
+        type: string
+      question:
+        $ref: '#/definitions/models.Question'
+    type: object
+  dto.QuestionsListResponse:
+    properties:
+      message:
+        type: string
+      questions:
+        items:
+          $ref: '#/definitions/models.Question'
+        type: array
+    type: object
+  dto.RegisterRequest:
+    properties:
+      email:
+        type: string
+      full_name:
+        type: string
+      password:
+        maxLength: 72
+        minLength: 6
+        type: string
+    required:
+    - email
+    - full_name
+    - password
+    type: object
+  dto.RegisterResponse:
+    properties:
+      message:
+        type: string
+      user:
+        $ref: '#/definitions/dto.UserSummaryResponse'
+    type: object
+  dto.ReplyAppealRequest:
+    properties:
+      response:
+        minLength: 1
+        type: string
+    required:
+    - response
+    type: object
+  dto.SaveAnswersRequest:
+    properties:
+      answers:
+        items:
+          $ref: '#/definitions/dto.AnswerInputDTO'
+        type: array
+      chosen_option:
+        type: string
+      question_id:
+        type: integer
+    type: object
+  dto.SaveAnswersResponse:
+    properties:
+      message:
+        type: string
+      saved_at:
+        type: string
+    type: object
+  dto.StartExamRequest:
+    properties:
+      confirmed:
+        example: true
+        type: boolean
+    type: object
+  dto.StartExamResponse:
+    properties:
+      attempt:
+        $ref: '#/definitions/models.ExamAttempt'
+      auto_submitted:
+        type: boolean
+      duration:
+        type: integer
+      end_time:
+        type: string
+      message:
+        type: string
+      questions:
+        items:
+          $ref: '#/definitions/models.QuestionSafe'
+        type: array
+      remaining_seconds:
+        type: integer
+      saved_answers:
+        items:
+          $ref: '#/definitions/models.AttemptAnswer'
+        type: array
+      start_time:
+        type: string
+    type: object
+  dto.StudentGradeEntry:
+    properties:
+      attempt_id:
+        type: integer
+      score:
+        type: number
+      status:
+        description: '"completed" | "in_progress" | "not_attempted"'
+        type: string
+      submitted_at:
+        type: string
+      violation_count:
+        type: integer
+    type: object
+  dto.StudentGradebookRow:
+    properties:
+      academic_rank:
+        description: '"Xuất sắc", "Giỏi", "Khá", "Trung bình", "Yếu"'
+        type: string
+      avatar_url:
+        type: string
+      average_score:
+        type: number
+      completed_count:
+        type: integer
+      department:
+        type: string
+      email:
+        type: string
+      exam_scores:
+        additionalProperties:
+          $ref: '#/definitions/dto.StudentGradeEntry'
+        description: examID -> entry
+        type: object
+      full_name:
+        type: string
+      student_code:
+        type: string
+      student_id:
+        type: integer
+    type: object
+  dto.SubmitExamRequest:
+    properties:
+      answers:
+        items:
+          $ref: '#/definitions/dto.AnswerInputDTO'
+        type: array
+    type: object
+  dto.TeacherAppealItem:
+    properties:
+      content:
+        type: string
+      created_at:
+        type: string
+      exam_title:
+        type: string
+      id:
+        type: integer
+      score:
+        type: number
+      status:
+        type: string
+      student_email:
+        type: string
+      student_id:
+        type: integer
+      student_name:
+        type: string
+      submission_id:
+        type: integer
+      title:
+        type: string
+    type: object
+  dto.TeacherAppealsResponse:
+    properties:
+      appeals:
+        items:
+          $ref: '#/definitions/dto.TeacherAppealItem'
+        type: array
+      items:
+        items:
+          $ref: '#/definitions/dto.TeacherAppealItem'
+        type: array
+      pagination:
+        $ref: '#/definitions/dto.PaginationMeta'
+    type: object
+  dto.UpdateClassRequest:
+    properties:
+      description:
+        type: string
+      name:
+        type: string
+    type: object
+  dto.UpdateExamRequest:
+    properties:
+      classroom_id:
+        type: integer
+      description:
+        type: string
+      duration:
+        type: integer
+      duration_minutes:
+        type: integer
+      end_time:
+        type: string
+      start_time:
+        type: string
+      status:
+        type: string
+      title:
+        type: string
+    type: object
+  dto.UpdateProfileRequest:
+    properties:
+      avatar_url:
+        type: string
+      bio:
+        type: string
+      department:
+        type: string
+      full_name:
+        type: string
+      password:
+        type: string
+      student_code:
+        type: string
+    type: object
+  dto.UpdateScoreRequest:
+    properties:
+      note:
+        type: string
+      score:
+        type: number
+      teacher_note:
+        type: string
+    required:
+    - score
+    type: object
+  dto.UpdateStudentRequest:
+    properties:
+      email:
+        type: string
+      full_name:
+        type: string
+      password:
+        type: string
+    type: object
+  dto.UpdateUserRoleRequest:
+    properties:
+      role:
+        type: string
+    required:
+    - role
+    type: object
+  dto.UserDirectoryItem:
+    properties:
+      avatar_url:
+        type: string
+      bio:
+        type: string
+      department:
+        type: string
+      email:
+        type: string
+      full_name:
+        type: string
+      id:
+        type: integer
+      role:
+        type: string
+      student_code:
+        type: string
+    type: object
+  dto.UserProfileEnvelope:
+    properties:
+      message:
+        type: string
+      user:
+        $ref: '#/definitions/dto.UserProfileResponse'
+    type: object
+  dto.UserProfileResponse:
+    properties:
+      avatar_url:
+        type: string
+      bio:
+        type: string
+      department:
+        type: string
+      email:
+        type: string
+      full_name:
+        type: string
+      id:
+        type: integer
+      role:
+        type: string
+      student_code:
+        type: string
+    type: object
+  dto.UserSummaryResponse:
+    properties:
+      email:
+        type: string
+      full_name:
+        type: string
+      id:
+        type: integer
+      role:
+        type: string
+    type: object
+  dto.ViolationRequest:
+    properties:
+      reason:
+        type: string
+    type: object
+  models.Appeal:
+    properties:
+      content:
+        type: string
+      created_at:
+        type: string
+      exam_id:
+        type: integer
+      id:
+        type: integer
+      responded_at:
+        type: string
+      status:
+        type: string
+      student_id:
+        type: integer
+      submission_id:
+        type: integer
+      teacher_id:
+        type: integer
+      teacher_response:
+        type: string
+      title:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  models.AttemptAnswer:
+    properties:
+      attempt_id:
+        type: integer
+      chosen_option:
+        type: string
+      id:
+        type: integer
+      is_correct:
+        type: boolean
+      points_awarded:
+        type: number
+      question_id:
+        type: integer
+      updated_at:
+        type: string
+    type: object
+  models.AuditLog:
+    properties:
+      action:
+        type: string
+      actor:
+        $ref: '#/definitions/models.User'
+      actor_id:
+        type: integer
+      created_at:
+        type: string
+      details:
+        type: string
+      id:
+        type: integer
+      target_id:
+        type: integer
+    type: object
+  models.Classroom:
+    properties:
+      code:
+        type: string
+      created_at:
+        type: string
+      description:
+        type: string
+      exams:
+        items:
+          $ref: '#/definitions/models.Exam'
+        type: array
+      id:
+        type: integer
+      members:
+        items:
+          $ref: '#/definitions/models.ClassroomMember'
+        type: array
+      name:
+        type: string
+      teacher:
+        $ref: '#/definitions/models.User'
+      teacher_id:
+        type: integer
+      updated_at:
+        type: string
+    type: object
+  models.ClassroomMember:
+    properties:
+      classroom_id:
+        type: integer
+      id:
+        type: integer
+      joined_at:
+        type: string
+      student:
+        $ref: '#/definitions/models.User'
+      student_id:
+        type: integer
+    type: object
+  models.Exam:
+    properties:
+      classroom_id:
+        type: integer
+      created_at:
+        type: string
+      description:
+        type: string
+      duration:
+        type: integer
+      end_time:
+        type: string
+      exam_code:
+        type: string
+      id:
+        type: integer
+      published_at:
+        type: string
+      questions:
+        items:
+          $ref: '#/definitions/models.Question'
+        type: array
+      start_time:
+        type: string
+      status:
+        type: string
+      teacher_id:
+        type: integer
+      title:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  models.ExamAttempt:
+    properties:
+      correct_count:
+        type: integer
+      exam_id:
+        type: integer
+      id:
+        type: integer
+      last_saved_at:
+        type: string
+      score:
+        type: number
+      started_at:
+        type: string
+      status:
+        type: string
+      submitted_at:
+        type: string
+      teacher_note:
+        type: string
+      user_id:
+        type: integer
+      violation_count:
+        type: integer
+      wrong_count:
+        type: integer
+    type: object
+  models.Notification:
+    properties:
+      created_at:
+        type: string
+      id:
+        type: integer
+      is_read:
+        type: boolean
+      message:
+        type: string
+      target_url:
+        type: string
+      title:
+        type: string
+      user_id:
+        type: integer
+    type: object
+  models.Question:
+    properties:
+      correct_option:
+        type: string
+      created_at:
+        type: string
+      exam_id:
+        type: integer
+      id:
+        type: integer
+      option_a:
+        type: string
+      option_b:
+        type: string
+      option_c:
+        type: string
+      option_d:
+        type: string
+      points:
+        type: number
+      prompt:
+        type: string
+      sort_order:
+        type: integer
+      updated_at:
+        type: string
+    type: object
+  models.QuestionSafe:
+    properties:
+      exam_id:
+        type: integer
+      id:
+        type: integer
+      option_a:
+        type: string
+      option_b:
+        type: string
+      option_c:
+        type: string
+      option_d:
+        type: string
+      points:
+        type: number
+      prompt:
+        type: string
+      sort_order:
+        type: integer
+    type: object
+  models.User:
+    properties:
+      avatar_url:
+        type: string
+      bio:
+        type: string
+      created_at:
+        type: string
+      department:
+        type: string
+      email:
+        type: string
+      full_name:
+        type: string
+      id:
+        type: integer
+      role:
+        type: string
+      student_code:
+        type: string
+      updated_at:
+        type: string
+    type: object
+info:
+  contact: {}
+  description: REST API cho he thong thi trac nghiem truc tuyen dai hoc (Golang Gin,
+    GORM, PostgreSQL/SQLite).
+  title: Online Exam System API
+  version: "1.0"
+paths:
+  /api/auth/login:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Thông tin đăng nhập
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.LoginResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      summary: Đăng nhập hệ thống và nhận JWT token
+      tags:
+      - Auth
+  /api/auth/register:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Thông tin đăng ký
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.RegisterRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/dto.RegisterResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      summary: Đăng ký tài khoản sinh viên
+      tags:
+      - Auth
+  /api/classes:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ClassesListResponse'
+      security:
+      - BearerAuth: []
+      summary: Danh sách lớp học phần của người dùng hiện tại
+      tags:
+      - Classrooms
+  /api/classes/{id}:
+    get:
+      parameters:
+      - description: ID lớp học phần
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ClassDetailResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Xem chi tiết lớp học phần
+      tags:
+      - Classrooms
+  /api/exams/schedule:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Lấy thời khóa biểu & lịch thi phân nhóm theo thời gian
+      tags:
+      - Schedule
+  /api/notifications:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.NotificationListResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Lấy danh sách thông báo và số lượng chưa đọc
+      tags:
+      - Notifications
+  /api/notifications/{id}:
+    delete:
+      parameters:
+      - description: ID thông báo
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.MessageResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Xóa một thông báo
+      tags:
+      - Notifications
+  /api/notifications/{id}/read:
+    patch:
+      parameters:
+      - description: ID thông báo
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.MessageResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Đánh dấu một thông báo là đã đọc
+      tags:
+      - Notifications
+  /api/notifications/clear-read:
+    delete:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.MessageResponse'
+      security:
+      - BearerAuth: []
+      summary: Xóa toàn bộ thông báo đã đọc
+      tags:
+      - Notifications
+  /api/notifications/read-all:
+    patch:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.MessageResponse'
+      security:
+      - BearerAuth: []
+      summary: Đánh dấu toàn bộ thông báo là đã đọc
+      tags:
+      - Notifications
+  /api/profile:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.UserProfileEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Xem hồ sơ cá nhân hiện tại
+      tags:
+      - Profile & Directory
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: Thông tin cập nhật
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UpdateProfileRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.UserProfileEnvelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Cập nhật hồ sơ cá nhân hoặc đổi mật khẩu
+      tags:
+      - Profile & Directory
+  /api/student/appeals:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Nội dung đơn phúc khảo
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CreateAppealRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/dto.AppealEnvelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Gửi đơn phúc khảo điểm bài thi
+      tags:
+      - Student Appeals & History
+  /api/student/attempts:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Danh sách các lượt thi của sinh viên
+      tags:
+      - Student Exam
+  /api/student/attempts/{attempt_id}/result:
+    get:
+      parameters:
+      - description: ID lượt thi
+        in: path
+        name: attempt_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Xem kết quả bài thi sau khi nộp
+      tags:
+      - Student Exam
+  /api/student/attempts/{attempt_id}/save:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: ID lượt thi
+        in: path
+        name: attempt_id
+        required: true
+        type: integer
+      - description: Danh sách đáp án
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.SaveAnswersRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.SaveAnswersResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Tự động lưu đáp án (Atomic UPSERT)
+      tags:
+      - Student Exam
+  /api/student/attempts/{attempt_id}/submit:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: ID lượt thi
+        in: path
+        name: attempt_id
+        required: true
+        type: integer
+      - description: Đáp án cuối (tùy chọn)
+        in: body
+        name: request
+        schema:
+          $ref: '#/definitions/dto.SubmitExamRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.AttemptEnvelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Nộp bài thi chính thức và chấm điểm tự động
+      tags:
+      - Student Exam
+  /api/student/attempts/{attempt_id}/violation:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: ID lượt thi
+        in: path
+        name: attempt_id
+        required: true
+        type: integer
+      - description: Lý do vi phạm
+        in: body
+        name: request
+        schema:
+          $ref: '#/definitions/dto.ViolationRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Ghi nhận vi phạm chuyển tab (tự động thu bài khi đủ 3 lần)
+      tags:
+      - Anti Cheat
+  /api/student/classes/join:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Mã lớp học phần
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.JoinClassRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ClassEnvelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Sinh viên tham gia lớp học phần bằng mã lớp
+      tags:
+      - Classrooms
+  /api/student/exams/{id}/start:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: ID đề thi
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Xác nhận tham gia thi
+        in: body
+        name: request
+        schema:
+          $ref: '#/definitions/dto.StartExamRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.StartExamResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "428":
+          description: Precondition Required
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Bắt đầu hoặc tiếp tục làm bài thi
+      tags:
+      - Student Exam
+  /api/student/exams/available:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Danh sách đề thi khả dụng cho sinh viên
+      tags:
+      - Student Exam
+  /api/student/exams/lookup:
+    get:
+      parameters:
+      - description: 'Mã đề thi (VD: IT2026)'
+        in: query
+        name: code
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Tra cứu đề thi bằng mã đề
+      tags:
+      - Student Exam
+  /api/student/history:
+    get:
+      parameters:
+      - description: Trang (mặc định 1)
+        in: query
+        name: page
+        type: integer
+      - description: Số dòng mỗi trang (mặc định 10)
+        in: query
+        name: page_size
+        type: integer
+      - description: Từ khóa tìm kiếm
+        in: query
+        name: q
+        type: string
+      - description: Trạng thái phúc khảo (PENDING|REPLIED|REJECTED|RESOLVED)
+        in: query
+        name: appeal_status
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Lịch sử các bài thi đã làm của sinh viên
+      tags:
+      - Student Appeals & History
+  /api/student/history/{submissionId}:
+    get:
+      parameters:
+      - description: ID lượt thi
+        in: path
+        name: submissionId
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Xem chi tiết bài làm trong lịch sử (chỉ hiện đáp án đúng sau khi đóng
+        ca thi)
+      tags:
+      - Student Appeals & History
+  /api/teacher/appeals/{appealId}:
+    get:
+      parameters:
+      - description: ID đơn phúc khảo
+        in: path
+        name: appealId
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Xem chi tiết đơn phúc khảo và bài làm liên quan
+      tags:
+      - Teacher Appeals
+  /api/teacher/appeals/{appealId}/reject:
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: ID đơn phúc khảo
+        in: path
+        name: appealId
+        required: true
+        type: integer
+      - description: Lý do từ chối (tùy chọn)
+        in: body
+        name: request
+        schema:
+          $ref: '#/definitions/dto.ActionAppealRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.AppealEnvelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Giảng viên từ chối đơn phúc khảo
+      tags:
+      - Teacher Appeals
+  /api/teacher/appeals/{appealId}/reply:
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: ID đơn phúc khảo
+        in: path
+        name: appealId
+        required: true
+        type: integer
+      - description: Nội dung phản hồi
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.ReplyAppealRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.AppealEnvelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Giảng viên phản hồi đơn phúc khảo
+      tags:
+      - Teacher Appeals
+  /api/teacher/appeals/{appealId}/resolve:
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: ID đơn phúc khảo
+        in: path
+        name: appealId
+        required: true
+        type: integer
+      - description: Ghi chú xử lý (tùy chọn)
+        in: body
+        name: request
+        schema:
+          $ref: '#/definitions/dto.ActionAppealRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.AppealEnvelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Giảng viên chấp thuận đơn phúc khảo
+      tags:
+      - Teacher Appeals
+  /api/teacher/attempts/{id}:
+    delete:
+      parameters:
+      - description: ID lượt thi
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.MessageResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Xóa lượt làm bài để cho phép sinh viên thi lại
+      tags:
+      - Teacher Results & Audit
+  /api/teacher/attempts/{id}/score:
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: ID lượt thi
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Điểm mới và ghi chú
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UpdateScoreRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.AttemptEnvelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Điều chỉnh điểm bài làm kèm ghi chú và audit log
+      tags:
+      - Teacher Results & Audit
+  /api/teacher/audit-logs:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.AuditLogsResponse'
+      security:
+      - BearerAuth: []
+      summary: Xem nhật ký kiểm toán các thao tác điểm số và phòng thi
+      tags:
+      - Teacher Results & Audit
+  /api/teacher/classes:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Thông tin lớp học phần
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CreateClassRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/dto.ClassEnvelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Giảng viên tạo lớp học phần mới
+      tags:
+      - Teacher Classrooms
+  /api/teacher/classes/{id}:
+    delete:
+      parameters:
+      - description: ID lớp học phần
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.MessageResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Xóa lớp học phần
+      tags:
+      - Teacher Classrooms
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: ID lớp học phần
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Thông tin cập nhật
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UpdateClassRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ClassEnvelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Cập nhật thông tin lớp học phần
+      tags:
+      - Teacher Classrooms
+  /api/teacher/classes/{id}/gradebook:
+    get:
+      parameters:
+      - description: ID lớp học phần
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ClassGradebookResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Lấy sổ điểm tổng hợp của lớp học phần
+      tags:
+      - Teacher Classrooms
+  /api/teacher/classes/{id}/members:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: ID lớp học phần
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Thông tin sinh viên (student_id, email hoặc student_code)
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.AddClassMemberRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Thêm sinh viên vào lớp học phần
+      tags:
+      - Teacher Classrooms
+  /api/teacher/classes/{id}/members/{studentId}:
+    delete:
+      parameters:
+      - description: ID lớp học phần
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: ID sinh viên
+        in: path
+        name: studentId
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.MessageResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Xóa sinh viên khỏi lớp học phần
+      tags:
+      - Teacher Classrooms
+  /api/teacher/exams:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ExamsListResponse'
+      security:
+      - BearerAuth: []
+      summary: Danh sách đề thi của giảng viên
+      tags:
+      - Teacher Exams
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Thông tin đề thi
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CreateExamRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/dto.ExamEnvelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Giảng viên tạo đề thi mới
+      tags:
+      - Teacher Exams
+  /api/teacher/exams/{id}:
+    delete:
+      parameters:
+      - description: ID đề thi
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.MessageResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Xóa đề thi và dữ liệu liên quan
+      tags:
+      - Teacher Exams
+    get:
+      parameters:
+      - description: ID đề thi
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ExamEnvelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Xem chi tiết đề thi và danh sách câu hỏi
+      tags:
+      - Teacher Exams
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: ID đề thi
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Thông tin cập nhật
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UpdateExamRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ExamEnvelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Cập nhật thông tin đề thi
+      tags:
+      - Teacher Exams
+  /api/teacher/exams/{id}/appeals:
+    get:
+      parameters:
+      - description: ID đề thi
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Trang
+        in: query
+        name: page
+        type: integer
+      - description: Số dòng mỗi trang
+        in: query
+        name: page_size
+        type: integer
+      - description: Lọc trạng thái
+        in: query
+        name: status
+        type: string
+      - description: Từ khóa tìm kiếm
+        in: query
+        name: q
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.TeacherAppealsResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Danh sách đơn phúc khảo của một đề thi
+      tags:
+      - Teacher Appeals
+  /api/teacher/exams/{id}/publish:
+    patch:
+      parameters:
+      - description: ID đề thi
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ExamEnvelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Xuất bản đề thi cho sinh viên làm bài
+      tags:
+      - Teacher Exams
+  /api/teacher/exams/{id}/questions:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: ID đề thi
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Danh sách câu hỏi
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.AddQuestionsRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/dto.QuestionsListResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Thêm câu hỏi vào đề thi
+      tags:
+      - Teacher Questions
+  /api/teacher/exams/{id}/questions/bulk:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: ID đề thi
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Danh sách câu hỏi
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.AddQuestionsRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/dto.QuestionsListResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Nhập câu hỏi hàng loạt trong một transaction
+      tags:
+      - Teacher Questions
+  /api/teacher/exams/{id}/results:
+    get:
+      parameters:
+      - description: ID đề thi
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Xem bảng điểm và thống kê kết quả đề thi
+      tags:
+      - Teacher Results & Audit
+  /api/teacher/exams/{id}/results/export:
+    get:
+      parameters:
+      - description: ID đề thi
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - text/csv
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: file
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Xuất bảng điểm đề thi ra file CSV UTF-8 BOM
+      tags:
+      - Teacher Results & Audit
+  /api/teacher/questions/{id}:
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: ID câu hỏi
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Thông tin câu hỏi
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.QuestionDTO'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.QuestionEnvelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Cập nhật câu hỏi trong đề nháp
+      tags:
+      - Teacher Questions
+  /api/teacher/questions/{question_id}:
+    delete:
+      parameters:
+      - description: ID câu hỏi
+        in: path
+        name: question_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.MessageResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Xóa câu hỏi khỏi đề nháp
+      tags:
+      - Teacher Questions
+  /api/teacher/students:
+    get:
+      parameters:
+      - description: Từ khóa tìm kiếm
+        in: query
+        name: q
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Danh sách sinh viên (hỗ trợ tìm kiếm ?q=)
+      tags:
+      - Teacher Users
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Thông tin sinh viên
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CreateStudentRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Giảng viên tạo tài khoản sinh viên mới
+      tags:
+      - Teacher Users
+  /api/teacher/students/{id}:
+    delete:
+      parameters:
+      - description: ID sinh viên
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.MessageResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Xóa tài khoản sinh viên
+      tags:
+      - Teacher Users
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: ID sinh viên
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Thông tin cập nhật
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UpdateStudentRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Cập nhật thông tin hoặc đặt lại mật khẩu sinh viên
+      tags:
+      - Teacher Users
+  /api/teacher/users/{id}/role:
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: ID người dùng
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Vai trò mới
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UpdateUserRoleRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.UserProfileEnvelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Giảng viên chuyển đổi vai trò người dùng
+      tags:
+      - Teacher Users
+  /api/users/directory:
+    get:
+      parameters:
+      - description: Từ khóa tìm kiếm (tên, email, mã SV)
+        in: query
+        name: q
+        type: string
+      - description: Lọc vai trò (teacher | student)
+        in: query
+        name: role
+        type: string
+      - description: Lọc theo khoa/bộ môn
+        in: query
+        name: department
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.DirectoryResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Tra cứu danh bạ người dùng toàn hệ thống
+      tags:
+      - Profile & Directory
+  /health:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.HealthResponse'
+      summary: Kiểm tra trạng thái hoạt động của service
+      tags:
+      - System
+securityDefinitions:
+  BearerAuth:
+    description: 'Nhap JWT token theo dinh dang: Bearer <token>'
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

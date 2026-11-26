@@ -30,6 +30,13 @@ func getDefaultExamTakingHandler() *ExamTakingHandler {
 	return NewExamTakingHandler(svc)
 }
 
+// StudentGetAvailableExams godoc
+// @Summary Danh sách đề thi khả dụng cho sinh viên
+// @Tags Student Exam
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} map[string]interface{}
+// @Router /api/student/exams/available [get]
 func (h *ExamTakingHandler) StudentGetAvailableExams(c *gin.Context) {
 	userIDVal, _ := c.Get("user_id")
 	userID := userIDVal.(uint)
@@ -43,6 +50,17 @@ func (h *ExamTakingHandler) StudentGetAvailableExams(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"exams": exams})
 }
 
+// StudentLookupExam godoc
+// @Summary Tra cứu đề thi bằng mã đề
+// @Tags Student Exam
+// @Produce json
+// @Security BearerAuth
+// @Param code query string true "Mã đề thi (VD: IT2026)"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} dto.ErrorResponse
+// @Failure 404 {object} dto.ErrorResponse
+// @Failure 429 {object} dto.ErrorResponse
+// @Router /api/student/exams/lookup [get]
 func (h *ExamTakingHandler) StudentLookupExam(c *gin.Context) {
 	code := c.Query("code")
 	if code == "" {
@@ -65,6 +83,20 @@ func (h *ExamTakingHandler) StudentLookupExam(c *gin.Context) {
 	c.JSON(http.StatusOK, res)
 }
 
+// StudentStartExam godoc
+// @Summary Bắt đầu hoặc tiếp tục làm bài thi
+// @Tags Student Exam
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "ID đề thi"
+// @Param request body dto.StartExamRequest false "Xác nhận tham gia thi"
+// @Success 200 {object} dto.StartExamResponse
+// @Failure 400 {object} dto.ErrorResponse
+// @Failure 403 {object} dto.ErrorResponse
+// @Failure 404 {object} dto.ErrorResponse
+// @Failure 428 {object} dto.ErrorResponse
+// @Router /api/student/exams/{id}/start [post]
 func (h *ExamTakingHandler) StudentStartExam(c *gin.Context) {
 	userIDVal, _ := c.Get("user_id")
 	userID := userIDVal.(uint)
@@ -101,6 +133,19 @@ func (h *ExamTakingHandler) StudentStartExam(c *gin.Context) {
 	c.JSON(http.StatusOK, res)
 }
 
+// StudentSaveAnswers godoc
+// @Summary Tự động lưu đáp án (Atomic UPSERT)
+// @Tags Student Exam
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param attempt_id path int true "ID lượt thi"
+// @Param request body dto.SaveAnswersRequest true "Danh sách đáp án"
+// @Success 200 {object} dto.SaveAnswersResponse
+// @Failure 400 {object} dto.ErrorResponse
+// @Failure 404 {object} dto.ErrorResponse
+// @Failure 409 {object} dto.ErrorResponse
+// @Router /api/student/attempts/{attempt_id}/save [post]
 func (h *ExamTakingHandler) StudentSaveAnswers(c *gin.Context) {
 	userIDVal, _ := c.Get("user_id")
 	userID := userIDVal.(uint)
@@ -137,6 +182,18 @@ func (h *ExamTakingHandler) StudentSaveAnswers(c *gin.Context) {
 	})
 }
 
+// StudentRecordViolation godoc
+// @Summary Ghi nhận vi phạm chuyển tab (tự động thu bài khi đủ 3 lần)
+// @Tags Anti Cheat
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param attempt_id path int true "ID lượt thi"
+// @Param request body dto.ViolationRequest false "Lý do vi phạm"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} dto.ErrorResponse
+// @Failure 404 {object} dto.ErrorResponse
+// @Router /api/student/attempts/{attempt_id}/violation [post]
 func (h *ExamTakingHandler) StudentRecordViolation(c *gin.Context) {
 	userIDVal, _ := c.Get("user_id")
 	userID := userIDVal.(uint)
@@ -162,6 +219,17 @@ func (h *ExamTakingHandler) StudentRecordViolation(c *gin.Context) {
 	c.JSON(http.StatusOK, res)
 }
 
+// StudentSubmitExam godoc
+// @Summary Nộp bài thi chính thức và chấm điểm tự động
+// @Tags Student Exam
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param attempt_id path int true "ID lượt thi"
+// @Param request body dto.SubmitExamRequest false "Đáp án cuối (tùy chọn)"
+// @Success 200 {object} dto.AttemptEnvelope
+// @Failure 400 {object} dto.ErrorResponse
+// @Router /api/student/attempts/{attempt_id}/submit [post]
 func (h *ExamTakingHandler) StudentSubmitExam(c *gin.Context) {
 	userIDVal, _ := c.Get("user_id")
 	userID := userIDVal.(uint)
@@ -186,6 +254,15 @@ func (h *ExamTakingHandler) StudentSubmitExam(c *gin.Context) {
 	})
 }
 
+// StudentGetResult godoc
+// @Summary Xem kết quả bài thi sau khi nộp
+// @Tags Student Exam
+// @Produce json
+// @Security BearerAuth
+// @Param attempt_id path int true "ID lượt thi"
+// @Success 200 {object} map[string]interface{}
+// @Failure 404 {object} dto.ErrorResponse
+// @Router /api/student/attempts/{attempt_id}/result [get]
 func (h *ExamTakingHandler) StudentGetResult(c *gin.Context) {
 	userIDVal, _ := c.Get("user_id")
 	userID := userIDVal.(uint)
@@ -204,6 +281,13 @@ func (h *ExamTakingHandler) StudentGetResult(c *gin.Context) {
 	c.JSON(http.StatusOK, res)
 }
 
+// StudentListAttempts godoc
+// @Summary Danh sách các lượt thi của sinh viên
+// @Tags Student Exam
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} map[string]interface{}
+// @Router /api/student/attempts [get]
 func (h *ExamTakingHandler) StudentListAttempts(c *gin.Context) {
 	userIDVal, _ := c.Get("user_id")
 	userID := userIDVal.(uint)
@@ -217,6 +301,13 @@ func (h *ExamTakingHandler) StudentListAttempts(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"attempts": attempts})
 }
 
+// GetExamSchedule godoc
+// @Summary Lấy thời khóa biểu & lịch thi phân nhóm theo thời gian
+// @Tags Schedule
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} map[string]interface{}
+// @Router /api/exams/schedule [get]
 func (h *ExamTakingHandler) GetExamSchedule(c *gin.Context) {
 	userIDVal, exists := c.Get("user_id")
 	if !exists {

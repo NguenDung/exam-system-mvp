@@ -30,6 +30,16 @@ func getDefaultExamHandler() *ExamHandler {
 	return NewExamHandler(svc)
 }
 
+// TeacherCreateExam godoc
+// @Summary Giảng viên tạo đề thi mới
+// @Tags Teacher Exams
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param request body dto.CreateExamRequest true "Thông tin đề thi"
+// @Success 201 {object} dto.ExamEnvelope
+// @Failure 400 {object} dto.ErrorResponse
+// @Router /api/teacher/exams [post]
 func (h *ExamHandler) TeacherCreateExam(c *gin.Context) {
 	teacherIDVal, _ := c.Get("user_id")
 	teacherID := teacherIDVal.(uint)
@@ -56,6 +66,13 @@ func (h *ExamHandler) TeacherCreateExam(c *gin.Context) {
 	})
 }
 
+// TeacherListExams godoc
+// @Summary Danh sách đề thi của giảng viên
+// @Tags Teacher Exams
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} dto.ExamsListResponse
+// @Router /api/teacher/exams [get]
 func (h *ExamHandler) TeacherListExams(c *gin.Context) {
 	teacherIDVal, _ := c.Get("user_id")
 	teacherID := teacherIDVal.(uint)
@@ -69,6 +86,15 @@ func (h *ExamHandler) TeacherListExams(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"exams": exams})
 }
 
+// TeacherGetExam godoc
+// @Summary Xem chi tiết đề thi và danh sách câu hỏi
+// @Tags Teacher Exams
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "ID đề thi"
+// @Success 200 {object} dto.ExamEnvelope
+// @Failure 404 {object} dto.ErrorResponse
+// @Router /api/teacher/exams/{id} [get]
 func (h *ExamHandler) TeacherGetExam(c *gin.Context) {
 	teacherIDVal, _ := c.Get("user_id")
 	teacherID := teacherIDVal.(uint)
@@ -87,6 +113,18 @@ func (h *ExamHandler) TeacherGetExam(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"exam": exam})
 }
 
+// TeacherUpdateExam godoc
+// @Summary Cập nhật thông tin đề thi
+// @Tags Teacher Exams
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "ID đề thi"
+// @Param request body dto.UpdateExamRequest true "Thông tin cập nhật"
+// @Success 200 {object} dto.ExamEnvelope
+// @Failure 400 {object} dto.ErrorResponse
+// @Failure 404 {object} dto.ErrorResponse
+// @Router /api/teacher/exams/{id} [put]
 func (h *ExamHandler) TeacherUpdateExam(c *gin.Context) {
 	teacherIDVal, _ := c.Get("user_id")
 	teacherID := teacherIDVal.(uint)
@@ -114,6 +152,15 @@ func (h *ExamHandler) TeacherUpdateExam(c *gin.Context) {
 	})
 }
 
+// TeacherDeleteExam godoc
+// @Summary Xóa đề thi và dữ liệu liên quan
+// @Tags Teacher Exams
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "ID đề thi"
+// @Success 200 {object} dto.MessageResponse
+// @Failure 404 {object} dto.ErrorResponse
+// @Router /api/teacher/exams/{id} [delete]
 func (h *ExamHandler) TeacherDeleteExam(c *gin.Context) {
 	teacherIDVal, _ := c.Get("user_id")
 	teacherID := teacherIDVal.(uint)
@@ -131,6 +178,16 @@ func (h *ExamHandler) TeacherDeleteExam(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Exam deleted successfully"})
 }
 
+// TeacherPublishExam godoc
+// @Summary Xuất bản đề thi cho sinh viên làm bài
+// @Tags Teacher Exams
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "ID đề thi"
+// @Success 200 {object} dto.ExamEnvelope
+// @Failure 400 {object} dto.ErrorResponse
+// @Failure 404 {object} dto.ErrorResponse
+// @Router /api/teacher/exams/{id}/publish [patch]
 func (h *ExamHandler) TeacherPublishExam(c *gin.Context) {
 	teacherIDVal, _ := c.Get("user_id")
 	teacherID := teacherIDVal.(uint)
@@ -156,6 +213,17 @@ func (h *ExamHandler) TeacherPublishExam(c *gin.Context) {
 	})
 }
 
+// TeacherAddQuestions godoc
+// @Summary Thêm câu hỏi vào đề thi
+// @Tags Teacher Questions
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "ID đề thi"
+// @Param request body dto.AddQuestionsRequest true "Danh sách câu hỏi"
+// @Success 201 {object} dto.QuestionsListResponse
+// @Failure 400 {object} dto.ErrorResponse
+// @Router /api/teacher/exams/{id}/questions [post]
 func (h *ExamHandler) TeacherAddQuestions(c *gin.Context) {
 	teacherIDVal, _ := c.Get("user_id")
 	teacherID := teacherIDVal.(uint)
@@ -187,6 +255,15 @@ func (h *ExamHandler) TeacherAddQuestions(c *gin.Context) {
 	})
 }
 
+// TeacherGetResults godoc
+// @Summary Xem bảng điểm và thống kê kết quả đề thi
+// @Tags Teacher Results & Audit
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "ID đề thi"
+// @Success 200 {object} map[string]interface{}
+// @Failure 404 {object} dto.ErrorResponse
+// @Router /api/teacher/exams/{id}/results [get]
 func (h *ExamHandler) TeacherGetResults(c *gin.Context) {
 	teacherIDVal, _ := c.Get("user_id")
 	teacherID := teacherIDVal.(uint)
@@ -205,6 +282,15 @@ func (h *ExamHandler) TeacherGetResults(c *gin.Context) {
 	c.JSON(http.StatusOK, res)
 }
 
+// TeacherExportResultsCSV godoc
+// @Summary Xuất bảng điểm đề thi ra file CSV UTF-8 BOM
+// @Tags Teacher Results & Audit
+// @Produce text/csv
+// @Security BearerAuth
+// @Param id path int true "ID đề thi"
+// @Success 200 {file} file
+// @Failure 404 {object} dto.ErrorResponse
+// @Router /api/teacher/exams/{id}/results/export [get]
 func (h *ExamHandler) TeacherExportResultsCSV(c *gin.Context) {
 	teacherIDVal, _ := c.Get("user_id")
 	teacherID := teacherIDVal.(uint)
@@ -224,6 +310,18 @@ func (h *ExamHandler) TeacherExportResultsCSV(c *gin.Context) {
 	c.Data(http.StatusOK, "text/csv; charset=utf-8", bytesData)
 }
 
+// TeacherUpdateAttemptScore godoc
+// @Summary Điều chỉnh điểm bài làm kèm ghi chú và audit log
+// @Tags Teacher Results & Audit
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "ID lượt thi"
+// @Param request body dto.UpdateScoreRequest true "Điểm mới và ghi chú"
+// @Success 200 {object} dto.AttemptEnvelope
+// @Failure 400 {object} dto.ErrorResponse
+// @Failure 404 {object} dto.ErrorResponse
+// @Router /api/teacher/attempts/{id}/score [patch]
 func (h *ExamHandler) TeacherUpdateAttemptScore(c *gin.Context) {
 	teacherIDVal, _ := c.Get("user_id")
 	teacherID := teacherIDVal.(uint)
@@ -251,6 +349,15 @@ func (h *ExamHandler) TeacherUpdateAttemptScore(c *gin.Context) {
 	})
 }
 
+// TeacherResetAttempt godoc
+// @Summary Xóa lượt làm bài để cho phép sinh viên thi lại
+// @Tags Teacher Results & Audit
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "ID lượt thi"
+// @Success 200 {object} dto.MessageResponse
+// @Failure 404 {object} dto.ErrorResponse
+// @Router /api/teacher/attempts/{id} [delete]
 func (h *ExamHandler) TeacherResetAttempt(c *gin.Context) {
 	teacherIDVal, _ := c.Get("user_id")
 	teacherID := teacherIDVal.(uint)
@@ -268,10 +375,33 @@ func (h *ExamHandler) TeacherResetAttempt(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Attempt reset successfully"})
 }
 
+// TeacherBulkAddQuestions godoc
+// @Summary Nhập câu hỏi hàng loạt trong một transaction
+// @Tags Teacher Questions
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "ID đề thi"
+// @Param request body dto.AddQuestionsRequest true "Danh sách câu hỏi"
+// @Success 201 {object} dto.QuestionsListResponse
+// @Failure 400 {object} dto.ErrorResponse
+// @Router /api/teacher/exams/{id}/questions/bulk [post]
 func (h *ExamHandler) TeacherBulkAddQuestions(c *gin.Context) {
 	h.TeacherAddQuestions(c)
 }
 
+// TeacherUpdateQuestion godoc
+// @Summary Cập nhật câu hỏi trong đề nháp
+// @Tags Teacher Questions
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "ID câu hỏi"
+// @Param request body dto.QuestionDTO true "Thông tin câu hỏi"
+// @Success 200 {object} dto.QuestionEnvelope
+// @Failure 400 {object} dto.ErrorResponse
+// @Failure 404 {object} dto.ErrorResponse
+// @Router /api/teacher/questions/{id} [put]
 func (h *ExamHandler) TeacherUpdateQuestion(c *gin.Context) {
 	teacherIDVal, _ := c.Get("user_id")
 	teacherID := teacherIDVal.(uint)
@@ -303,6 +433,16 @@ func (h *ExamHandler) TeacherUpdateQuestion(c *gin.Context) {
 	})
 }
 
+// TeacherDeleteQuestion godoc
+// @Summary Xóa câu hỏi khỏi đề nháp
+// @Tags Teacher Questions
+// @Produce json
+// @Security BearerAuth
+// @Param question_id path int true "ID câu hỏi"
+// @Success 200 {object} dto.MessageResponse
+// @Failure 400 {object} dto.ErrorResponse
+// @Failure 404 {object} dto.ErrorResponse
+// @Router /api/teacher/questions/{question_id} [delete]
 func (h *ExamHandler) TeacherDeleteQuestion(c *gin.Context) {
 	teacherIDVal, _ := c.Get("user_id")
 	teacherID := teacherIDVal.(uint)
@@ -327,6 +467,14 @@ func (h *ExamHandler) TeacherDeleteQuestion(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Question deleted successfully"})
 }
 
+// TeacherListStudents godoc
+// @Summary Danh sách sinh viên (hỗ trợ tìm kiếm ?q=)
+// @Tags Teacher Users
+// @Produce json
+// @Security BearerAuth
+// @Param q query string false "Từ khóa tìm kiếm"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/teacher/students [get]
 func (h *ExamHandler) TeacherListStudents(c *gin.Context) {
 	teacherIDVal, _ := c.Get("user_id")
 	teacherID := teacherIDVal.(uint)
@@ -341,6 +489,17 @@ func (h *ExamHandler) TeacherListStudents(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"students": students})
 }
 
+// TeacherCreateStudent godoc
+// @Summary Giảng viên tạo tài khoản sinh viên mới
+// @Tags Teacher Users
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param request body dto.CreateStudentRequest true "Thông tin sinh viên"
+// @Success 201 {object} map[string]interface{}
+// @Failure 400 {object} dto.ErrorResponse
+// @Failure 409 {object} dto.ErrorResponse
+// @Router /api/teacher/students [post]
 func (h *ExamHandler) TeacherCreateStudent(c *gin.Context) {
 	teacherIDVal, _ := c.Get("user_id")
 	teacherID := teacherIDVal.(uint)
@@ -367,6 +526,19 @@ func (h *ExamHandler) TeacherCreateStudent(c *gin.Context) {
 	})
 }
 
+// TeacherUpdateStudent godoc
+// @Summary Cập nhật thông tin hoặc đặt lại mật khẩu sinh viên
+// @Tags Teacher Users
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "ID sinh viên"
+// @Param request body dto.UpdateStudentRequest true "Thông tin cập nhật"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} dto.ErrorResponse
+// @Failure 404 {object} dto.ErrorResponse
+// @Failure 409 {object} dto.ErrorResponse
+// @Router /api/teacher/students/{id} [put]
 func (h *ExamHandler) TeacherUpdateStudent(c *gin.Context) {
 	teacherIDVal, _ := c.Get("user_id")
 	teacherID := teacherIDVal.(uint)
@@ -398,6 +570,15 @@ func (h *ExamHandler) TeacherUpdateStudent(c *gin.Context) {
 	})
 }
 
+// TeacherDeleteStudent godoc
+// @Summary Xóa tài khoản sinh viên
+// @Tags Teacher Users
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "ID sinh viên"
+// @Success 200 {object} dto.MessageResponse
+// @Failure 404 {object} dto.ErrorResponse
+// @Router /api/teacher/students/{id} [delete]
 func (h *ExamHandler) TeacherDeleteStudent(c *gin.Context) {
 	teacherIDVal, _ := c.Get("user_id")
 	teacherID := teacherIDVal.(uint)
@@ -415,6 +596,13 @@ func (h *ExamHandler) TeacherDeleteStudent(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Student deleted successfully"})
 }
 
+// TeacherGetAuditLogs godoc
+// @Summary Xem nhật ký kiểm toán các thao tác điểm số và phòng thi
+// @Tags Teacher Results & Audit
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} dto.AuditLogsResponse
+// @Router /api/teacher/audit-logs [get]
 func (h *ExamHandler) TeacherGetAuditLogs(c *gin.Context) {
 	teacherIDVal, _ := c.Get("user_id")
 	teacherID := teacherIDVal.(uint)

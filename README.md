@@ -269,6 +269,13 @@ Tài liệu đặc tả API được đặt trong thư mục `docs/`:
    - Thiết lập sẵn biến `baseUrl` (`http://localhost:8081`) và script tự lưu Bearer JWT token sau khi đăng nhập.
    - **Cách sử dụng**: Mở Postman -> chọn **Import** -> chọn tệp `docs/exam_system_postman_collection.json`.
 
-2. **OpenAPI 3.0 Specification (`docs/openapi.yaml`)**:
-   - Đặc tả đầy đủ các endpoint, schema Request/Response và mã trạng thái HTTP theo chuẩn OpenAPI 3.0.
-   - Có thể mở trực tiếp trên [Swagger Editor](https://editor.swagger.io) hoặc import vào các công cụ kiểm thử API.
+2. **Swagger UI & OpenAPI Specification (`swaggo/swag` + `gin-swagger`)**:
+   - Tài liệu OpenAPI tự động sinh trực tiếp từ DTO & Swagger annotations trong code tại `backend/docs/swagger.json` và `backend/docs/swagger.yaml` (bên cạnh bản đặc tả `docs/openapi.yaml`).
+   - Truy cập giao diện **Swagger UI** trực tiếp khi hệ thống chạy:
+     - Backend trực tiếp: **`http://localhost:8081/swagger/index.html`**
+     - Qua Nginx Docker: **`http://localhost:3000/swagger/index.html`**
+   - Sinh lại Swagger docs sau khi sửa API:
+     ```bash
+     cd backend
+     swag init -g main.go -o docs --parseDependency --parseInternal
+     ```

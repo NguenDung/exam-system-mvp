@@ -9,6 +9,15 @@ import (
 	"exam-system-mvp/router"
 )
 
+// @title Online Exam System API
+// @version 1.0
+// @description REST API cho he thong thi trac nghiem truc tuyen dai hoc (Golang Gin, GORM, PostgreSQL/SQLite).
+// @BasePath /
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
+// @description Nhap JWT token theo dinh dang: Bearer <token>
+
 func main() {
 	config.ConnectDatabase()
 	models.Migrate(config.DB)

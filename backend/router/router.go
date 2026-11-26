@@ -3,13 +3,26 @@ package router
 import (
 	"time"
 
+	_ "exam-system-mvp/docs"
 	"exam-system-mvp/handlers"
 	"exam-system-mvp/middleware"
 	"exam-system-mvp/models"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 )
+
+// healthCheck godoc
+// @Summary Kiểm tra trạng thái hoạt động của service
+// @Tags System
+// @Produce json
+// @Success 200 {object} dto.HealthResponse
+// @Router /health [get]
+func healthCheck(c *gin.Context) {
+	c.JSON(200, gin.H{"status": "ok", "service": "exam-system-mvp"})
+}
 
 func SetupRouter() *gin.Engine {
 	r := gin.Default()
@@ -25,9 +38,8 @@ func SetupRouter() *gin.Engine {
 
 	r.Use(middleware.SecurityMiddleware(2 * 1024 * 1024))
 
-	r.Match([]string{"GET", "HEAD"}, "/health", func(c *gin.Context) {
-		c.JSON(200, gin.H{"status": "ok", "service": "exam-system-mvp"})
-	})
+	r.Match([]string{"GET", "HEAD"}, "/health", healthCheck)
+	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	api := r.Group("/api")
 

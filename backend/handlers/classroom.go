@@ -29,6 +29,16 @@ func getDefaultClassroomHandler() *ClassroomHandler {
 	return NewClassroomHandler(svc)
 }
 
+// TeacherCreateClass godoc
+// @Summary Giảng viên tạo lớp học phần mới
+// @Tags Teacher Classrooms
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param request body dto.CreateClassRequest true "Thông tin lớp học phần"
+// @Success 201 {object} dto.ClassEnvelope
+// @Failure 400 {object} dto.ErrorResponse
+// @Router /api/teacher/classes [post]
 func (h *ClassroomHandler) TeacherCreateClass(c *gin.Context) {
 	teacherIDVal, _ := c.Get("user_id")
 	teacherID := teacherIDVal.(uint)
@@ -55,6 +65,18 @@ func (h *ClassroomHandler) TeacherCreateClass(c *gin.Context) {
 	})
 }
 
+// TeacherUpdateClass godoc
+// @Summary Cập nhật thông tin lớp học phần
+// @Tags Teacher Classrooms
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "ID lớp học phần"
+// @Param request body dto.UpdateClassRequest true "Thông tin cập nhật"
+// @Success 200 {object} dto.ClassEnvelope
+// @Failure 400 {object} dto.ErrorResponse
+// @Failure 404 {object} dto.ErrorResponse
+// @Router /api/teacher/classes/{id} [put]
 func (h *ClassroomHandler) TeacherUpdateClass(c *gin.Context) {
 	teacherIDVal, _ := c.Get("user_id")
 	teacherID := teacherIDVal.(uint)
@@ -89,6 +111,15 @@ func (h *ClassroomHandler) TeacherUpdateClass(c *gin.Context) {
 	})
 }
 
+// TeacherDeleteClass godoc
+// @Summary Xóa lớp học phần
+// @Tags Teacher Classrooms
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "ID lớp học phần"
+// @Success 200 {object} dto.MessageResponse
+// @Failure 404 {object} dto.ErrorResponse
+// @Router /api/teacher/classes/{id} [delete]
 func (h *ClassroomHandler) TeacherDeleteClass(c *gin.Context) {
 	teacherIDVal, _ := c.Get("user_id")
 	teacherID := teacherIDVal.(uint)
@@ -111,6 +142,19 @@ func (h *ClassroomHandler) TeacherDeleteClass(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Classroom deleted successfully"})
 }
 
+// TeacherAddClassMember godoc
+// @Summary Thêm sinh viên vào lớp học phần
+// @Tags Teacher Classrooms
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "ID lớp học phần"
+// @Param request body dto.AddClassMemberRequest true "Thông tin sinh viên (student_id, email hoặc student_code)"
+// @Success 201 {object} map[string]interface{}
+// @Failure 400 {object} dto.ErrorResponse
+// @Failure 404 {object} dto.ErrorResponse
+// @Failure 409 {object} dto.ErrorResponse
+// @Router /api/teacher/classes/{id}/members [post]
 func (h *ClassroomHandler) TeacherAddClassMember(c *gin.Context) {
 	teacherIDVal, _ := c.Get("user_id")
 	teacherID := teacherIDVal.(uint)
@@ -160,6 +204,16 @@ func (h *ClassroomHandler) TeacherAddClassMember(c *gin.Context) {
 	})
 }
 
+// TeacherRemoveClassMember godoc
+// @Summary Xóa sinh viên khỏi lớp học phần
+// @Tags Teacher Classrooms
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "ID lớp học phần"
+// @Param studentId path int true "ID sinh viên"
+// @Success 200 {object} dto.MessageResponse
+// @Failure 404 {object} dto.ErrorResponse
+// @Router /api/teacher/classes/{id}/members/{studentId} [delete]
 func (h *ClassroomHandler) TeacherRemoveClassMember(c *gin.Context) {
 	teacherIDVal, _ := c.Get("user_id")
 	teacherID := teacherIDVal.(uint)
@@ -186,6 +240,18 @@ func (h *ClassroomHandler) TeacherRemoveClassMember(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Member removed from class successfully"})
 }
 
+// StudentJoinClass godoc
+// @Summary Sinh viên tham gia lớp học phần bằng mã lớp
+// @Tags Classrooms
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param request body dto.JoinClassRequest true "Mã lớp học phần"
+// @Success 200 {object} dto.ClassEnvelope
+// @Failure 400 {object} dto.ErrorResponse
+// @Failure 404 {object} dto.ErrorResponse
+// @Failure 409 {object} dto.ErrorResponse
+// @Router /api/student/classes/join [post]
 func (h *ClassroomHandler) StudentJoinClass(c *gin.Context) {
 	userIDVal, _ := c.Get("user_id")
 	userID := userIDVal.(uint)
@@ -217,6 +283,13 @@ func (h *ClassroomHandler) StudentJoinClass(c *gin.Context) {
 	})
 }
 
+// ListClasses godoc
+// @Summary Danh sách lớp học phần của người dùng hiện tại
+// @Tags Classrooms
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} dto.ClassesListResponse
+// @Router /api/classes [get]
 func (h *ClassroomHandler) ListClasses(c *gin.Context) {
 	userIDVal, _ := c.Get("user_id")
 	userID := userIDVal.(uint)
@@ -232,6 +305,16 @@ func (h *ClassroomHandler) ListClasses(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"classes": items})
 }
 
+// GetClassDetail godoc
+// @Summary Xem chi tiết lớp học phần
+// @Tags Classrooms
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "ID lớp học phần"
+// @Success 200 {object} dto.ClassDetailResponse
+// @Failure 403 {object} dto.ErrorResponse
+// @Failure 404 {object} dto.ErrorResponse
+// @Router /api/classes/{id} [get]
 func (h *ClassroomHandler) GetClassDetail(c *gin.Context) {
 	userIDVal, _ := c.Get("user_id")
 	userID := userIDVal.(uint)
@@ -259,6 +342,15 @@ func (h *ClassroomHandler) GetClassDetail(c *gin.Context) {
 	c.JSON(http.StatusOK, res)
 }
 
+// TeacherGetClassGradebook godoc
+// @Summary Lấy sổ điểm tổng hợp của lớp học phần
+// @Tags Teacher Classrooms
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "ID lớp học phần"
+// @Success 200 {object} dto.ClassGradebookResponse
+// @Failure 404 {object} dto.ErrorResponse
+// @Router /api/teacher/classes/{id}/gradebook [get]
 func (h *ClassroomHandler) TeacherGetClassGradebook(c *gin.Context) {
 	teacherIDVal, _ := c.Get("user_id")
 	teacherID := teacherIDVal.(uint)

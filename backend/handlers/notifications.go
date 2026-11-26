@@ -32,6 +32,14 @@ func CreateNotification(userID uint, title, message string, targetURL ...string)
 	getDefaultNotificationService().CreateNotification(userID, title, message, targetURL...)
 }
 
+// GetNotifications godoc
+// @Summary Lấy danh sách thông báo và số lượng chưa đọc
+// @Tags Notifications
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} dto.NotificationListResponse
+// @Failure 401 {object} dto.ErrorResponse
+// @Router /api/notifications [get]
 func (h *NotificationHandler) GetNotifications(c *gin.Context) {
 	userIDVal, exists := c.Get("user_id")
 	if !exists {
@@ -49,6 +57,15 @@ func (h *NotificationHandler) GetNotifications(c *gin.Context) {
 	c.JSON(http.StatusOK, res)
 }
 
+// MarkNotificationAsRead godoc
+// @Summary Đánh dấu một thông báo là đã đọc
+// @Tags Notifications
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "ID thông báo"
+// @Success 200 {object} dto.MessageResponse
+// @Failure 404 {object} dto.ErrorResponse
+// @Router /api/notifications/{id}/read [patch]
 func (h *NotificationHandler) MarkNotificationAsRead(c *gin.Context) {
 	userIDVal, exists := c.Get("user_id")
 	if !exists {
@@ -75,6 +92,13 @@ func (h *NotificationHandler) MarkNotificationAsRead(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Notification marked as read"})
 }
 
+// MarkAllNotificationsAsRead godoc
+// @Summary Đánh dấu toàn bộ thông báo là đã đọc
+// @Tags Notifications
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} dto.MessageResponse
+// @Router /api/notifications/read-all [patch]
 func (h *NotificationHandler) MarkAllNotificationsAsRead(c *gin.Context) {
 	userIDVal, exists := c.Get("user_id")
 	if !exists {
@@ -91,6 +115,15 @@ func (h *NotificationHandler) MarkAllNotificationsAsRead(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "All notifications marked as read"})
 }
 
+// DeleteNotification godoc
+// @Summary Xóa một thông báo
+// @Tags Notifications
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "ID thông báo"
+// @Success 200 {object} dto.MessageResponse
+// @Failure 404 {object} dto.ErrorResponse
+// @Router /api/notifications/{id} [delete]
 func (h *NotificationHandler) DeleteNotification(c *gin.Context) {
 	userIDVal, exists := c.Get("user_id")
 	if !exists {
@@ -117,6 +150,13 @@ func (h *NotificationHandler) DeleteNotification(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Notification deleted successfully"})
 }
 
+// ClearReadNotifications godoc
+// @Summary Xóa toàn bộ thông báo đã đọc
+// @Tags Notifications
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} dto.MessageResponse
+// @Router /api/notifications/clear-read [delete]
 func (h *NotificationHandler) ClearReadNotifications(c *gin.Context) {
 	userIDVal, exists := c.Get("user_id")
 	if !exists {

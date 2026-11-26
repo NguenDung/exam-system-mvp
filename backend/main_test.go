@@ -2381,3 +2381,22 @@ func TestTeacher_ClassGradebook(t *testing.T) {
 	config.DB.Model(&exam).Update("classroom_id", nil)
 	config.DB.Delete(&models.Classroom{}, classID)
 }
+
+func TestSwagger_UIAndDocJSON(t *testing.T) {
+	srv := setupTestServer(t)
+
+	wUI := do(t, srv, "GET", "/swagger/index.html", "", nil)
+	if wUI.Code != http.StatusOK {
+		t.Fatalf("GET /swagger/index.html: want 200, got %d", wUI.Code)
+	}
+
+	wDoc := do(t, srv, "GET", "/swagger/doc.json", "", nil)
+	if wDoc.Code != http.StatusOK {
+		t.Fatalf("GET /swagger/doc.json: want 200, got %d", wDoc.Code)
+	}
+	doc := parseJSON(t, wDoc)
+	paths, ok := doc["paths"].(map[string]interface{})
+	if !ok || len(paths) < 40 {
+		t.Fatalf("expected generated swagger paths >= 40, got %d", len(paths))
+	}
+}

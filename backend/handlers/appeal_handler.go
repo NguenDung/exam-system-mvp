@@ -32,6 +32,18 @@ func getDefaultAppealHandler() *AppealHandler {
 	return NewAppealHandler(svc)
 }
 
+// StudentGetHistory godoc
+// @Summary Lịch sử các bài thi đã làm của sinh viên
+// @Tags Student Appeals & History
+// @Produce json
+// @Security BearerAuth
+// @Param page query int false "Trang (mặc định 1)"
+// @Param page_size query int false "Số dòng mỗi trang (mặc định 10)"
+// @Param q query string false "Từ khóa tìm kiếm"
+// @Param appeal_status query string false "Trạng thái phúc khảo (PENDING|REPLIED|REJECTED|RESOLVED)"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} dto.ErrorResponse
+// @Router /api/student/history [get]
 func (h *AppealHandler) StudentGetHistory(c *gin.Context) {
 	userIDVal, _ := c.Get("user_id")
 	studentID := userIDVal.(uint)
@@ -75,6 +87,15 @@ func (h *AppealHandler) StudentGetHistory(c *gin.Context) {
 	})
 }
 
+// StudentGetHistoryDetail godoc
+// @Summary Xem chi tiết bài làm trong lịch sử (chỉ hiện đáp án đúng sau khi đóng ca thi)
+// @Tags Student Appeals & History
+// @Produce json
+// @Security BearerAuth
+// @Param submissionId path int true "ID lượt thi"
+// @Success 200 {object} map[string]interface{}
+// @Failure 404 {object} dto.ErrorResponse
+// @Router /api/student/history/{submissionId} [get]
 func (h *AppealHandler) StudentGetHistoryDetail(c *gin.Context) {
 	userIDVal, _ := c.Get("user_id")
 	studentID := userIDVal.(uint)
@@ -93,6 +114,18 @@ func (h *AppealHandler) StudentGetHistoryDetail(c *gin.Context) {
 	c.JSON(http.StatusOK, res)
 }
 
+// StudentCreateAppeal godoc
+// @Summary Gửi đơn phúc khảo điểm bài thi
+// @Tags Student Appeals & History
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param request body dto.CreateAppealRequest true "Nội dung đơn phúc khảo"
+// @Success 201 {object} dto.AppealEnvelope
+// @Failure 400 {object} dto.ErrorResponse
+// @Failure 404 {object} dto.ErrorResponse
+// @Failure 409 {object} dto.ErrorResponse
+// @Router /api/student/appeals [post]
 func (h *AppealHandler) StudentCreateAppeal(c *gin.Context) {
 	userIDVal, _ := c.Get("user_id")
 	studentID := userIDVal.(uint)
@@ -129,6 +162,19 @@ func (h *AppealHandler) StudentCreateAppeal(c *gin.Context) {
 	})
 }
 
+// TeacherListExamAppeals godoc
+// @Summary Danh sách đơn phúc khảo của một đề thi
+// @Tags Teacher Appeals
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "ID đề thi"
+// @Param page query int false "Trang"
+// @Param page_size query int false "Số dòng mỗi trang"
+// @Param status query string false "Lọc trạng thái"
+// @Param q query string false "Từ khóa tìm kiếm"
+// @Success 200 {object} dto.TeacherAppealsResponse
+// @Failure 404 {object} dto.ErrorResponse
+// @Router /api/teacher/exams/{id}/appeals [get]
 func (h *AppealHandler) TeacherListExamAppeals(c *gin.Context) {
 	teacherIDVal, _ := c.Get("user_id")
 	teacherID := teacherIDVal.(uint)
@@ -170,6 +216,15 @@ func (h *AppealHandler) TeacherListExamAppeals(c *gin.Context) {
 	})
 }
 
+// TeacherGetAppeal godoc
+// @Summary Xem chi tiết đơn phúc khảo và bài làm liên quan
+// @Tags Teacher Appeals
+// @Produce json
+// @Security BearerAuth
+// @Param appealId path int true "ID đơn phúc khảo"
+// @Success 200 {object} map[string]interface{}
+// @Failure 404 {object} dto.ErrorResponse
+// @Router /api/teacher/appeals/{appealId} [get]
 func (h *AppealHandler) TeacherGetAppeal(c *gin.Context) {
 	teacherIDVal, _ := c.Get("user_id")
 	teacherID := teacherIDVal.(uint)
@@ -188,6 +243,19 @@ func (h *AppealHandler) TeacherGetAppeal(c *gin.Context) {
 	c.JSON(http.StatusOK, detail)
 }
 
+// TeacherReplyAppeal godoc
+// @Summary Giảng viên phản hồi đơn phúc khảo
+// @Tags Teacher Appeals
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param appealId path int true "ID đơn phúc khảo"
+// @Param request body dto.ReplyAppealRequest true "Nội dung phản hồi"
+// @Success 200 {object} dto.AppealEnvelope
+// @Failure 400 {object} dto.ErrorResponse
+// @Failure 404 {object} dto.ErrorResponse
+// @Failure 409 {object} dto.ErrorResponse
+// @Router /api/teacher/appeals/{appealId}/reply [patch]
 func (h *AppealHandler) TeacherReplyAppeal(c *gin.Context) {
 	teacherIDVal, _ := c.Get("user_id")
 	teacherID := teacherIDVal.(uint)
@@ -219,6 +287,18 @@ func (h *AppealHandler) TeacherReplyAppeal(c *gin.Context) {
 	})
 }
 
+// TeacherRejectAppeal godoc
+// @Summary Giảng viên từ chối đơn phúc khảo
+// @Tags Teacher Appeals
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param appealId path int true "ID đơn phúc khảo"
+// @Param request body dto.ActionAppealRequest false "Lý do từ chối (tùy chọn)"
+// @Success 200 {object} dto.AppealEnvelope
+// @Failure 404 {object} dto.ErrorResponse
+// @Failure 409 {object} dto.ErrorResponse
+// @Router /api/teacher/appeals/{appealId}/reject [patch]
 func (h *AppealHandler) TeacherRejectAppeal(c *gin.Context) {
 	teacherIDVal, _ := c.Get("user_id")
 	teacherID := teacherIDVal.(uint)
@@ -247,6 +327,18 @@ func (h *AppealHandler) TeacherRejectAppeal(c *gin.Context) {
 	})
 }
 
+// TeacherResolveAppeal godoc
+// @Summary Giảng viên chấp thuận đơn phúc khảo
+// @Tags Teacher Appeals
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param appealId path int true "ID đơn phúc khảo"
+// @Param request body dto.ActionAppealRequest false "Ghi chú xử lý (tùy chọn)"
+// @Success 200 {object} dto.AppealEnvelope
+// @Failure 404 {object} dto.ErrorResponse
+// @Failure 409 {object} dto.ErrorResponse
+// @Router /api/teacher/appeals/{appealId}/resolve [patch]
 func (h *AppealHandler) TeacherResolveAppeal(c *gin.Context) {
 	teacherIDVal, _ := c.Get("user_id")
 	teacherID := teacherIDVal.(uint)

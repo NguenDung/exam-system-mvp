@@ -26,7 +26,16 @@ func getDefaultAuthHandler() *AuthHandler {
 	return NewAuthHandler(authSvc)
 }
 
-// Register handles student account creation.
+// Register godoc
+// @Summary Đăng ký tài khoản sinh viên
+// @Tags Auth
+// @Accept json
+// @Produce json
+// @Param request body dto.RegisterRequest true "Thông tin đăng ký"
+// @Success 201 {object} dto.RegisterResponse
+// @Failure 400 {object} dto.ErrorResponse
+// @Failure 409 {object} dto.ErrorResponse
+// @Router /api/auth/register [post]
 func (h *AuthHandler) Register(c *gin.Context) {
 	var req dto.RegisterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -50,7 +59,17 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	c.JSON(http.StatusCreated, res)
 }
 
-// Login authenticates a user and returns a signed JWT.
+// Login godoc
+// @Summary Đăng nhập hệ thống và nhận JWT token
+// @Tags Auth
+// @Accept json
+// @Produce json
+// @Param request body dto.LoginRequest true "Thông tin đăng nhập"
+// @Success 200 {object} dto.LoginResponse
+// @Failure 400 {object} dto.ErrorResponse
+// @Failure 401 {object} dto.ErrorResponse
+// @Failure 429 {object} dto.ErrorResponse
+// @Router /api/auth/login [post]
 func (h *AuthHandler) Login(c *gin.Context) {
 	var req dto.LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {

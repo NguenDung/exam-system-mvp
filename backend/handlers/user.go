@@ -26,6 +26,15 @@ func getDefaultUserHandler() *UserHandler {
 	return NewUserHandler(svc)
 }
 
+// GetProfile godoc
+// @Summary Xem hồ sơ cá nhân hiện tại
+// @Tags Profile & Directory
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} dto.UserProfileEnvelope
+// @Failure 401 {object} dto.ErrorResponse
+// @Failure 404 {object} dto.ErrorResponse
+// @Router /api/profile [get]
 func (h *UserHandler) GetProfile(c *gin.Context) {
 	userIDVal, exists := c.Get("user_id")
 	if !exists {
@@ -55,6 +64,17 @@ func (h *UserHandler) GetProfile(c *gin.Context) {
 	})
 }
 
+// UpdateProfile godoc
+// @Summary Cập nhật hồ sơ cá nhân hoặc đổi mật khẩu
+// @Tags Profile & Directory
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param request body dto.UpdateProfileRequest true "Thông tin cập nhật"
+// @Success 200 {object} dto.UserProfileEnvelope
+// @Failure 400 {object} dto.ErrorResponse
+// @Failure 404 {object} dto.ErrorResponse
+// @Router /api/profile [put]
 func (h *UserHandler) UpdateProfile(c *gin.Context) {
 	userIDVal, exists := c.Get("user_id")
 	if !exists {
@@ -95,6 +115,17 @@ func (h *UserHandler) UpdateProfile(c *gin.Context) {
 	})
 }
 
+// GetDirectory godoc
+// @Summary Tra cứu danh bạ người dùng toàn hệ thống
+// @Tags Profile & Directory
+// @Produce json
+// @Security BearerAuth
+// @Param q query string false "Từ khóa tìm kiếm (tên, email, mã SV)"
+// @Param role query string false "Lọc vai trò (teacher | student)"
+// @Param department query string false "Lọc theo khoa/bộ môn"
+// @Success 200 {object} dto.DirectoryResponse
+// @Failure 500 {object} dto.ErrorResponse
+// @Router /api/users/directory [get]
 func (h *UserHandler) GetDirectory(c *gin.Context) {
 	q := c.Query("q")
 	role := c.Query("role")
@@ -109,6 +140,18 @@ func (h *UserHandler) GetDirectory(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"users": users})
 }
 
+// TeacherUpdateUserRole godoc
+// @Summary Giảng viên chuyển đổi vai trò người dùng
+// @Tags Teacher Users
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "ID người dùng"
+// @Param request body dto.UpdateUserRoleRequest true "Vai trò mới"
+// @Success 200 {object} dto.UserProfileEnvelope
+// @Failure 400 {object} dto.ErrorResponse
+// @Failure 404 {object} dto.ErrorResponse
+// @Router /api/teacher/users/{id}/role [patch]
 func (h *UserHandler) TeacherUpdateUserRole(c *gin.Context) {
 	teacherIDVal, _ := c.Get("user_id")
 	teacherID := teacherIDVal.(uint)
